@@ -1,0 +1,6 @@
+user_id,price_sensitivity,churn_risk,segment
+1,0.82,0.61,enterprise
+2,0.40,0.15,sm_b
+3,0.73,0.48,mid_market
+4,0.65,0.52,enterprise
+5,0.33,0.20,sm_b

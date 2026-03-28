@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "digital-unconscious"
+version = "0.2.0"
+description = "Passive Screen Observation × AI-Powered Idea Generation — from daily screen behaviour to validated research ideas with zero human intervention"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Digital Unconscious Contributors" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+api = ["anthropic>=0.40"]
+
+[project.scripts]
+du = "du_research.cli:main"
+du-research = "du_research.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

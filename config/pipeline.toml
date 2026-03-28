@@ -1,0 +1,117 @@
+# Digital Unconscious — Pipeline Configuration
+# v0.2.0
+
+[pipeline]
+workspace_dir = "workspace"
+quality_threshold = 78
+auto_learn = true
+network_timeout_seconds = 15
+max_revisions = 3
+
+[ai]
+mode = "auto"                # "auto" | "claude_code" | "api"
+default_model = "sonnet"     # claude-sonnet-4-6
+creative_model = "opus"      # claude-opus-4-6 (high temp for idea generation)
+judge_model = "sonnet"       # claude-sonnet-4-6 (low temp for scoring)
+compressor_model = "haiku"   # claude-haiku-4-5 (fast, cheap compression)
+briefing_model = "opus"      # claude-opus-4-6 (daily briefing writer)
+writer_model = "opus"
+reviewer_model = "sonnet"
+revision_model = "sonnet"
+analysis_model = "sonnet"
+# api_key = ""               # prefer ANTHROPIC_API_KEY env var
+
+[observation]
+enabled = true
+screenpipe_url = "http://localhost:3030"
+window_minutes = 30
+lookback_multiplier = 4
+fallback_log_path = ""       # path to manual daily log file
+service_interval_minutes = 60
+recent_frame_hash_limit = 5000
+# blacklist_apps = ["game", "video_player"]
+
+[idea]
+primary_domains = ["AI tools", "product design"]
+secondary_domains = ["cognitive science", "business models"]
+max_ideas_per_cycle = 8
+include_threshold = 75       # score > 75 goes into daily briefing
+hold_threshold = 60          # score 60-75 goes to observation pool
+max_briefing_ideas = 5
+auto_research_enabled = true
+auto_research_top_k = 1
+auto_research_dedupe_enabled = true
+auto_research_similarity_threshold = 0.9
+auto_research_cooldown_days = 14
+
+[literature]
+max_results_per_source = 6
+core_papers = 5
+download_pdfs = true
+max_pdf_downloads = 3
+
+[datasets]
+max_results_per_source = 5
+
+[analysis]
+max_categorical_values = 6
+max_numeric_columns = 4
+enable_ai_codegen = true
+max_codegen_retries = 5
+timeout_seconds = 120
+figure_dpi = 300
+
+[paper]
+target_venue = "Research dossier"
+final_submission_requires_approval = true
+
+[learning]
+min_runs_before_update = 1
+prompt_evolution = true
+human_idea_model = true
+min_runs_before_evolution = 3
+
+[daily]
+max_ideas = 10
+min_idea_score = 0.35
+briefing_time = "22:00"
+
+[circuit_breaker]
+max_retries = 3
+initial_wait = 2.0
+failure_threshold = 5
+recovery_timeout = 60.0
+
+[credentials]
+vault_path = "workspace/credentials/credentials.enc"
+key_path = "workspace/credentials/master.key"
+
+[automation]
+enabled = true
+auto_execute = false
+runner = "claude_code"
+browser = "chrome"
+download_dir = "workspace/browser_downloads"
+screenshot_dir = "workspace/browser_screenshots"
+headless = true
+timeout_seconds = 60
+institutional_proxy_url = ""
+
+[submission]
+enabled = true
+approvals_path = "workspace/submissions"
+pending_timeout_hours = 72
+
+[service]
+pid_path = "workspace/service/daemon.json"
+log_path = "workspace/service/daemon.log"
+status_path = "workspace/service/status.json"
+run_history_limit = 200
+gc_every_cycles = 24
+maintenance_every_cycles = 24
+
+[retention]
+observation_days = 30
+daily_cycle_days = 180
+browser_artifact_days = 30
+service_log_max_mb = 50

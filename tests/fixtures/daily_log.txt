@@ -1,0 +1,4 @@
+Spent 20 minutes comparing SaaS pricing pages and wondering why users seem to struggle more with plan naming than actual price.
+Maybe there is a study here: cognitive load from pricing-table complexity versus churn risk.
+Opened churn dashboard, saw enterprise accounts tolerate complexity better than SMB accounts.
+Question: can navigation friction in billing UX predict downgrade or churn?
