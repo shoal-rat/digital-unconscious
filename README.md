@@ -1,21 +1,33 @@
-# DU Research MVP
+# Digital Unconscious
 
-`DU Research` is a local-first research pipeline that turns an idea into a reproducible research dossier.
+Passive observation to research ideas, daily briefs, and reproducible dossier pipelines.
 
-This repository deliberately implements the buildable part of the original concept:
+`Digital Unconscious` is a local-first autonomous research engine that watches daily screen activity, compresses behavioral signals into ideas, ranks them, and can automatically promote strong ideas into a literature-to-manuscript workflow.
 
-- daily idea capture from exported notes or activity logs
-- passive observation via Screenpipe-driven daily cycles
-- literature discovery from open APIs
-- open PDF downloading when a direct PDF link is available
-- feasibility scoring
-- dataset source discovery
-- optional CSV-based descriptive analysis
-- manuscript starter generation
-- reviewer-style scoring
-- learning summaries across runs
+## What It Does
 
-It does **not** claim to autonomously produce submission-ready academic papers from arbitrary ideas without human involvement. The improved PRD in [docs/PRD.md](docs/PRD.md) narrows the scope to a realistic MVP and keeps the larger vision as future work.
+- passively captures behavior from Screenpipe or a fallback activity log
+- accumulates observations in a long-running local daemon
+- generates a daily idea briefing at a configured time
+- deduplicates repeated ideas and avoids rerunning near-identical research
+- scouts literature and datasets from open providers
+- runs optional CSV analysis with figures and reproducibility artifacts
+- drafts, reviews, revises, and packages a research dossier
+- exports or runs Claude Code browser automation tasks for gated portals
+- learns across runs with prompt evolution and a persistent human idea model
+
+## System Flow
+
+```text
+Screen Activity
+  -> Observation Journal
+  -> Compression Agent
+  -> Idea Generator
+  -> Judge Agent
+  -> Daily Briefing
+  -> Auto-Research Gate
+  -> Literature / Data / Analysis / Draft / Review / Submission Package
+```
 
 ## Quickstart
 
@@ -23,64 +35,70 @@ It does **not** claim to autonomously produce submission-ready academic papers f
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e .
-python -m du_research research --idea "Cognitive load as a SaaS pricing axis"
-python -m du_research research --idea "Behavioral drivers of churn" --data-file tests/fixtures/sample_data.csv
-python -m du_research learn
+python -m du_research.cli
 ```
 
-Artifacts are written to `workspace/`.
+On first launch, the app stores default setup choices locally. After that, launching without arguments defaults to the long-running observation service.
 
-## Commands
+## Main Commands
 
 ```powershell
-python -m du_research research --idea "Your idea"
-python -m du_research research --idea-id idea_001
-python -m du_research daily
-python -m du_research start --iterations 1
-python -m du_research research --idea "Your idea" --data-file path\to\data.csv
-python -m du_research research --idea "Your idea" --dry-run
-python -m du_research daily-capture --input path\to\daily_log.txt
-python -m du_research status --run-id run_20260328_193000_your_idea
-python -m du_research export-computer-task --run-id run_20260328_193000_your_idea
-python -m du_research learn
+python -m du_research.cli
+python -m du_research.cli start
+python -m du_research.cli service start
+python -m du_research.cli service status
+python -m du_research.cli service stop
+python -m du_research.cli daily
+python -m du_research.cli research --idea "Cognitive load as a SaaS pricing axis"
+python -m du_research.cli research --idea-id idea_001
+python -m du_research.cli research --idea "Behavioral drivers of churn" --data-file tests/fixtures/sample_data.csv
+python -m du_research.cli learn
 ```
 
-## Claude Code / Computer Use
+## Background Operation
 
-This repo can export a supervised browser task pack for a Claude Code or other computer-use runner, but it does not store or automate your primary Chrome profile or account credentials itself. The boundary is documented in `docs/CLAUDE_CODE_INTEGRATION.md`.
+- first-run setup persists defaults under `workspace/setup/`
+- the foreground service polls on a schedule and writes status into `workspace/service/`
+- the background daemon can be started with `service start`
+- Windows autostart can be enabled once and then left alone
+- retention and maintenance settings prune old observation, browser, and daily artifacts over time
 
-## Passive Observation
+## Claude Code Automation
 
-`du daily` now prefers passive observation from the local Screenpipe service at the configured `screenpipe_url`. The cycle is:
+This repository supports browser automation through Claude Code task packs and direct execution via the configured automation runner. It does not silently take over your personal Chrome profile. Credential handling and supervised boundaries are documented in [docs/CLAUDE_CODE_INTEGRATION.md](docs/CLAUDE_CODE_INTEGRATION.md).
 
-`observe -> compress -> generate ideas -> judge -> briefing -> auto-promote top ideas into research`
-
-If Screenpipe is unavailable, the system falls back to `--log-file` or `observation.fallback_log_path`.
-
-## Output Layout
-
-Each run creates a folder like:
+## Repository Layout
 
 ```text
-workspace/
-  runs/
-    run_20260328_193000_example/
-      run_manifest.json
-      execution_trace.jsonl
-      01_literature/
-      02_feasibility/
-      03_data_sources/
-      04_analysis/
-      05_drafting/
-      06_review/
-      learning_signal.json
-  learning/
-    human_idea_model.json
-    learning_changes.md
+src/du_research/
+  agents/          multi-agent prompting and learning
+  stages/          literature, data, analysis, drafting, review
+  automation.py    browser automation runner
+  engine.py        long-running observation and daily idea cycle
+  pipeline.py      end-to-end research orchestration
+  service_manager.py
+  maintenance.py
+docs/
+  PRD.md
+  ARCHITECTURE.md
+  IMPLEMENTATION_STATUS.md
+tests/
+workspace/         runtime artifacts, ignored by git
 ```
+
+## Documentation
+
+- Product scope: [docs/PRD.md](docs/PRD.md)
+- System design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Claude Code integration boundary: [docs/CLAUDE_CODE_INTEGRATION.md](docs/CLAUDE_CODE_INTEGRATION.md)
+- Implementation tracking: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
 
 ## Testing
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
