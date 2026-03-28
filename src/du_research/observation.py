@@ -69,9 +69,15 @@ _BLACKLIST_PATTERNS = [
 ]
 
 
-def _is_filtered(frame: BehaviorFrame) -> bool:
+def _is_filtered(
+    frame: BehaviorFrame,
+    extra_blacklist_apps: set[str] | None = None,
+) -> bool:
     """Return True if the frame should be dropped (privacy / noise)."""
-    if frame.app_name.lower() in _BLACKLIST_APPS:
+    app_lower = frame.app_name.lower()
+    if app_lower in _BLACKLIST_APPS:
+        return True
+    if extra_blacklist_apps and app_lower in extra_blacklist_apps:
         return True
     combined = f"{frame.window_title} {frame.text_content}"
     return any(pat.search(combined) for pat in _BLACKLIST_PATTERNS)
@@ -83,6 +89,7 @@ class ScreenpipeObserver:
 
     base_url: str = _SCREENPIPE_BASE
     timeout: int = 10
+    blacklist_apps: set[str] = field(default_factory=set)
 
     def fetch_recent(
         self,
@@ -126,7 +133,7 @@ class ScreenpipeObserver:
                 text_content=content.get("text", "")[:1000],
                 frame_type=item.get("type", "OCR").lower(),
             )
-            if not _is_filtered(frame):
+            if not _is_filtered(frame, extra_blacklist_apps=self.blacklist_apps):
                 frames.append(frame)
         return frames
 
@@ -151,6 +158,8 @@ class FileObserver:
     Each line becomes a frame.  This is the fallback when screenpipe is
     unavailable and the user supplies a daily log.
     """
+
+    blacklist_apps: set[str] = field(default_factory=set)
 
     def read(self, path: Path) -> list[BehaviorFrame]:
         if not path.exists():
@@ -191,7 +200,7 @@ class FileObserver:
                     frame_type="log",
                 ))
 
-        return [f for f in frames if not _is_filtered(f)]
+        return [f for f in frames if not _is_filtered(f, extra_blacklist_apps=self.blacklist_apps)]
 
 
 # ---------------------------------------------------------------------------

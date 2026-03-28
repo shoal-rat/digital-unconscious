@@ -19,6 +19,29 @@ from du_research.pipeline import ResearchPipeline
 from du_research.service_manager import ServiceManager
 
 
+def _pick_top_backlog_idea(config) -> str | None:
+    """Pick the highest-scoring unresearched idea from the backlog."""
+    backlog_path = Path(config.pipeline.workspace_dir).resolve() / "ideas" / "idea_backlog.jsonl"
+    if not backlog_path.exists():
+        return None
+    best_title = None
+    best_score = -1.0
+    for line in backlog_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        title = obj.get("title", obj.get("idea_text", ""))
+        score = float(obj.get("total_score", 0))
+        if title and score > best_score:
+            best_score = score
+            best_title = title
+    return best_title
+
+
 def _build_backend(config):
     backend_kwargs = {}
     if config.ai.api_key:
@@ -50,6 +73,8 @@ def _build_parser() -> argparse.ArgumentParser:
     research.add_argument("--data-file", help="Optional local CSV file for descriptive analysis")
     research.add_argument("--run-id", help="Optional run id override")
     research.add_argument("--dry-run", action="store_true", help="Skip network calls; produce planning artifacts only")
+    research.add_argument("--auto", action="store_true", help="Auto-select the top idea from the backlog instead of requiring --idea")
+    research.add_argument("--resume", action="store_true", help="Resume an existing run (requires --run-id)")
 
     learn_cmd = subparsers.add_parser("learn", help="Aggregate learning signals across runs")
     learn_cmd.add_argument("--workspace-dir", help="Override workspace directory")
@@ -154,16 +179,41 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- research (original pipeline) ---------------------------------------
     if args.command == "research":
-        if not args.idea and not args.idea_id:
-            parser.error("research requires either --idea or --idea-id")
         pipeline = ResearchPipeline(config, backend=_build_backend(config))
-        result = pipeline.run(
-            idea_text=args.idea,
-            idea_id=args.idea_id,
-            data_file=args.data_file,
-            run_id=args.run_id,
-            dry_run=args.dry_run,
-        )
+
+        # --resume: resume an existing run
+        if args.resume:
+            if not args.run_id:
+                parser.error("--resume requires --run-id")
+            result = pipeline.run(
+                idea_text=args.idea or "",
+                run_id=args.run_id,
+                dry_run=args.dry_run,
+                resume=True,
+            )
+        # --auto: pick the top idea from the backlog automatically
+        elif args.auto:
+            idea_text = _pick_top_backlog_idea(config)
+            if not idea_text:
+                print('{"error": "No ideas in backlog. Run `du daily` first."}', file=sys.stderr)
+                return 1
+            result = pipeline.run(
+                idea_text=idea_text,
+                data_file=args.data_file,
+                run_id=args.run_id,
+                dry_run=args.dry_run,
+            )
+        else:
+            if not args.idea and not args.idea_id:
+                parser.error("research requires --idea, --idea-id, or --auto")
+            result = pipeline.run(
+                idea_text=args.idea,
+                idea_id=args.idea_id,
+                data_file=args.data_file,
+                run_id=args.run_id,
+                dry_run=args.dry_run,
+            )
+
         summary = {
             "run_id": result["run_id"],
             "run_dir": result["run_dir"],

@@ -528,6 +528,23 @@ def load_signals(workspace_dir: Path) -> list[dict[str, Any]]:
     return signals
 
 
+def _load_daily_ideas_for_learning(workspace_dir: Path) -> list[dict[str, Any]]:
+    """Load all daily ideas from the idea backlog for human model building."""
+    backlog = workspace_dir / "ideas" / "idea_backlog.jsonl"
+    if not backlog.exists():
+        return []
+    ideas = []
+    for line in backlog.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ideas.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return ideas
+
+
 def load_human_idea_model(workspace_dir: Path) -> dict[str, Any] | None:
     """Load the existing human idea model if it exists."""
     path = workspace_dir / "learning" / "human_idea_model.json"
@@ -552,7 +569,8 @@ def run_full_learning_cycle(
 
     run_outcomes = analyze_run_outcomes(signals)
     existing_model = load_human_idea_model(workspace_dir)
-    human_model = build_human_idea_model(signals, existing_model=existing_model)
+    daily_ideas = _load_daily_ideas_for_learning(workspace_dir)
+    human_model = build_human_idea_model(signals, daily_ideas=daily_ideas, existing_model=existing_model)
 
     scheduler = MetaLearningScheduler(workspace_dir, min_runs_before_evolution=min_runs_before_evolution)
     scheduler_result = scheduler.decide(run_outcomes)

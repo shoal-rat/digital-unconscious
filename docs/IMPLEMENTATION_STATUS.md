@@ -1,43 +1,61 @@
-# Implementation Status Against `autonomous_research_pipeline_v2.pdf`
+# Implementation Status — v0.3.0
 
-## Implemented In This Repository
+## Fully Implemented
 
-- Daily idea capture from exported text or `jsonl` logs
-- Literature scouting from open providers
-- Open PDF download attempts when direct links are available
-- Structured paper metadata with heuristic claims, methods, findings, and dataset hints
-- Feasibility scoring with go/review/archive output
-- Open dataset discovery
-- Local CSV descriptive analysis
-- Processed-data copy plus provenance metadata
-- Reproducibility rerun check
-- Manuscript Markdown generation
-- BibTeX generation
-- Simple generated manuscript PDF
-- Review scoring with revision history
-- Learning signal aggregation
-- Supervised Claude Code computer-use task export
+### Digital Unconscious Core (PRD Features)
+- [x] Dual-mode AI backend (Claude Code headless + Anthropic API SDK)
+- [x] Circuit breaker with 3-state resilience and exponential backoff
+- [x] Screenpipe observation layer with HTTP API integration
+- [x] File-based fallback observation (text + JSONL)
+- [x] Privacy filtering (hardcoded + configurable app blacklist)
+- [x] Sliding-window compression with Claude Haiku
+- [x] Creative idea generation with Claude Opus (high temp)
+- [x] Adversarial judge with Claude Sonnet (low temp, 4 dimensions)
+- [x] Personalized judge rubrics from Human Idea Model
+- [x] Daily Markdown briefing generation
+- [x] Auto-research trigger for high-scoring ideas
+- [x] Smart deduplication for auto-research (similarity + cooldown)
+- [x] RAG context from domain knowledge store
+- [x] Human Idea Model (intellectual fingerprint)
+- [x] Prompt Evolution Engine (versioned, shadow-tested)
+- [x] Domain Knowledge Expander
+- [x] Meta-Learning Scheduler (conservative update rules, auto-rollback)
+- [x] Full learning cycle orchestration
+- [x] Observation service daemon with configurable intervals
+- [x] Platform autostart registration
+- [x] Workspace maintenance and garbage collection
 
-## Not Fully Implemented Here
+### Research Pipeline (6 Stages)
+- [x] Literature Scout (arXiv, PubMed, Semantic Scholar, open PDF download)
+- [x] Feasibility Assessment (0-100 score, go/review/archive)
+- [x] Dataset Discovery (OSF, Zenodo, open registries)
+- [x] Analysis & Figures (AI code generation, auto-debug, 300 DPI)
+- [x] Paper Drafting (Markdown manuscript with BibTeX)
+- [x] AI Peer Review Loop (adversarial reviewer + revision agent)
+- [x] AI-powered writer, reviewer, revision, analysis-coder agents
+- [x] Supervised computer-use task export
 
-- Passive 24/7 screen observation
-- Institutional credential vault and encrypted reuse
-- Unsupervised browser login flows against personal Chrome profiles
-- Paywalled portal navigation without human approval
-- LLM-backed writer/reviewer agents using Claude models directly
-- Statistical testing with p-values, effect sizes, and confidence intervals for arbitrary studies
-- Journal-specific camera-ready typesetting
-- Final submission workflow and approval queue
-- Prompt evolution and domain-RAG expansion loops
+### Infrastructure
+- [x] AES-GCM encrypted credential vault
+- [x] CLI: daily, research (--idea, --auto, --resume), learn, init, config, start, service, credential, logs, status
+- [x] Onboarding wizard with first-run setup
+- [x] Background service daemon management
+- [x] 31+ passing tests
 
-## Why Those Items Are Still Separate
+## Not Yet Implemented (Deferred to Future Phases)
 
-The remaining items are not just more Python code inside this repo. They require one or more of:
+- [ ] ChromaDB vector database for semantic RAG retrieval
+- [ ] Supervised browser automation in sandboxed environment
+- [ ] Institutional portal navigation (library login flows)
+- [ ] Journal-specific camera-ready typesetting
+- [ ] Final submission workflow and approval queue
+- [ ] Multi-user/team deployment
+- [ ] Community prompt marketplace
 
-- external model providers and prompt orchestration
-- a sandboxed browser automation environment
-- sensitive credential handling
-- institution-specific portal behavior
-- legal and security controls around account use
+## Why Those Items Are Deferred
 
-That boundary is deliberate. The repository now covers the parts that are realistically safe and buildable locally without pretending the external automation pieces are solved when they are not.
+The deferred items require external infrastructure (ChromaDB, browser sandbox),
+institution-specific handling (portal UIs, credential flows), or represent
+long-term platform features beyond the single-user local-first scope. The current
+file-based RAG context provides the same information flow as ChromaDB would, using
+the domain knowledge JSON store built by the learning engine.

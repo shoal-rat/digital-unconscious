@@ -763,5 +763,165 @@ class FakeCircuitBreaker:
         return {"state": "closed", "total_calls": len(self.backend.calls)}
 
 
+# ---------------------------------------------------------------------------
+# New v0.3 gap-fix tests
+# ---------------------------------------------------------------------------
+
+
+class BlacklistAppsTests(unittest.TestCase):
+    """Tests for configurable blacklist_apps in observation layer."""
+
+    def test_file_observer_filters_blacklisted_apps(self) -> None:
+        observer = FileObserver(blacklist_apps={"mygame"})
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
+            f.write(json.dumps({"app_name": "mygame", "text": "Playing a game", "timestamp": "2026-03-28T10:00:00Z"}) + "\n")
+            f.write(json.dumps({"app_name": "browser", "text": "Reading papers", "timestamp": "2026-03-28T10:01:00Z"}) + "\n")
+            f.flush()
+            path = Path(f.name)
+        try:
+            frames = observer.read(path)
+            # "mygame" should be filtered out by the custom blacklist
+            self.assertEqual(len(frames), 1)
+            self.assertEqual(frames[0].app_name, "browser")
+        finally:
+            path.unlink()
+
+    def test_default_blacklist_still_works(self) -> None:
+        from du_research.observation import _is_filtered
+        frame = BehaviorFrame(
+            timestamp="2026-03-28T10:00:00Z",
+            app_name="screensaver",
+            window_title="",
+            text_content="idle",
+        )
+        self.assertTrue(_is_filtered(frame))
+
+
+class JudgePersonalizationTests(unittest.TestCase):
+    """Tests for personalized judge rubrics from Human Idea Model."""
+
+    def test_judge_accepts_human_idea_model(self) -> None:
+        """Judge should accept and use human_idea_model without errors."""
+        fake = FakeBackend(default=json.dumps({
+            "evaluations": [{
+                "idea_id": "test_001",
+                "novelty": 70,
+                "feasibility": 65,
+                "domain_relevance": 80,
+                "timeliness": 60,
+                "total_score": 69.5,
+                "verdict": "hold",
+                "one_line_reason": "Decent idea",
+            }]
+        }))
+        judge = JudgeAgent(backend=fake, model="sonnet")
+        human_model = {
+            "what_makes_a_good_idea_for_this_user": [
+                "Combines behavioral data with measurable outcomes",
+            ],
+            "recurring_blind_spots": ["Underestimates data availability"],
+            "idea_lifecycle": {"conversion_rate": 0.05},
+        }
+        evals = judge.evaluate(
+            [{"id": "test_001", "title": "Test idea", "description": "A test"}],
+            human_idea_model=human_model,
+        )
+        self.assertEqual(len(evals), 1)
+        # Verify the model context was included in the prompt
+        self.assertTrue(any("Personalized" in c["prompt"] or "behavioral data" in c["prompt"] for c in fake.calls))
+
+    def test_format_judge_model_context(self) -> None:
+        from du_research.agents.judge import _format_judge_model_context
+        model = {
+            "what_makes_a_good_idea_for_this_user": ["Cross-domain connections"],
+            "recurring_blind_spots": ["Overestimates novelty"],
+            "idea_lifecycle": {"conversion_rate": 0.03},
+        }
+        context = _format_judge_model_context(model)
+        self.assertIn("Cross-domain connections", context)
+        self.assertIn("Overestimates novelty", context)
+        self.assertIn("3.0%", context)
+
+
+class RAGContextTests(unittest.TestCase):
+    """Tests for RAG context loading from domain knowledge store."""
+
+    def test_load_rag_context_returns_none_without_knowledge(self) -> None:
+        from du_research.engine import DigitalUnconsciousEngine
+        config = AppConfig()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.pipeline.workspace_dir = tmpdir
+            engine = DigitalUnconsciousEngine.__new__(DigitalUnconsciousEngine)
+            engine.workspace = Path(tmpdir)
+            engine.config = config
+            result = engine._load_rag_context([{"test": "summary"}])
+            self.assertIsNone(result)
+
+    def test_load_rag_context_returns_knowledge(self) -> None:
+        from du_research.engine import DigitalUnconsciousEngine
+        config = AppConfig()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.pipeline.workspace_dir = tmpdir
+            engine = DigitalUnconsciousEngine.__new__(DigitalUnconsciousEngine)
+            engine.workspace = Path(tmpdir)
+            engine.config = config
+            knowledge_dir = Path(tmpdir) / "knowledge"
+            knowledge_dir.mkdir()
+            (knowledge_dir / "domain_knowledge.json").write_text(json.dumps({
+                "papers": [{"paper": "doi:10.1234/test", "count": 3}],
+                "domains": [{"domain": "AI tools", "count": 5}],
+            }))
+            result = engine._load_rag_context([{"test": "summary"}])
+            self.assertIsNotNone(result)
+            self.assertIn("doi:10.1234/test", result)
+            self.assertIn("AI tools", result)
+
+
+class CLIAutoResumeTests(unittest.TestCase):
+    """Tests for --auto and --resume CLI flags."""
+
+    def test_pick_top_backlog_idea(self) -> None:
+        from du_research.cli import _pick_top_backlog_idea
+        config = AppConfig()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.pipeline.workspace_dir = tmpdir
+            ideas_dir = Path(tmpdir) / "ideas"
+            ideas_dir.mkdir()
+            backlog = ideas_dir / "idea_backlog.jsonl"
+            backlog.write_text(
+                json.dumps({"title": "Low idea", "total_score": 50}) + "\n"
+                + json.dumps({"title": "Best idea", "total_score": 90}) + "\n"
+                + json.dumps({"title": "Mid idea", "total_score": 70}) + "\n"
+            )
+            result = _pick_top_backlog_idea(config)
+            self.assertEqual(result, "Best idea")
+
+    def test_pick_top_returns_none_when_empty(self) -> None:
+        from du_research.cli import _pick_top_backlog_idea
+        config = AppConfig()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.pipeline.workspace_dir = tmpdir
+            result = _pick_top_backlog_idea(config)
+            self.assertIsNone(result)
+
+
+class LearningDailyIdeasTests(unittest.TestCase):
+    """Tests for daily_ideas being passed to human model builder."""
+
+    def test_daily_ideas_loaded_in_full_learning_cycle(self) -> None:
+        from du_research.agents.learning_engine import _load_daily_ideas_for_learning
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            ideas_dir = workspace / "ideas"
+            ideas_dir.mkdir()
+            backlog = ideas_dir / "idea_backlog.jsonl"
+            backlog.write_text(
+                json.dumps({"title": "Test idea", "domain": "AI tools"}) + "\n"
+            )
+            ideas = _load_daily_ideas_for_learning(workspace)
+            self.assertEqual(len(ideas), 1)
+            self.assertEqual(ideas[0]["title"], "Test idea")
+
+
 if __name__ == "__main__":
     unittest.main()

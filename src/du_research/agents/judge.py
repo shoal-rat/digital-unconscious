@@ -89,6 +89,7 @@ class JudgeAgent:
         behaviour_summary: dict[str, Any] | None = None,
         primary_domains: list[str] | None = None,
         existing_ideas: list[str] | None = None,
+        human_idea_model: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Score each idea and return evaluations sorted by total_score."""
         if not ideas:
@@ -110,6 +111,11 @@ class JudgeAgent:
                 f"\n## Recent Existing Ideas (for novelty comparison)\n"
                 + "\n".join(f"- {idea}" for idea in existing_ideas[:20])
             )
+
+        if human_idea_model:
+            model_hints = _format_judge_model_context(human_idea_model)
+            if model_hints:
+                parts.append(f"\n## Personalized Evaluation Context\n{model_hints}")
 
         parts.append(f"\nEvaluate all {len(ideas)} ideas. Output ONLY valid JSON.")
         prompt = "\n".join(parts)
@@ -143,6 +149,29 @@ class JudgeAgent:
                 ev["verdict"] = "discard"
 
         return sorted(evaluations, key=lambda e: e["total_score"], reverse=True)
+
+
+def _format_judge_model_context(model: dict[str, Any]) -> str:
+    """Extract relevant hints from the human idea model for personalized judging."""
+    lines = []
+    good_idea = model.get("what_makes_a_good_idea_for_this_user", [])
+    if good_idea:
+        lines.append("What historically makes a good idea for this user:")
+        for criterion in good_idea[:4]:
+            lines.append(f"  - {criterion}")
+
+    blind_spots = model.get("recurring_blind_spots", [])
+    if blind_spots:
+        lines.append("Known blind spots (be lenient on ideas that counterbalance these):")
+        for spot in blind_spots[:3]:
+            lines.append(f"  - {spot}")
+
+    lifecycle = model.get("idea_lifecycle", {})
+    conversion = lifecycle.get("conversion_rate", 0)
+    if conversion > 0:
+        lines.append(f"Historical idea-to-paper conversion rate: {conversion:.1%}")
+
+    return "\n".join(lines)
 
 
 def _heuristic_evaluate(ideas: list[dict[str, Any]]) -> list[dict[str, Any]]:

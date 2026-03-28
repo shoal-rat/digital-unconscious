@@ -114,11 +114,13 @@ class DigitalUnconsciousEngine:
         )
 
         # Observers
+        _blacklist = {a.lower() for a in config.observation.blacklist_apps}
         self.screenpipe = ScreenpipeObserver(
             base_url=config.observation.screenpipe_url,
             timeout=config.pipeline.network_timeout_seconds,
+            blacklist_apps=_blacklist,
         )
-        self.file_observer = FileObserver()
+        self.file_observer = FileObserver(blacklist_apps=_blacklist)
         self.research_pipeline = ResearchPipeline(config, backend=self.backend)
         self.maintenance = WorkspaceMaintenance(self.workspace, config)
 
@@ -163,23 +165,26 @@ class DigitalUnconsciousEngine:
         human_model = load_human_idea_model(self.workspace)
         existing_ideas = self._load_recent_ideas()
 
-        # 4. Generate ideas from each summary
+        # 4. Generate ideas from each summary (with RAG context if available)
+        rag_context = self._load_rag_context(summaries)
         all_ideas: list[dict[str, Any]] = []
         for summary in summaries:
             ideas = self.idea_generator.generate(
                 summary,
+                rag_context=rag_context,
                 human_idea_model=human_model,
                 idea_count=self.config.idea.max_ideas_per_cycle,
             )
             all_ideas.extend(ideas)
         logger.info("Generated %d raw ideas", len(all_ideas))
 
-        # 5. Judge all ideas
+        # 5. Judge all ideas (with personalized context from human model)
         evaluations = self.judge.evaluate(
             all_ideas,
             behaviour_summary=summaries[0] if summaries else None,
             primary_domains=self.config.idea.primary_domains,
             existing_ideas=existing_ideas,
+            human_idea_model=human_model,
         )
         logger.info("Evaluated %d ideas", len(evaluations))
 
@@ -496,6 +501,37 @@ class DigitalUnconsciousEngine:
 
         logger.warning("No observation source available")
         return []
+
+    def _load_rag_context(self, summaries: list[dict[str, Any]]) -> str | None:
+        """Build RAG context from domain knowledge and past research.
+
+        Currently uses the file-based domain knowledge store. When ChromaDB is
+        available this method should be upgraded to semantic retrieval.
+        """
+        knowledge_path = self.workspace / "knowledge" / "domain_knowledge.json"
+        if not knowledge_path.exists():
+            return None
+
+        try:
+            knowledge = json.loads(knowledge_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+        parts: list[str] = []
+
+        # Include top papers from knowledge base
+        papers = knowledge.get("papers", [])
+        if papers:
+            paper_lines = [f"- {p.get('paper', 'unknown')} (cited {p.get('count', 0)} times)" for p in papers[:10]]
+            parts.append("### Relevant Papers from Knowledge Base\n" + "\n".join(paper_lines))
+
+        # Include domain distribution
+        domains = knowledge.get("domains", [])
+        if domains:
+            domain_lines = [f"- {d.get('domain', 'unknown')}: {d.get('count', 0)} runs" for d in domains[:8]]
+            parts.append("### Domain Research History\n" + "\n".join(domain_lines))
+
+        return "\n\n".join(parts) if parts else None
 
     def _load_recent_ideas(self, max_ideas: int = 50) -> list[str]:
         """Load recent idea titles from the backlog for novelty comparison."""
