@@ -169,19 +169,30 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _launch_background_service(config_path: str | None = None) -> None:
+    """Start the observation service as a detached background process."""
+    import subprocess as _sp
+    cmd = [sys.executable, "-m", "du_research.cli", "service", "start"]
+    if config_path:
+        cmd.extend(["--config", config_path])
+    try:
+        _sp.Popen(
+            cmd,
+            creationflags=_sp.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            stdout=_sp.DEVNULL,
+            stderr=_sp.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     argv = list(argv) if argv is not None else sys.argv[1:]
     if not argv:
-        # First run: open dashboard with setup wizard
-        # Subsequent runs: start background service silently
-        config_check = load_config()
-        workspace = Path(config_check.pipeline.workspace_dir).resolve()
-        setup_done = (workspace / "setup" / "user_settings.json").exists()
-        if setup_done:
-            argv = ["start"]
-        else:
-            argv = ["dashboard"]
+        # No arguments = launch the full desktop experience
+        # Tray icon + dashboard server + background observation service
+        argv = ["tray"]
     args = parser.parse_args(argv)
     config = load_config(args.config)
     project_root = Path(__file__).resolve().parents[2]
@@ -429,14 +440,30 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(service_manager.status(), indent=2, ensure_ascii=False))
             return 0
 
-    # --- tray (system tray icon) ----------------------------------------------
+    # --- tray (system tray icon — the default "du" experience) ----------------
     if args.command == "tray":
         from du_research.tray import run_tray
-        # Start dashboard server in background for tray to link to
+
+        workspace = Path(config.pipeline.workspace_dir).resolve()
+        setup_done = (workspace / "setup" / "user_settings.json").exists()
+
+        # 1. Start dashboard server in background
         threading.Thread(
             target=lambda: __import__("du_research.dashboard", fromlist=["run_dashboard"]).run_dashboard(config, open_browser=False),
             daemon=True,
         ).start()
+
+        # 2. Start observation service in background
+        _launch_background_service()
+
+        # 3. If first run, open browser to setup wizard
+        if not setup_done:
+            import time as _time
+            _time.sleep(0.5)  # let dashboard server start
+            import webbrowser
+            webbrowser.open("http://localhost:9830/setup")
+
+        # 4. Show tray icon (main loop — user sees icon in taskbar)
         run_tray(config)
         return 0
 

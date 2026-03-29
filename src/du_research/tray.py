@@ -130,7 +130,6 @@ def run_tray(config: AppConfig | None = None, config_path: str | None = None):
     config = config or load_config(config_path)
 
     def open_dashboard(icon, item):
-        _run_command("dashboard", "--no-open")
         webbrowser.open("http://localhost:9830")
 
     def open_briefing(icon, item):
@@ -194,7 +193,17 @@ def run_tray(config: AppConfig | None = None, config_path: str | None = None):
     icon = pystray.Icon(
         name="digital-unconscious",
         icon=_create_icon_image(),
-        title="Digital Unconscious",
+        title="Digital Unconscious — running",
         menu=menu,
     )
-    icon.run()
+
+    def _on_ready(icon):
+        n = _idea_count(config)
+        briefing = _latest_briefing_path(config)
+        if briefing:
+            date = briefing.parent.name.replace("cycle_", "")
+            _notify(icon, "Digital Unconscious", f"Running silently. {n} ideas in backlog.\nLatest briefing: {date}")
+        else:
+            _notify(icon, "Digital Unconscious", "Running silently. Right-click for options.\nYour first briefing will appear at your scheduled time.")
+
+    icon.run(setup=_on_ready)
