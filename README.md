@@ -65,6 +65,14 @@ That's it. On first run, a setup wizard opens in your browser. Configure your re
 du update
 ```
 
+### Uninstall
+
+```powershell
+pip uninstall digital-unconscious -y
+```
+
+This removes the program completely. Your workspace data (ideas, briefings, settings) stays in the `workspace/` folder — delete that manually if you want a full cleanup.
+
 ### Alternative install (from source)
 
 ```powershell
