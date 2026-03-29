@@ -10,6 +10,9 @@ from du_research.models import PaperCandidate, StageResult
 from du_research.net import build_url, fetch_bytes, fetch_json
 from du_research.utils import citation_score, overlap_score, recentness_score, safe_year, slugify, strip_html
 
+# Optional AI backend for Claude Code computer-use browsing
+_AI_BACKEND = None  # Set by caller via run_stage(backend=...)
+
 
 class LiteratureProvider(Protocol):
     name: str
@@ -333,6 +336,117 @@ def _download_open_pdfs(
     return downloads, errors
 
 
+def _browse_and_download_papers(
+    papers: list[PaperCandidate],
+    output_dir: Path,
+    backend: object,
+    max_papers: int = 5,
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Use Claude Code computer-use to browse paper pages and download PDFs.
+
+    This calls Claude Code with browser/computer tools enabled, instructing it
+    to visit each paper URL, read the abstract, and download the PDF — exactly
+    like a human researcher would.
+    """
+    import json as _json
+    downloads: list[dict[str, str]] = []
+    errors: list[str] = []
+    pdf_dir = output_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    for paper in papers[:max_papers]:
+        url = paper.pdf_url or paper.url
+        if not url:
+            continue
+
+        prompt = (
+            f"Browse to this academic paper and download the PDF.\n\n"
+            f"Title: {paper.title}\n"
+            f"URL: {url}\n"
+            f"DOI: {paper.doi or 'N/A'}\n\n"
+            f"Instructions:\n"
+            f"1. Open the URL in Chrome\n"
+            f"2. If it's a PDF, download it to: {pdf_dir}\n"
+            f"3. If it's a landing page, find and click the PDF download link\n"
+            f"4. If there's a 'Download PDF' or 'View PDF' button, click it\n"
+            f"5. For arXiv, append .pdf to the abstract URL\n"
+            f"6. Save the file as: {slugify(paper.title, max_length=40)}.pdf\n"
+            f"7. If the PDF is behind a paywall, try Unpaywall or Sci-Hub alternatives\n\n"
+            f"Proceed without stopping. Do not ask for permission."
+        )
+        try:
+            response = backend.call(
+                prompt,
+                mode="strict",
+                model="sonnet",
+                allowed_tools=["computer", "bash"],
+                max_tokens=3000,
+            )
+            if response.ok:
+                downloads.append({
+                    "title": paper.title,
+                    "url": url,
+                    "method": "claude_code_browser",
+                    "response": response.text[:500],
+                })
+            else:
+                errors.append(f"Claude Code browse failed for {paper.title}: {response.raw.get('error', 'unknown')}")
+        except Exception as exc:
+            errors.append(f"Claude Code browse error for {paper.title}: {exc}")
+
+    return downloads, errors
+
+
+def _extract_paper_content(
+    papers: list[PaperCandidate],
+    output_dir: Path,
+    backend: object,
+    max_papers: int = 3,
+) -> list[dict[str, str]]:
+    """Use Claude Code to read downloaded PDFs and extract structured findings."""
+    import json as _json
+    extracted: list[dict[str, str]] = []
+    pdf_dir = output_dir / "pdfs"
+    if not pdf_dir.exists():
+        return extracted
+
+    pdf_files = list(pdf_dir.glob("*.pdf"))[:max_papers]
+    for pdf_path in pdf_files:
+        prompt = (
+            f"Read this PDF file and extract structured information.\n\n"
+            f"File: {pdf_path}\n\n"
+            f"Extract and return ONLY JSON:\n"
+            f'{{"title": "...", "abstract": "...", "key_findings": ["..."], '
+            f'"methods": ["..."], "datasets_used": ["..."], "limitations": ["..."]}}'
+        )
+        try:
+            response = backend.call(
+                prompt,
+                mode="strict",
+                model="sonnet",
+                allowed_tools=["Read"],
+                max_tokens=2000,
+            )
+            if response.ok:
+                try:
+                    data = _json.loads(response.text)
+                    extracted.append(data)
+                except _json.JSONDecodeError:
+                    # Try to find JSON in response
+                    text = response.text
+                    start = text.find("{")
+                    end = text.rfind("}") + 1
+                    if start >= 0 and end > start:
+                        try:
+                            extracted.append(_json.loads(text[start:end]))
+                        except _json.JSONDecodeError:
+                            pass
+        except Exception:
+            pass
+
+    return extracted
+
+
 def run_stage(
     idea_text: str,
     output_dir: Path,
@@ -343,6 +457,7 @@ def run_stage(
     max_pdf_downloads: int = 3,
     dry_run: bool = False,
     providers: list[LiteratureProvider] | None = None,
+    backend: object | None = None,
 ) -> tuple[list[PaperCandidate], dict, StageResult]:
     providers = providers if providers is not None else [
         ArxivProvider(timeout),
@@ -367,14 +482,28 @@ def run_stage(
     ranked = [_enrich_paper(paper) for paper in _dedupe(found)]
     downloads: list[dict[str, str]] = []
     download_errors: list[str] = []
+    browser_downloads: list[dict[str, str]] = []
+    extracted_content: list[dict[str, str]] = []
     if download_pdfs and not dry_run:
+        # First try direct HTTP downloads for open-access papers
         downloads, download_errors = _download_open_pdfs(ranked, output_dir, timeout, max_pdf_downloads)
+        # Then use Claude Code computer-use to browse and download remaining papers
+        if backend is not None:
+            remaining = [p for p in ranked if not any(d["title"] == p.title for d in downloads)]
+            browser_downloads, browser_errors = _browse_and_download_papers(
+                remaining, output_dir, backend, max_papers=max_pdf_downloads,
+            )
+            download_errors.extend(browser_errors)
+            # Extract structured content from downloaded PDFs
+            extracted_content = _extract_paper_content(ranked, output_dir, backend, max_papers=3)
     payload = {
         "query": idea_text,
         "paper_count": len(ranked),
         "provider_counts": provider_counts,
         "errors": errors,
         "downloaded_pdfs": downloads,
+        "browser_downloaded": browser_downloads,
+        "extracted_content": extracted_content,
         "download_errors": download_errors,
         "core_reference_titles": [paper.title for paper in ranked[:core_papers]],
         "papers": [paper.to_dict() for paper in ranked],

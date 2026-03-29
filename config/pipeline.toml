@@ -90,6 +90,7 @@ key_path = "workspace/credentials/master.key"
 enabled = true
 auto_execute = false
 runner = "claude_code"
+checkpoint_policy = "best_effort" # "best_effort" (only stop when blocked) | "strict" (preemptive human checkpoints)
 browser = "chrome"
 download_dir = "workspace/browser_downloads"
 screenshot_dir = "workspace/browser_screenshots"

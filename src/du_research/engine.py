@@ -50,6 +50,7 @@ from du_research.observation import (
     deduplicate_frames,
     group_into_windows,
 )
+from du_research.rag import RAGStore
 from du_research.utils import iso_now
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,7 @@ class DigitalUnconsciousEngine:
         self.file_observer = FileObserver(blacklist_apps=_blacklist)
         self.research_pipeline = ResearchPipeline(config, backend=self.backend)
         self.maintenance = WorkspaceMaintenance(self.workspace, config)
+        self.rag = RAGStore(self.workspace)
 
     # ------------------------------------------------------------------
     # Main cycle
@@ -300,6 +302,20 @@ class DigitalUnconsciousEngine:
             json.dumps(research_runs, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+        # 10. Ingest papers from completed research runs into RAG knowledge base
+        rag_ingested = 0
+        for rr in research_runs:
+            run_dir = rr.get("run_dir")
+            if run_dir:
+                rag_ingested += self.rag.add_papers_from_run(Path(run_dir))
+        if rag_ingested:
+            logger.info("Ingested %d papers into RAG knowledge base", rag_ingested)
+
+        # Also ingest user knowledge docs if present
+        user_knowledge_dir = self.workspace / "knowledge" / "documents"
+        if user_knowledge_dir.exists():
+            self.rag.add_knowledge_files(user_knowledge_dir)
 
         logger.info(
             "Daily cycle complete: %d included, %d held, briefing at %s",
@@ -503,35 +519,32 @@ class DigitalUnconsciousEngine:
         return []
 
     def _load_rag_context(self, summaries: list[dict[str, Any]]) -> str | None:
-        """Build RAG context from domain knowledge and past research.
+        """Build RAG context via ChromaDB semantic search (or file fallback).
 
-        Currently uses the file-based domain knowledge store. When ChromaDB is
-        available this method should be upgraded to semantic retrieval.
+        Extracts key topics from today's behaviour summaries and queries the
+        knowledge base for the most relevant past research and user documents.
         """
-        knowledge_path = self.workspace / "knowledge" / "domain_knowledge.json"
-        if not knowledge_path.exists():
+        if self.rag.count() == 0:
             return None
 
-        try:
-            knowledge = json.loads(knowledge_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        # Build query from today's dominant topics
+        query_parts: list[str] = []
+        for summary in summaries[:3]:
+            topics = summary.get("dominant_topics", [])
+            if isinstance(topics, list):
+                query_parts.extend(str(t) for t in topics)
+            query_parts.extend(str(s) for s in summary.get("search_queries", []))
+            hints = summary.get("cross_domain_hints", [])
+            if isinstance(hints, list):
+                query_parts.extend(str(h) for h in hints)
+
+        query_text = " ".join(query_parts) if query_parts else " ".join(
+            str(summary.get("dominant_topics", "")) for summary in summaries[:2]
+        )
+        if not query_text.strip():
             return None
 
-        parts: list[str] = []
-
-        # Include top papers from knowledge base
-        papers = knowledge.get("papers", [])
-        if papers:
-            paper_lines = [f"- {p.get('paper', 'unknown')} (cited {p.get('count', 0)} times)" for p in papers[:10]]
-            parts.append("### Relevant Papers from Knowledge Base\n" + "\n".join(paper_lines))
-
-        # Include domain distribution
-        domains = knowledge.get("domains", [])
-        if domains:
-            domain_lines = [f"- {d.get('domain', 'unknown')}: {d.get('count', 0)} runs" for d in domains[:8]]
-            parts.append("### Domain Research History\n" + "\n".join(domain_lines))
-
-        return "\n\n".join(parts) if parts else None
+        return self.rag.query_as_context(query_text, n_results=8)
 
     def _load_recent_ideas(self, max_ideas: int = 50) -> list[str]:
         """Load recent idea titles from the backlog for novelty comparison."""

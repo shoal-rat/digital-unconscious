@@ -844,37 +844,44 @@ class JudgePersonalizationTests(unittest.TestCase):
 
 
 class RAGContextTests(unittest.TestCase):
-    """Tests for RAG context loading from domain knowledge store."""
+    """Tests for RAG context loading from knowledge store."""
 
     def test_load_rag_context_returns_none_without_knowledge(self) -> None:
         from du_research.engine import DigitalUnconsciousEngine
+        from du_research.rag import RAGStore
         config = AppConfig()
         with tempfile.TemporaryDirectory() as tmpdir:
             config.pipeline.workspace_dir = tmpdir
             engine = DigitalUnconsciousEngine.__new__(DigitalUnconsciousEngine)
             engine.workspace = Path(tmpdir)
             engine.config = config
+            engine.rag = RAGStore(Path(tmpdir))
             result = engine._load_rag_context([{"test": "summary"}])
             self.assertIsNone(result)
 
     def test_load_rag_context_returns_knowledge(self) -> None:
         from du_research.engine import DigitalUnconsciousEngine
+        from du_research.rag import RAGStore
         config = AppConfig()
         with tempfile.TemporaryDirectory() as tmpdir:
             config.pipeline.workspace_dir = tmpdir
             engine = DigitalUnconsciousEngine.__new__(DigitalUnconsciousEngine)
             engine.workspace = Path(tmpdir)
             engine.config = config
-            knowledge_dir = Path(tmpdir) / "knowledge"
-            knowledge_dir.mkdir()
-            (knowledge_dir / "domain_knowledge.json").write_text(json.dumps({
-                "papers": [{"paper": "doi:10.1234/test", "count": 3}],
-                "domains": [{"domain": "AI tools", "count": 5}],
-            }))
-            result = engine._load_rag_context([{"test": "summary"}])
+            engine.rag = RAGStore(Path(tmpdir))
+            # Add some documents to the RAG store
+            engine.rag.add_paper(
+                "Cognitive load in SaaS pricing",
+                "This paper studies how pricing complexity affects user decisions",
+                doi="doi:10.1234/test",
+                domain="AI tools",
+            )
+            result = engine._load_rag_context([{
+                "dominant_topics": ["pricing", "cognitive load"],
+                "search_queries": ["SaaS pricing"],
+            }])
             self.assertIsNotNone(result)
-            self.assertIn("doi:10.1234/test", result)
-            self.assertIn("AI tools", result)
+            self.assertIn("pricing", result.lower())
 
 
 class CLIAutoResumeTests(unittest.TestCase):
@@ -921,6 +928,102 @@ class LearningDailyIdeasTests(unittest.TestCase):
             ideas = _load_daily_ideas_for_learning(workspace)
             self.assertEqual(len(ideas), 1)
             self.assertEqual(ideas[0]["title"], "Test idea")
+
+
+class RAGStoreTests(unittest.TestCase):
+    """Tests for the ChromaDB / file-fallback RAG store."""
+
+    def test_rag_store_add_and_query_fallback(self) -> None:
+        """RAG store works without ChromaDB via file-based fallback."""
+        from du_research.rag import RAGStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = RAGStore(Path(tmpdir))
+            store.add_paper(
+                "Neural pricing models",
+                "We study how neural networks can predict optimal SaaS pricing.",
+                doi="10.1234/pricing",
+                domain="AI tools",
+            )
+            store.add_paper(
+                "Cognitive load theory in UX",
+                "Applying cognitive load theory to simplify user interface design.",
+                doi="10.1234/cogload",
+                domain="cognitive science",
+            )
+            self.assertEqual(store.count(), 2)
+            results = store.query("pricing neural networks")
+            self.assertTrue(len(results) > 0)
+            self.assertIn("pricing", results[0]["text"].lower())
+
+    def test_rag_store_query_as_context(self) -> None:
+        from du_research.rag import RAGStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = RAGStore(Path(tmpdir))
+            store.add_paper("Test paper", "About AI and creativity", doi="10.test/1")
+            context = store.query_as_context("AI creativity")
+            self.assertIsNotNone(context)
+            self.assertIn("Test paper", context)
+
+    def test_rag_store_empty_returns_none(self) -> None:
+        from du_research.rag import RAGStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = RAGStore(Path(tmpdir))
+            self.assertIsNone(store.query_as_context("anything"))
+
+    def test_rag_store_add_papers_from_run(self) -> None:
+        from du_research.rag import RAGStore
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = RAGStore(Path(tmpdir))
+            run_dir = Path(tmpdir) / "runs" / "test_run"
+            lit_dir = run_dir / "01_literature"
+            lit_dir.mkdir(parents=True)
+            (lit_dir / "papers.json").write_text(json.dumps({
+                "papers": [
+                    {"title": "Paper A", "summary": "About topic A", "doi": "10.a/1", "source": "arxiv"},
+                    {"title": "Paper B", "summary": "About topic B", "doi": "10.b/2", "source": "pubmed"},
+                ]
+            }))
+            count = store.add_papers_from_run(run_dir)
+            self.assertEqual(count, 2)
+            self.assertEqual(store.count(), 2)
+
+
+class AIFeasibilityTests(unittest.TestCase):
+    """Tests for AI-powered feasibility assessment."""
+
+    def test_ai_feasibility_with_fake_backend(self) -> None:
+        from du_research.stages.feasibility import run_stage
+        from du_research.models import PaperCandidate
+        fake = FakeBackend(default=json.dumps({
+            "decision": "proceed",
+            "confidence": 78,
+            "novel_angle": "Fresh combination of pricing and cognitive load",
+            "recommended_methods": ["survey", "regression"],
+            "required_data": ["SaaS pricing data", "user behavior logs"],
+            "estimated_effort": "medium",
+            "key_risks": ["Data availability"],
+            "reasoning": "Strong literature base with clear gap.",
+        }))
+        papers = [
+            PaperCandidate(source="arxiv", title="Pricing study", summary="About pricing", authors=[], year=2024, url=""),
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output, result = run_stage("Cognitive load in pricing", papers, Path(tmpdir), backend=fake)
+            self.assertEqual(output["decision"], "proceed")
+            self.assertEqual(output["confidence"], 78)
+            self.assertEqual(output.get("assessment_mode"), "ai")
+            self.assertIn("regression", output["recommended_methods"])
+
+    def test_heuristic_fallback_without_backend(self) -> None:
+        from du_research.stages.feasibility import run_stage
+        from du_research.models import PaperCandidate
+        papers = [
+            PaperCandidate(source="arxiv", title="Pricing study", summary="About pricing", authors=[], year=2024, url=""),
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output, result = run_stage("Cognitive load in pricing", papers, Path(tmpdir))
+            self.assertIn(output["decision"], {"proceed", "review", "archive"})
+            self.assertNotIn("assessment_mode", output)  # heuristic has no mode field
 
 
 if __name__ == "__main__":

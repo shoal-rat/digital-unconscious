@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digital-unconscious"
-version = "0.1.0"
+version = "0.4.0"
 description = "Passive Screen Observation × AI-Powered Idea Generation — from daily screen behaviour to validated research ideas with zero human intervention"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,8 @@ dependencies = []
 
 [project.optional-dependencies]
 api = ["anthropic>=0.40"]
+rag = ["chromadb>=0.5"]
+full = ["anthropic>=0.40", "chromadb>=0.5"]
 
 [project.scripts]
 du = "du_research.cli:main"

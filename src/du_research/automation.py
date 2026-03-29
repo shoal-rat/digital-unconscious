@@ -28,6 +28,7 @@ class BrowserAutomationRunner:
         *,
         runner: str,
         browser: str,
+        checkpoint_policy: str,
         download_dir: Path,
         screenshot_dir: Path,
         headless: bool,
@@ -35,6 +36,7 @@ class BrowserAutomationRunner:
     ):
         self.runner = runner
         self.browser = browser
+        self.checkpoint_policy = checkpoint_policy.strip().lower()
         self.download_dir = download_dir
         self.screenshot_dir = screenshot_dir
         self.headless = headless
@@ -64,10 +66,20 @@ class BrowserAutomationRunner:
 
     def _execute_with_claude_code(self, task: dict[str, Any]) -> dict[str, Any]:
         backend = ClaudeCodeBackend(timeout_seconds=self.timeout_seconds)
+        if self._strict_checkpoints():
+            policy_instruction = (
+                "Never accept terms, solve CAPTCHA, or submit credentials without stopping and stating that "
+                "a manual checkpoint is required."
+            )
+        else:
+            policy_instruction = (
+                "Proceed end-to-end with best effort. Only stop and request a manual checkpoint when you cannot "
+                "continue after reasonable attempts (for example: CAPTCHA, MFA, hard access wall, or consent/payment gate)."
+            )
         prompt = (
             "Use Chrome/computer tools to inspect and download the resources in this JSON task pack. "
-            "Never accept terms, solve CAPTCHA, or submit credentials without stopping and stating that "
-            "a manual checkpoint is required.\n\n"
+            + policy_instruction
+            + "\n\n"
             + json.dumps(task, indent=2, ensure_ascii=False)
         )
         response = backend.call(
@@ -122,6 +134,7 @@ class BrowserAutomationRunner:
     ) -> dict[str, Any]:
         screenshots = []
         downloaded_files = []
+        manual_checkpoints = []
         driver = self._build_driver()
         try:
             wait = WebDriverWait(driver, self.timeout_seconds)
@@ -154,25 +167,33 @@ class BrowserAutomationRunner:
                     screenshots.append(str(target))
                 elif action == "manual_checkpoint":
                     checkpoint_path = self.screenshot_dir / f"checkpoint_{index:02d}.json"
+                    checkpoint_payload = {
+                        "timestamp": iso_now(),
+                        "message": step.get("message", "Manual action required"),
+                        "current_url": driver.current_url,
+                        "policy": self.checkpoint_policy,
+                    }
                     checkpoint_path.write_text(
-                        json.dumps(
-                            {
-                                "timestamp": iso_now(),
-                                "message": step.get("message", "Manual action required"),
-                                "current_url": driver.current_url,
-                            },
-                            indent=2,
-                            ensure_ascii=False,
-                        ),
+                        json.dumps(checkpoint_payload, indent=2, ensure_ascii=False),
                         encoding="utf-8",
                     )
-                    raise ManualCheckpointRequired(step.get("message", "Manual action required"), checkpoint_path)
+                    manual_checkpoints.append({
+                        "message": checkpoint_payload["message"],
+                        "checkpoint_path": str(checkpoint_path),
+                    })
+                    if self._strict_checkpoints():
+                        raise ManualCheckpointRequired(step.get("message", "Manual action required"), checkpoint_path)
             downloaded_files = [str(path) for path in self.download_dir.glob("*") if path.is_file()]
             return {
                 "runner": "selenium",
                 "ok": True,
                 "screenshots": screenshots,
                 "downloaded_files": downloaded_files,
+                "manual_checkpoints": manual_checkpoints,
+                "checkpoint_policy": self.checkpoint_policy,
             }
         finally:
             driver.quit()
+
+    def _strict_checkpoints(self) -> bool:
+        return self.checkpoint_policy == "strict"

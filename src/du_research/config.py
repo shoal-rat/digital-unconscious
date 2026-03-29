@@ -122,6 +122,7 @@ class AutomationSection:
     enabled: bool = True
     auto_execute: bool = False
     runner: str = "claude_code"  # "claude_code" | "selenium"
+    checkpoint_policy: str = "best_effort"  # "best_effort" | "strict"
     browser: str = "chrome"
     download_dir: str = "workspace/browser_downloads"
     screenshot_dir: str = "workspace/browser_screenshots"

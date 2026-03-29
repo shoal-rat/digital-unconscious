@@ -58,6 +58,7 @@ class ResearchPipeline:
         self.automation_runner = automation_runner or BrowserAutomationRunner(
             runner=config.automation.runner,
             browser=config.automation.browser,
+            checkpoint_policy=config.automation.checkpoint_policy,
             download_dir=_workspace_path(config.automation.download_dir).resolve(),
             screenshot_dir=_workspace_path(config.automation.screenshot_dir).resolve(),
             headless=config.automation.headless,
@@ -75,6 +76,7 @@ class ResearchPipeline:
         run_id: str | None = None,
         idea_id: str | None = None,
         dry_run: bool = False,
+        resume: bool = False,
     ) -> dict[str, Any]:
         resolved_idea_text, resolved_idea_id = self.resolve_idea(idea_text=idea_text, idea_id=idea_id)
         if not resolved_idea_text:
@@ -105,6 +107,7 @@ class ResearchPipeline:
                 max_pdf_downloads=self.config.literature.max_pdf_downloads,
                 dry_run=dry_run,
                 providers=self.literature_providers,
+                backend=self.backend,
             )
             manifest.stages.append(stage)
             storage.append_trace("literature", "completed", stage.metrics)
@@ -115,6 +118,7 @@ class ResearchPipeline:
                 idea_text=resolved_idea_text,
                 papers=papers,
                 output_dir=feasibility_dir,
+                backend=self.backend,
             )
             manifest.stages.append(stage)
             storage.append_trace("feasibility", "completed", stage.metrics)
@@ -128,6 +132,7 @@ class ResearchPipeline:
                 timeout=self.config.pipeline.network_timeout_seconds,
                 dry_run=dry_run,
                 providers=self.dataset_providers,
+                backend=self.backend,
             )
             manifest.stages.append(stage)
             storage.append_trace("data_sources", "completed", stage.metrics)
@@ -137,6 +142,7 @@ class ResearchPipeline:
                 storage.run_dir,
                 credential_lookup=self.credential_broker.get_credential,
                 institutional_proxy_url=self.config.automation.institutional_proxy_url,
+                checkpoint_policy=self.config.automation.checkpoint_policy,
             )
             automation_result: dict[str, Any] = {
                 "task_path": str(automation_task_path),
@@ -338,6 +344,7 @@ class ResearchPipeline:
                 run_dir,
                 credential_lookup=self.credential_broker.get_credential,
                 institutional_proxy_url=self.config.automation.institutional_proxy_url,
+                checkpoint_policy=self.config.automation.checkpoint_policy,
             )
         )
 

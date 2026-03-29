@@ -45,7 +45,10 @@ def export_computer_use_task(
     *,
     credential_lookup: Callable[[str], dict[str, Any] | None] | None = None,
     institutional_proxy_url: str | None = None,
+    checkpoint_policy: str = "best_effort",
 ) -> Path:
+    checkpoint_policy = checkpoint_policy.strip().lower()
+    strict_checkpoints = checkpoint_policy == "strict"
     literature_path = run_dir / "01_literature" / "papers.json"
     datasets_path = run_dir / "03_data_sources" / "datasets.json"
     payload: dict[str, Any] = {
@@ -55,11 +58,18 @@ def export_computer_use_task(
         "allowlisted_domains": [],
         "credential_resources": [],
         "institutional_proxy_url": institutional_proxy_url or "",
-        "human_approval_required_for": [
-            "CAPTCHA or consent walls",
-            "payments or subscription changes",
-            "terms-of-service acceptance",
-        ],
+        "checkpoint_policy": checkpoint_policy,
+        "human_approval_required_for": (
+            [
+                "CAPTCHA or consent walls",
+                "payments or subscription changes",
+                "terms-of-service acceptance",
+            ]
+            if strict_checkpoints
+            else [
+                "Only when blocked by CAPTCHA/MFA/consent or payment walls",
+            ]
+        ),
         "tasks": [],
         "flow": [],
     }
@@ -97,7 +107,7 @@ def export_computer_use_task(
                 flow.append({"action": "screenshot"})
             if pdf_url:
                 flow.append({"action": "download_url", "url": pdf_url, "sleep_seconds": 5})
-            elif resource and credential:
+            elif strict_checkpoints and resource and credential:
                 flow.append(
                     {
                         "action": "manual_checkpoint",
@@ -133,7 +143,7 @@ def export_computer_use_task(
                     dataset_url = institutional_proxy_url.rstrip("/") + "/" + quote(url, safe="")
                 flow.append({"action": "open", "url": dataset_url})
                 flow.append({"action": "screenshot"})
-            if dataset.get("access") not in {"open", "public"}:
+            if strict_checkpoints and dataset.get("access") not in {"open", "public"}:
                 flow.append(
                     {
                         "action": "manual_checkpoint",
