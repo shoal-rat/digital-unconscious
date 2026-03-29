@@ -126,7 +126,10 @@ class DigitalUnconsciousEngine:
         self.file_observer = FileObserver(blacklist_apps=_blacklist)
         self.research_pipeline = ResearchPipeline(config, backend=self.backend)
         self.maintenance = WorkspaceMaintenance(self.workspace, config)
-        self.rag = RAGStore(self.workspace)
+        # Use file-based RAG in temp directories (avoids ChromaDB locking issues)
+        import tempfile as _tf
+        _in_temp = str(self.workspace).startswith(_tf.gettempdir())
+        self.rag = RAGStore(self.workspace, force_file_mode=_in_temp)
         self.task_queue = TaskQueue(self.workspace)
 
     # ------------------------------------------------------------------

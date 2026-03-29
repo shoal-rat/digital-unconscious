@@ -1,31 +1,17 @@
+"""Daily idea capture — extracts research ideas from daily logs using LLM.
+
+LLM-only: Claude scores snippets and rewrites them as research questions.
+When LLM is unavailable, raw snippets are saved for later processing.
+"""
 from __future__ import annotations
 
-from collections import Counter
 import json
-from pathlib import Path
 import re
+from collections import Counter
+from pathlib import Path
 from typing import Any
 
-from du_research.utils import infer_domain, iso_now, overlap_score, slugify, tokenize, top_keywords
-
-
-IDEA_HINTS = {
-    "idea",
-    "question",
-    "hypothesis",
-    "experiment",
-    "study",
-    "test",
-    "measure",
-    "pricing",
-    "behavior",
-    "churn",
-    "interface",
-    "could",
-    "should",
-    "why",
-    "how",
-}
+from du_research.utils import iso_now, slugify
 
 
 def _read_entries(input_path: Path) -> list[dict[str, Any]]:
@@ -35,8 +21,7 @@ def _read_entries(input_path: Path) -> list[dict[str, Any]]:
             line = line.strip()
             if not line:
                 continue
-            payload = json.loads(line)
-            entries.append(payload)
+            entries.append(json.loads(line))
         return entries
     return [{"text": input_path.read_text(encoding="utf-8")}]
 
@@ -60,25 +45,85 @@ def _candidate_snippets(entries: list[dict[str, Any]]) -> list[dict[str, str]]:
     return snippets
 
 
-def _score_snippet(snippet: str) -> float:
-    tokens = tokenize(snippet)
-    if not tokens:
-        return 0.0
-    unique_ratio = min(len(set(tokens)) / max(len(tokens), 1), 1.0)
-    idea_signal = len(set(tokens) & IDEA_HINTS) / 6.0
-    question_signal = 0.15 if "?" in snippet else 0.0
-    bridge_signal = 0.15 if any(word in tokens for word in ["as", "vs", "between", "across"]) else 0.0
-    return round(min((unique_ratio * 0.4) + idea_signal + question_signal + bridge_signal, 1.0), 4)
+def _llm_score_and_rewrite(
+    snippets: list[dict[str, str]],
+    backend: object | None,
+    max_ideas: int = 10,
+) -> list[dict[str, Any]]:
+    """Use LLM to score snippets and rewrite them as research ideas."""
+    if backend is None or not snippets:
+        # No LLM — return raw snippets with zero scores (will be queued)
+        return [
+            {
+                "idea_id": f"idea_{slugify(s['text'], max_length=24)}",
+                "idea_text": s["text"],
+                "score": 0.0,
+                "domain": "pending",
+                "keywords": [],
+                "source_excerpt": s["text"][:300],
+                "status": "pending_llm",
+            }
+            for s in snippets[:max_ideas]
+        ]
 
+    # Batch snippets for LLM evaluation
+    snippet_texts = [s["text"][:200] for s in snippets[:30]]
+    prompt = (
+        f"From these {len(snippet_texts)} text snippets from a user's daily activity, "
+        f"extract the top {max_ideas} most promising research ideas.\n\n"
+        f"Snippets:\n" + "\n".join(f"{i+1}. {t}" for i, t in enumerate(snippet_texts)) + "\n\n"
+        f"For each idea:\n"
+        f"1. Rewrite it as a clear research question or hypothesis\n"
+        f"2. Score it 0-100 on research potential\n"
+        f"3. Identify the domain\n"
+        f"4. Extract 3-5 keywords\n\n"
+        f"Return ONLY JSON array:\n"
+        f'[{{"idea_text": "...", "score": 75, "domain": "...", "keywords": ["..."], "source_index": 0}}]'
+    )
 
-def _rewrite_as_idea(snippet: str) -> str:
-    text = snippet.strip()
-    text = re.sub(r"^\d+[\).\s-]+", "", text)
-    if text.endswith("?"):
-        return text
-    if not re.search(r"\b(how|why|what|could|should|test|measure|study)\b", text.lower()):
-        return f"Research whether {text[0].lower() + text[1:]}" if text else text
-    return text
+    try:
+        response = backend.call(prompt, mode="strict", model="sonnet", max_tokens=2000)
+        if response.ok:
+            text = response.text
+            try:
+                ideas = json.loads(text)
+            except json.JSONDecodeError:
+                start = text.find("[")
+                end = text.rfind("]") + 1
+                if start >= 0 and end > start:
+                    ideas = json.loads(text[start:end])
+                else:
+                    ideas = []
+
+            result = []
+            for idea in ideas[:max_ideas]:
+                src_idx = idea.get("source_index", 0)
+                source = snippets[src_idx]["text"] if src_idx < len(snippets) else ""
+                result.append({
+                    "idea_id": f"idea_{slugify(idea.get('idea_text', ''), max_length=24)}",
+                    "idea_text": idea.get("idea_text", ""),
+                    "score": round(idea.get("score", 0) / 100, 4),
+                    "domain": idea.get("domain", "general"),
+                    "keywords": idea.get("keywords", []),
+                    "source_excerpt": source[:300],
+                })
+            return result
+    except Exception:
+        pass
+
+    # LLM failed — return raw
+    return [
+        {
+            "idea_id": f"idea_{slugify(s['text'], max_length=24)}",
+            "idea_text": s["text"],
+            "score": 0.0,
+            "domain": "pending",
+            "keywords": [],
+            "source_excerpt": s["text"][:300],
+            "status": "pending_llm",
+        }
+        for s in snippets[:max_ideas]
+    ]
 
 
 def capture_daily_ideas(
@@ -87,33 +132,14 @@ def capture_daily_ideas(
     max_ideas: int,
     min_idea_score: float,
     backlog_path: Path | None = None,
+    backend: object | None = None,
 ) -> dict[str, Any]:
     entries = _read_entries(input_path)
     snippets = _candidate_snippets(entries)
-    ranked = []
-    for snippet in snippets:
-        score = _score_snippet(snippet["text"])
-        if score < min_idea_score:
-            continue
-        idea_text = _rewrite_as_idea(snippet["text"])
-        ranked.append(
-            {
-                "idea_id": f"idea_{slugify(idea_text, max_length=24)}",
-                "idea_text": idea_text,
-                "score": score,
-                "domain": infer_domain([idea_text]),
-                "keywords": top_keywords([idea_text], limit=5),
-                "source_excerpt": snippet["text"][:300],
-            }
-        )
 
-    deduped: dict[str, dict[str, Any]] = {}
-    for item in sorted(ranked, key=lambda value: value["score"], reverse=True):
-        key = item["idea_text"].lower()
-        existing = deduped.get(key)
-        if existing is None or item["score"] > existing["score"]:
-            deduped[key] = item
-    ideas = list(deduped.values())[:max_ideas]
+    ideas = _llm_score_and_rewrite(snippets, backend, max_ideas=max_ideas)
+    # Filter by minimum score (LLM scores are 0-1)
+    ideas = [i for i in ideas if i.get("score", 0) >= min_idea_score or i.get("status") == "pending_llm"]
 
     domain_counts = Counter(item["domain"] for item in ideas)
     payload = {

@@ -863,7 +863,7 @@ class RAGContextTests(unittest.TestCase):
             engine = DigitalUnconsciousEngine.__new__(DigitalUnconsciousEngine)
             engine.workspace = Path(tmpdir)
             engine.config = config
-            engine.rag = RAGStore(Path(tmpdir))
+            engine.rag = RAGStore(Path(tmpdir), force_file_mode=True)
             result = engine._load_rag_context([{"test": "summary"}])
             self.assertIsNone(result)
 
@@ -876,7 +876,7 @@ class RAGContextTests(unittest.TestCase):
             engine = DigitalUnconsciousEngine.__new__(DigitalUnconsciousEngine)
             engine.workspace = Path(tmpdir)
             engine.config = config
-            engine.rag = RAGStore(Path(tmpdir))
+            engine.rag = RAGStore(Path(tmpdir), force_file_mode=True)
             # Add some documents to the RAG store
             engine.rag.add_paper(
                 "Cognitive load in SaaS pricing",
@@ -945,7 +945,7 @@ class RAGStoreTests(unittest.TestCase):
         """RAG store works without ChromaDB via file-based fallback."""
         from du_research.rag import RAGStore
         with tempfile.TemporaryDirectory() as tmpdir:
-            store = RAGStore(Path(tmpdir))
+            store = RAGStore(Path(tmpdir), force_file_mode=True)
             store.add_paper(
                 "Neural pricing models",
                 "We study how neural networks can predict optimal SaaS pricing.",
@@ -966,7 +966,7 @@ class RAGStoreTests(unittest.TestCase):
     def test_rag_store_query_as_context(self) -> None:
         from du_research.rag import RAGStore
         with tempfile.TemporaryDirectory() as tmpdir:
-            store = RAGStore(Path(tmpdir))
+            store = RAGStore(Path(tmpdir), force_file_mode=True)
             store.add_paper("Test paper", "About AI and creativity", doi="10.test/1")
             context = store.query_as_context("AI creativity")
             self.assertIsNotNone(context)
@@ -975,13 +975,13 @@ class RAGStoreTests(unittest.TestCase):
     def test_rag_store_empty_returns_none(self) -> None:
         from du_research.rag import RAGStore
         with tempfile.TemporaryDirectory() as tmpdir:
-            store = RAGStore(Path(tmpdir))
+            store = RAGStore(Path(tmpdir), force_file_mode=True)
             self.assertIsNone(store.query_as_context("anything"))
 
     def test_rag_store_add_papers_from_run(self) -> None:
         from du_research.rag import RAGStore
         with tempfile.TemporaryDirectory() as tmpdir:
-            store = RAGStore(Path(tmpdir))
+            store = RAGStore(Path(tmpdir), force_file_mode=True)
             run_dir = Path(tmpdir) / "runs" / "test_run"
             lit_dir = run_dir / "01_literature"
             lit_dir.mkdir(parents=True)

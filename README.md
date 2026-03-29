@@ -36,8 +36,15 @@ You browse the web, read papers, write code, chat on Slack...
     Learning Engine — the system gets smarter about YOU over time
 ```
 
-## Quickstart (one line)
+## Install & Run (two commands)
 
+**Windows (PowerShell):**
+```powershell
+pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git"
+du
+```
+
+**Mac / Linux (bash):**
 ```bash
 pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git" && du
 ```
@@ -46,21 +53,24 @@ That's it. On first run, a setup wizard opens in your browser. Configure your re
 
 ### What happens after setup
 
-1. The system registers itself in Windows Startup (runs on login)
+1. The system registers itself in Startup (runs on login)
 2. A background service observes your screen via screenpipe
 3. Every day at your configured time, it generates a briefing
 4. Open `du dashboard` anytime to view briefings and ideas
-5. You never need to touch it again
+5. You never need to touch it again — just read your briefings
 
-### Alternative install
+### Update to latest version
 
-```bash
-# Clone and install locally
+```powershell
+du update
+```
+
+### Alternative install (from source)
+
+```powershell
 git clone https://github.com/shoal-rat/digital-unconscious.git
 cd digital-unconscious
 pip install -e ".[full]"
-
-# One-time setup (opens browser wizard)
 du
 
 # Set your focus (ideas will be filtered to these fields)

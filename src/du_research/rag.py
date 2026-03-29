@@ -45,14 +45,15 @@ class RAGStore:
     search so the rest of the pipeline still works.
     """
 
-    def __init__(self, workspace_dir: Path, collection_name: str = "knowledge"):
+    def __init__(self, workspace_dir: Path, collection_name: str = "knowledge",
+                 force_file_mode: bool = False):
         self.workspace_dir = workspace_dir
         self.collection_name = collection_name
         self._collection = None
         self._client = None
         self._fallback_docs: list[dict[str, Any]] | None = None
 
-        if _CHROMA_AVAILABLE:
+        if _CHROMA_AVAILABLE and not force_file_mode:
             persist_dir = workspace_dir / "chromadb"
             persist_dir.mkdir(parents=True, exist_ok=True)
             try:

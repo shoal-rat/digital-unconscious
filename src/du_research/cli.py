@@ -160,6 +160,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dash_cmd.add_argument("--no-open", action="store_true", help="Don't auto-open browser")
 
     subparsers.add_parser("drain", help="Process pending tasks in the queue (retry failed LLM calls)")
+    subparsers.add_parser("update", help="Update Digital Unconscious to the latest version from GitHub")
 
     logs_cmd = subparsers.add_parser("logs", help="Show logs for a run")
     logs_cmd.add_argument("--run-id", required=True, help="Run id to inspect")
@@ -438,6 +439,21 @@ def main(argv: list[str] | None = None) -> int:
         ).start()
         run_tray(config)
         return 0
+
+    # --- update ---------------------------------------------------------------
+    if args.command == "update":
+        import subprocess as _sp
+        print("  Updating Digital Unconscious from GitHub...")
+        result = _sp.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade",
+             "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print("  Updated successfully.")
+        else:
+            print(f"  Update failed: {result.stderr[:500]}")
+        return result.returncode
 
     # --- drain (process queued tasks) -----------------------------------------
     if args.command == "drain":
