@@ -39,7 +39,7 @@ You browse the web, read papers, write code, chat on Slack...
 ## Quickstart (one line)
 
 ```bash
-pip install -e ".[full]" && du
+pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git" && du
 ```
 
 That's it. On first run, a setup wizard opens in your browser. Configure your research fields, click "Start", and the system runs silently in the background from then on. You'll receive daily briefings automatically.
@@ -52,10 +52,12 @@ That's it. On first run, a setup wizard opens in your browser. Configure your re
 4. Open `du dashboard` anytime to view briefings and ideas
 5. You never need to touch it again
 
-### Manual quickstart
+### Alternative install
 
 ```bash
-# Install
+# Clone and install locally
+git clone https://github.com/shoal-rat/digital-unconscious.git
+cd digital-unconscious
 pip install -e ".[full]"
 
 # One-time setup (opens browser wizard)

@@ -447,6 +447,109 @@ def _extract_paper_content(
     return extracted
 
 
+def _llm_rank_papers(
+    papers: list[PaperCandidate],
+    idea_text: str,
+    backend: object,
+    top_n: int = 30,
+) -> list[PaperCandidate]:
+    """Use LLM to rank papers by relevance to the research idea."""
+    if not papers:
+        return papers
+    paper_summaries = []
+    for i, p in enumerate(papers[:top_n]):
+        paper_summaries.append({
+            "index": i,
+            "title": p.title,
+            "year": p.year,
+            "summary": (p.summary or "")[:150],
+            "source": p.source,
+            "citation_count": p.citation_count,
+        })
+
+    prompt = (
+        f"Rank these {len(paper_summaries)} papers by relevance to the research idea:\n"
+        f'"{idea_text}"\n\n'
+        f"Papers:\n{json.dumps(paper_summaries, indent=2, ensure_ascii=False)}\n\n"
+        f"Return ONLY a JSON array of indices in order of relevance (most relevant first).\n"
+        f"Also assign a relevance score 0-100 to each.\n"
+        f"Format: [{{\"index\": 0, \"score\": 85}}, {{\"index\": 3, \"score\": 72}}, ...]"
+    )
+    try:
+        response = backend.call(prompt, mode="strict", model="sonnet", max_tokens=1000)
+        if response.ok:
+            text = response.text
+            try:
+                rankings = json.loads(text)
+            except json.JSONDecodeError:
+                start = text.find("[")
+                end = text.rfind("]") + 1
+                if start >= 0 and end > start:
+                    rankings = json.loads(text[start:end])
+                else:
+                    return papers[:top_n]
+
+            # Apply LLM scores
+            for entry in rankings:
+                idx = entry.get("index", -1)
+                if 0 <= idx < len(papers):
+                    papers[idx].score = round(entry.get("score", 50) / 100, 4)
+
+            # Sort by score
+            return sorted(papers[:top_n], key=lambda p: p.score, reverse=True)
+    except Exception:
+        pass
+    return papers[:top_n]
+
+
+def _llm_enrich_papers(
+    papers: list[PaperCandidate],
+    idea_text: str,
+    backend: object,
+    max_papers: int = 10,
+) -> list[PaperCandidate]:
+    """Use LLM to extract structured claims, methods, findings from papers."""
+    if not papers:
+        return papers
+    paper_data = []
+    for p in papers[:max_papers]:
+        paper_data.append({
+            "title": p.title,
+            "summary": (p.summary or "")[:300],
+        })
+
+    prompt = (
+        f"For each paper below, extract structured research metadata.\n"
+        f"Research idea context: \"{idea_text}\"\n\n"
+        f"Papers:\n{json.dumps(paper_data, indent=2, ensure_ascii=False)}\n\n"
+        f"Return ONLY JSON array:\n"
+        f'[{{"claims": ["..."], "methods": ["..."], "findings": ["..."], "datasets_used": ["..."]}}]'
+    )
+    try:
+        response = backend.call(prompt, mode="strict", model="haiku", max_tokens=1500)
+        if response.ok:
+            text = response.text
+            try:
+                enrichments = json.loads(text)
+            except json.JSONDecodeError:
+                start = text.find("[")
+                end = text.rfind("]") + 1
+                if start >= 0 and end > start:
+                    enrichments = json.loads(text[start:end])
+                else:
+                    return papers
+
+            for i, enrichment in enumerate(enrichments):
+                if i < len(papers):
+                    papers[i].claims = enrichment.get("claims", [])[:3]
+                    papers[i].methods = enrichment.get("methods", [])[:3]
+                    papers[i].findings = enrichment.get("findings", [])[:3]
+                    papers[i].datasets_used = enrichment.get("datasets_used", [])[:3]
+    except Exception:
+        pass
+    return papers
+
+
 def run_stage(
     idea_text: str,
     output_dir: Path,
@@ -479,7 +582,14 @@ def run_stage(
                 provider_counts[provider.name] = 0
                 errors.append(f"{provider.name}: {exc}")
 
-    ranked = [_enrich_paper(paper) for paper in _dedupe(found)]
+    deduped = _dedupe(found)
+
+    # Use LLM for ranking and enrichment when available
+    if backend is not None and deduped:
+        ranked = _llm_rank_papers(deduped, idea_text, backend, top_n=30)
+        ranked = _llm_enrich_papers(ranked, idea_text, backend, max_papers=10)
+    else:
+        ranked = [_enrich_paper(paper) for paper in deduped]
     downloads: list[dict[str, str]] = []
     download_errors: list[str] = []
     browser_downloads: list[dict[str, str]] = []

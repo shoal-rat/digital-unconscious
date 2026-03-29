@@ -126,6 +126,57 @@ def _summary_markdown(query: str, datasets: list[DatasetCandidate], errors: list
     return "\n".join(lines) + "\n"
 
 
+def _llm_rank_datasets(
+    datasets: list[DatasetCandidate],
+    idea_text: str,
+    backend: object,
+) -> list[DatasetCandidate]:
+    """Use LLM to rank datasets by relevance to the research idea."""
+    if not datasets:
+        return datasets
+    import json as _json
+    ds_summaries = []
+    for i, d in enumerate(datasets[:20]):
+        ds_summaries.append({
+            "index": i,
+            "title": d.title,
+            "summary": (d.summary or "")[:150],
+            "access": d.access,
+            "source": d.source,
+        })
+
+    prompt = (
+        f"Rank these datasets by relevance to the research idea:\n"
+        f'"{idea_text}"\n\n'
+        f"Datasets:\n{_json.dumps(ds_summaries, indent=2, ensure_ascii=False)}\n\n"
+        f"Return ONLY a JSON array of indices with relevance scores:\n"
+        f'[{{"index": 0, "score": 85}}, ...]'
+    )
+    try:
+        response = backend.call(prompt, mode="strict", model="haiku", max_tokens=800)
+        if response.ok:
+            text = response.text
+            try:
+                rankings = _json.loads(text)
+            except _json.JSONDecodeError:
+                start = text.find("[")
+                end = text.rfind("]") + 1
+                if start >= 0 and end > start:
+                    rankings = _json.loads(text[start:end])
+                else:
+                    return datasets
+
+            for entry in rankings:
+                idx = entry.get("index", -1)
+                if 0 <= idx < len(datasets):
+                    datasets[idx].score = round(entry.get("score", 50) / 100, 4)
+
+            return sorted(datasets, key=lambda d: d.score, reverse=True)
+    except Exception:
+        pass
+    return datasets
+
+
 def _browse_and_download_datasets(
     datasets: list[DatasetCandidate],
     output_dir: Path,
@@ -206,7 +257,11 @@ def run_stage(
                 provider_counts[provider.name] = 0
                 errors.append(f"{provider.name}: {exc}")
 
-    ranked = _dedupe(found)
+    deduped = _dedupe(found)
+    if backend is not None and deduped:
+        ranked = _llm_rank_datasets(deduped, idea_text, backend)
+    else:
+        ranked = deduped
     browser_downloads: list[dict[str, str]] = []
     browser_errors: list[str] = []
     if backend is not None and not dry_run and ranked:

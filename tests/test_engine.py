@@ -1022,8 +1022,8 @@ class AIFeasibilityTests(unittest.TestCase):
             self.assertEqual(output.get("assessment_mode"), "ai")
             self.assertIn("regression", output["recommended_methods"])
 
-    def test_feasibility_without_backend_uses_heuristic_scoring(self) -> None:
-        """Feasibility stage still works without backend (legacy scoring)."""
+    def test_feasibility_without_backend_returns_pending(self) -> None:
+        """Feasibility stage without backend returns pending (LLM required)."""
         from du_research.stages.feasibility import run_stage
         from du_research.models import PaperCandidate
         papers = [
@@ -1031,7 +1031,8 @@ class AIFeasibilityTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmpdir:
             output, result = run_stage("Cognitive load in pricing", papers, Path(tmpdir))
-            self.assertIn(output["decision"], {"proceed", "review", "archive"})
+            self.assertEqual(output["status"], "queued_for_llm")
+            self.assertIn("novel_angle", output)  # downstream stages need this key
 
 
 if __name__ == "__main__":
