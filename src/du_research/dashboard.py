@@ -257,6 +257,7 @@ def _page(title: str, content: str, active: str = "") -> str:
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} — Digital Unconscious</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='28' fill='%231a1d27'/><circle cx='32' cy='32' r='10' fill='%236c8aff'/><circle cx='32' cy='32' r='5' fill='%23b4c8ff'/></svg>">
 <style>{_CSS}</style>
 </head><body>
 <div class="container">

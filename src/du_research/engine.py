@@ -51,6 +51,7 @@ from du_research.observation import (
     group_into_windows,
 )
 from du_research.rag import RAGStore
+from du_research.task_queue import TaskQueue
 from du_research.utils import iso_now
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,7 @@ class DigitalUnconsciousEngine:
         self.research_pipeline = ResearchPipeline(config, backend=self.backend)
         self.maintenance = WorkspaceMaintenance(self.workspace, config)
         self.rag = RAGStore(self.workspace)
+        self.task_queue = TaskQueue(self.workspace)
 
     # ------------------------------------------------------------------
     # Main cycle
@@ -155,13 +157,27 @@ class DigitalUnconsciousEngine:
         frames = frames_override if frames_override is not None else self._observe(log_file)
         logger.info("Observed %d behaviour frames", len(frames))
 
-        # 2. Compress into windows
+        # 2. Compress into windows (LLM-only, queue on failure)
         frames = deduplicate_frames(frames)
         windows = group_into_windows(frames, self.config.observation.window_minutes)
         summaries = []
+        queued_compressions = 0
         for window in windows:
             summary = self.compressor.compress(window)
-            summaries.append(summary)
+            if summary is not None:
+                summaries.append(summary)
+            else:
+                # Queue for later processing
+                self.task_queue.enqueue("compression", {
+                    "frames": [f.to_dict() for f in window],
+                    "date": date_str,
+                })
+                queued_compressions += 1
+        if queued_compressions:
+            logger.info("Queued %d compression tasks for later (LLM unavailable)", queued_compressions)
+        if not summaries:
+            logger.warning("No summaries produced — all compressions queued")
+            return self._queued_result(date_str, frames, queued_compressions)
         logger.info("Compressed into %d window summaries", len(summaries))
 
         # 3. Load context
@@ -181,7 +197,14 @@ class DigitalUnconsciousEngine:
             all_ideas.extend(ideas)
         logger.info("Generated %d raw ideas", len(all_ideas))
 
-        # 5. Judge all ideas (with personalized context from human model)
+        if not all_ideas:
+            logger.warning("No ideas generated — LLM may be unavailable")
+            self.task_queue.enqueue("idea_generation", {
+                "summaries": summaries,
+                "date": date_str,
+            })
+
+        # 5. Judge all ideas (LLM-only, queue on failure)
         evaluations = self.judge.evaluate(
             all_ideas,
             behaviour_summary=summaries[0] if summaries else None,
@@ -190,6 +213,13 @@ class DigitalUnconsciousEngine:
             human_idea_model=human_model,
             focus_fields=self.config.idea.focus_fields or None,
         )
+        if evaluations is None:
+            logger.warning("Judge unavailable — queuing evaluation for later")
+            self.task_queue.enqueue("judging", {
+                "ideas": all_ideas,
+                "date": date_str,
+            }, priority=1)
+            evaluations = []
         logger.info("Evaluated %d ideas", len(evaluations))
 
         # Merge evaluations back into ideas
@@ -208,7 +238,7 @@ class DigitalUnconsciousEngine:
             if self.config.idea.hold_threshold <= i.get("total_score", 0) < self.config.idea.include_threshold
         ]
 
-        # 6. Generate briefing
+        # 6. Generate briefing (LLM-only, queue on failure)
         briefing_text = self.briefing_agent.generate(
             summaries,
             included[:self.config.idea.max_briefing_ideas],
@@ -216,6 +246,14 @@ class DigitalUnconsciousEngine:
             human_idea_model=human_model,
             date_str=date_str,
         )
+        if briefing_text is None:
+            logger.warning("Briefing generation unavailable — queuing for later")
+            self.task_queue.enqueue("briefing", {
+                "summaries": summaries,
+                "ideas": included[:self.config.idea.max_briefing_ideas],
+                "date": date_str,
+            }, priority=2)
+            briefing_text = f"# Briefing Pending — {date_str}\n\nThe AI was unavailable. This briefing will be generated when the LLM is back online.\n\nRun `du drain` to retry pending tasks.\n"
 
         # 7. Save artifacts
         output_dir = self.workspace / "daily" / f"cycle_{date_str}"
@@ -471,6 +509,74 @@ class DigitalUnconsciousEngine:
             "completed_cycles": completed,
             "interval_minutes": interval,
             "runs": runs[-min(len(runs), self.config.service.run_history_limit):],
+        }
+
+    # ------------------------------------------------------------------
+    # Task queue
+    # ------------------------------------------------------------------
+
+    def drain_queue(self) -> dict[str, Any]:
+        """Process all pending tasks in the queue (retry failed LLM calls)."""
+        def _handler(task: dict[str, Any]) -> dict[str, Any] | None:
+            task_type = task.get("type")
+            payload = task.get("payload", {})
+
+            if task_type == "compression":
+                frames = [BehaviorFrame(**f) for f in payload.get("frames", [])]
+                result = self.compressor.compress(frames)
+                return {"summary": result} if result is not None else None
+
+            if task_type == "judging":
+                ideas = payload.get("ideas", [])
+                result = self.judge.evaluate(ideas)
+                return {"evaluations": result} if result is not None else None
+
+            if task_type == "briefing":
+                summaries = payload.get("summaries", [])
+                ideas = payload.get("ideas", [])
+                date = payload.get("date", "")
+                result = self.briefing_agent.generate(summaries, ideas, date_str=date)
+                if result is not None:
+                    output_dir = self.workspace / "daily" / f"cycle_{date}"
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    save_briefing(result, output_dir, date)
+                    return {"briefing_path": str(output_dir / f"briefing_{date}.md")}
+                return None
+
+            if task_type == "idea_generation":
+                summaries = payload.get("summaries", [])
+                all_ideas = []
+                for summary in summaries:
+                    ideas = self.idea_generator.generate(summary)
+                    all_ideas.extend(ideas)
+                return {"ideas": all_ideas} if all_ideas else None
+
+            return {"skipped": True, "reason": f"unknown task type: {task_type}"}
+
+        return self.task_queue.drain(_handler)
+
+    def _queued_result(
+        self,
+        date_str: str,
+        frames: list[BehaviorFrame],
+        queued_count: int,
+    ) -> dict[str, Any]:
+        """Return a result dict when the entire cycle was queued."""
+        return {
+            "date": date_str,
+            "frames_observed": len(frames),
+            "windows_compressed": 0,
+            "ideas_generated": 0,
+            "ideas_included": 0,
+            "ideas_held": 0,
+            "ideas_added_to_backlog": 0,
+            "research_runs_started": 0,
+            "briefing_path": "",
+            "output_dir": "",
+            "research_runs": [],
+            "queued_tasks": queued_count,
+            "circuit_breaker_stats": self.backend.stats,
+            "note": "LLM unavailable — tasks queued. Run `du drain` to retry.",
         }
 
     # ------------------------------------------------------------------

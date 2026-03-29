@@ -77,21 +77,42 @@ def _run_command(*args: str) -> None:
 
 
 def _create_icon_image():
-    """Create a small icon image for the system tray."""
+    """Create a beautiful system tray icon — a brain/lightbulb hybrid.
+
+    The icon represents the concept of "unconscious ideas becoming conscious":
+    a glowing neural node with radiating connections.
+    """
     from PIL import Image, ImageDraw
+    import math
+
     size = 64
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    # Dark circle background
-    draw.ellipse([2, 2, size - 2, size - 2], fill=(26, 29, 39, 255))
-    # "DU" text approximated with shapes — a lightbulb-like symbol
-    # Bulb
-    draw.ellipse([18, 8, 46, 36], fill=(108, 138, 255, 255))
-    # Stem
-    draw.rectangle([24, 34, 40, 46], fill=(108, 138, 255, 255))
-    # Base lines
-    draw.rectangle([22, 46, 42, 50], fill=(225, 228, 235, 255))
-    draw.rectangle([24, 51, 40, 55], fill=(225, 228, 235, 255))
+    cx, cy = size // 2, size // 2
+
+    # Outer glow circle (subtle)
+    draw.ellipse([4, 4, size - 4, size - 4], fill=(108, 138, 255, 30))
+
+    # Background circle
+    draw.ellipse([6, 6, size - 6, size - 6], fill=(20, 22, 32, 240))
+
+    # Radiating lines (neural connections) — 6 directions
+    for angle_deg in range(0, 360, 60):
+        angle = math.radians(angle_deg)
+        x1 = cx + int(10 * math.cos(angle))
+        y1 = cy + int(10 * math.sin(angle))
+        x2 = cx + int(24 * math.cos(angle))
+        y2 = cy + int(24 * math.sin(angle))
+        draw.line([(x1, y1), (x2, y2)], fill=(108, 138, 255, 120), width=2)
+        # Small dot at the end of each line
+        draw.ellipse([x2 - 2, y2 - 2, x2 + 2, y2 + 2], fill=(108, 138, 255, 180))
+
+    # Inner bright core (the "idea" moment)
+    draw.ellipse([cx - 10, cy - 10, cx + 10, cy + 10], fill=(108, 138, 255, 255))
+    draw.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], fill=(180, 200, 255, 255))
+    # Bright center dot
+    draw.ellipse([cx - 3, cy - 3, cx + 3, cy + 3], fill=(255, 255, 255, 255))
+
     return img
 
 

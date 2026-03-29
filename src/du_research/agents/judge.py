@@ -3,6 +3,9 @@
 Uses Claude Sonnet at low temperature for consistent, rigorous evaluation
 across four dimensions: novelty, feasibility, domain relevance, and
 timeliness.
+
+LLM-only: no heuristic fallback. If the AI is unreachable, returns None
+so the engine can queue the task for later.
 """
 from __future__ import annotations
 
@@ -91,8 +94,11 @@ class JudgeAgent:
         existing_ideas: list[str] | None = None,
         human_idea_model: dict[str, Any] | None = None,
         focus_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Score each idea and return evaluations sorted by total_score."""
+    ) -> list[dict[str, Any]] | None:
+        """Score each idea and return evaluations sorted by total_score.
+
+        Returns None if the LLM is unavailable (caller should queue).
+        """
         if not ideas:
             return []
 
@@ -139,12 +145,13 @@ class JudgeAgent:
         )
 
         if not response.ok:
-            logger.warning("Judge evaluation failed, using heuristic scoring")
-            return _heuristic_evaluate(ideas, focus_fields=focus_fields)
+            logger.warning("Judge evaluation failed — LLM unavailable")
+            return None
 
         evaluations = _parse_evaluations(response.text)
         if not evaluations:
-            return _heuristic_evaluate(ideas, focus_fields=focus_fields)
+            logger.warning("Could not parse judge output")
+            return None
 
         # Ensure total_score is computed consistently
         for ev in evaluations:
@@ -182,78 +189,6 @@ def _format_judge_model_context(model: dict[str, Any]) -> str:
         lines.append(f"Historical idea-to-paper conversion rate: {conversion:.1%}")
 
     return "\n".join(lines)
-
-
-def _heuristic_evaluate(
-    ideas: list[dict[str, Any]],
-    focus_fields: list[str] | None = None,
-) -> list[dict[str, Any]]:
-    """Fallback scoring when AI is unavailable.
-
-    Conservative by design: at ~1-in-200 selectivity, most ideas score 55-70.
-    Only exceptionally well-formed ideas with strong focus-field alignment
-    reach the include threshold (75+).
-    """
-    _focus_lower = {f.lower() for f in (focus_fields or [])}
-    evaluations = []
-    for idea in ideas:
-        desc = idea.get("description", idea.get("title", ""))
-        specificity = min(len(desc) / 200, 1.0)
-        has_data_hint = 1.0 if idea.get("data_hint") else 0.5
-        has_question = 1.0 if idea.get("research_question") else 0.6
-        has_novelty_signal = 1.0 if idea.get("novelty_signal") else 0.6
-        domains = idea.get("domains", [])
-        cross_domain = 1.0 if len(domains) >= 2 else 0.7
-        has_source = 1.0 if idea.get("source_behaviour") else 0.7
-
-        # Focus field matching: check if the idea lands in a user focus field
-        focus_match = 1.0  # no focus fields configured = no penalty
-        if _focus_lower:
-            app_field = (idea.get("application_field") or "").lower()
-            idea_domains_lower = [d.lower() for d in domains]
-            title_lower = (idea.get("title") or "").lower()
-            desc_lower = desc.lower()
-            # Check application_field, domains, title, description for focus match
-            matched = any(
-                ff in app_field or ff in title_lower or
-                any(ff in d for d in idea_domains_lower) or
-                ff in desc_lower
-                for ff in _focus_lower
-            )
-            focus_match = 1.0 if matched else 0.2  # heavy penalty for off-focus
-
-        novelty = round(55 + specificity * 20 + has_novelty_signal * 5, 1)
-        feasibility = round(50 + has_data_hint * 20 + has_question * 10, 1)
-        domain_relevance = round((55 + cross_domain * 20) * focus_match, 1)
-        timeliness = round(55 + has_source * 10, 1)
-
-        total = round(
-            novelty * WEIGHTS["novelty"]
-            + feasibility * WEIGHTS["feasibility"]
-            + domain_relevance * WEIGHTS["domain_relevance"]
-            + timeliness * WEIGHTS["timeliness"],
-            1,
-        )
-
-        if total >= 75:
-            verdict = "include"
-        elif total >= 60:
-            verdict = "hold"
-        else:
-            verdict = "discard"
-
-        evaluations.append({
-            "idea_id": idea.get("id", idea.get("idea_id", "")),
-            "novelty": novelty,
-            "feasibility": feasibility,
-            "domain_relevance": domain_relevance,
-            "timeliness": timeliness,
-            "total_score": total,
-            "verdict": verdict,
-            "one_line_reason": "Scored by heuristic (AI unavailable)",
-        })
-
-    return sorted(evaluations, key=lambda e: e["total_score"], reverse=True)
 
 
 def _parse_evaluations(text: str) -> list[dict[str, Any]]:

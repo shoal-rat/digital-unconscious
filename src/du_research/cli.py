@@ -159,6 +159,8 @@ def _build_parser() -> argparse.ArgumentParser:
     dash_cmd.add_argument("--port", type=int, default=9830, help="Port for the dashboard server")
     dash_cmd.add_argument("--no-open", action="store_true", help="Don't auto-open browser")
 
+    subparsers.add_parser("drain", help="Process pending tasks in the queue (retry failed LLM calls)")
+
     logs_cmd = subparsers.add_parser("logs", help="Show logs for a run")
     logs_cmd.add_argument("--run-id", required=True, help="Run id to inspect")
     logs_cmd.add_argument("--follow", action="store_true", help="Follow logs in real time")
@@ -427,6 +429,19 @@ def main(argv: list[str] | None = None) -> int:
             daemon=True,
         ).start()
         run_tray(config)
+        return 0
+
+    # --- drain (process queued tasks) -----------------------------------------
+    if args.command == "drain":
+        from du_research.engine import DigitalUnconsciousEngine
+        engine = DigitalUnconsciousEngine(config)
+        pending = engine.task_queue.count_pending()
+        if pending == 0:
+            print("  No pending tasks in queue.")
+            return 0
+        print(f"  Processing {pending} pending task(s)...")
+        result = engine.drain_queue()
+        print(f"  Done: {result['succeeded']} succeeded, {result['failed']} failed, {result['remaining']} remaining")
         return 0
 
     # --- dashboard ------------------------------------------------------------

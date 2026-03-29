@@ -3,6 +3,9 @@
 Uses Claude Haiku (fast, cheap) to compress a 30-minute window of screen
 observations into a 200-400 word structured JSON summary, preserving the
 signals that matter for idea generation.
+
+LLM-only: no heuristic fallback. If the AI is unreachable, returns None
+so the engine can queue the task for later.
 """
 from __future__ import annotations
 
@@ -11,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from du_research.ai_backend import AIBackend, AIResponse
+from du_research.ai_backend import AIBackend
 from du_research.observation import BehaviorFrame
 
 logger = logging.getLogger(__name__)
@@ -57,14 +60,18 @@ class CompressionAgent:
     model: str = "haiku"
     system_prompt: str | None = None
 
-    def compress(self, frames: list[BehaviorFrame]) -> dict[str, Any]:
-        """Compress *frames* into a structured behaviour summary."""
-        if not frames:
-            return _empty_summary()
+    def compress(self, frames: list[BehaviorFrame]) -> dict[str, Any] | None:
+        """Compress *frames* into a structured behaviour summary.
 
-        # Build the input for the AI
+        Returns None if the LLM is unavailable (caller should queue).
+        """
+        if not frames:
+            return {"time_range": "", "dominant_topics": [], "high_weight_content": [],
+                    "app_distribution": {}, "intent_signals": [], "cross_domain_hints": [],
+                    "search_queries": []}
+
         frame_descriptions = []
-        for f in frames[:80]:  # cap to avoid token overflow
+        for f in frames[:80]:
             desc = (
                 f"[{f.timestamp}] app={f.app_name} "
                 f"title=\"{f.window_title[:100]}\" "
@@ -77,10 +84,9 @@ class CompressionAgent:
                 desc += f" url={f.url}"
             frame_descriptions.append(desc)
 
-        frames_text = "\n".join(frame_descriptions)
         prompt = (
             f"Compress the following {len(frames)} behaviour observation frames "
-            f"into a structured JSON summary:\n\n{frames_text}"
+            f"into a structured JSON summary:\n\n" + "\n".join(frame_descriptions)
         )
 
         response = self.backend.call(
@@ -92,76 +98,23 @@ class CompressionAgent:
         )
 
         if not response.ok:
-            logger.warning("Compression failed, using heuristic fallback")
-            return _heuristic_compress(frames)
+            logger.warning("Compression failed — LLM unavailable")
+            return None
 
-        try:
-            return json.loads(response.text)
-        except json.JSONDecodeError:
-            # Try to extract JSON from response
-            text = response.text
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(text[start:end])
-                except json.JSONDecodeError:
-                    pass
-            logger.warning("Could not parse compression output, using heuristic")
-            return _heuristic_compress(frames)
+        return _parse_json(response.text)
 
 
-def _empty_summary() -> dict[str, Any]:
-    return {
-        "time_range": "",
-        "dominant_topics": [],
-        "high_weight_content": [],
-        "app_distribution": {},
-        "intent_signals": [],
-        "cross_domain_hints": [],
-        "search_queries": [],
-    }
-
-
-def _heuristic_compress(frames: list[BehaviorFrame]) -> dict[str, Any]:
-    """Fallback compression without AI — uses simple heuristics."""
-    from collections import Counter
-    from du_research.utils import tokenize
-
-    app_counts: Counter[str] = Counter()
-    all_text_tokens: list[str] = []
-    high_weight: list[dict[str, Any]] = []
-
-    for f in frames:
-        app_counts[f.app_name] += 1
-        tokens = tokenize(f"{f.window_title} {f.text_content}")
-        all_text_tokens.extend(tokens)
-        if f.dwell_seconds > 30:
-            high_weight.append({
-                "content": f.text_content[:200],
-                "dwell_time": f"{f.dwell_seconds / 60:.1f}min",
-                "weight": min(f.dwell_seconds / 300, 1.0),
-            })
-
-    total_apps = sum(app_counts.values()) or 1
-    topic_counter = Counter(all_text_tokens)
-    dominant = [word for word, _ in topic_counter.most_common(8)]
-
-    time_range = ""
-    if frames:
-        time_range = f"{frames[0].timestamp[:16]}-{frames[-1].timestamp[:16]}"
-
-    return {
-        "time_range": time_range,
-        "dominant_topics": dominant[:6],
-        "high_weight_content": sorted(
-            high_weight, key=lambda x: x["weight"], reverse=True
-        )[:5],
-        "app_distribution": {
-            app: round(count / total_apps, 2)
-            for app, count in app_counts.most_common(6)
-        },
-        "intent_signals": dominant[:3],
-        "cross_domain_hints": [],
-        "search_queries": [],
-    }
+def _parse_json(text: str) -> dict[str, Any] | None:
+    """Try to extract JSON from potentially messy AI output."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            try:
+                return json.loads(text[start:end])
+            except json.JSONDecodeError:
+                pass
+    logger.warning("Could not parse compression output")
+    return None

@@ -24,10 +24,10 @@ from du_research.observation import (
     deduplicate_frames,
     group_into_windows,
 )
-from du_research.agents.compressor import CompressionAgent, _heuristic_compress
+from du_research.agents.compressor import CompressionAgent
 from du_research.agents.idea_generator import IdeaGeneratorAgent, _parse_ideas
-from du_research.agents.judge import JudgeAgent, _heuristic_evaluate, WEIGHTS
-from du_research.agents.briefing import BriefingAgent, _heuristic_briefing
+from du_research.agents.judge import JudgeAgent, WEIGHTS
+from du_research.agents.briefing import BriefingAgent
 from du_research.agents.learning_engine import (
     analyze_run_outcomes,
     build_human_idea_model,
@@ -186,15 +186,15 @@ class ObservationTests(unittest.TestCase):
 
 
 class CompressionTests(unittest.TestCase):
-    def test_heuristic_compress_works(self) -> None:
+    def test_compression_returns_none_on_failure(self) -> None:
+        """When LLM fails, compressor returns None (no heuristic fallback)."""
+        fake = FakeBackend(default="")  # empty response = failure
+        agent = CompressionAgent(backend=fake, model="haiku")
         frames = [
             BehaviorFrame("2026-01-01T10:00:00Z", "chrome", "Pricing", "SaaS pricing model analysis", 120),
-            BehaviorFrame("2026-01-01T10:05:00Z", "notion", "Notes", "competitor research notes", 60),
         ]
-        result = _heuristic_compress(frames)
-        self.assertIn("dominant_topics", result)
-        self.assertIn("app_distribution", result)
-        self.assertIn("chrome", result["app_distribution"])
+        result = agent.compress(frames)
+        self.assertIsNone(result)
 
     def test_ai_compression_with_fake_backend(self) -> None:
         response_json = json.dumps({
@@ -249,15 +249,13 @@ class IdeaGeneratorTests(unittest.TestCase):
 
 
 class JudgeTests(unittest.TestCase):
-    def test_heuristic_evaluate_produces_scores(self) -> None:
-        ideas = [
-            {"id": "1", "title": "Good idea", "description": "A detailed description of the idea with enough specificity", "data_hint": "survey data", "research_question": "How does X affect Y?", "domains": ["ai", "ux"]},
-            {"id": "2", "title": "Vague", "description": "short", "domains": ["ai"]},
-        ]
-        evaluations = _heuristic_evaluate(ideas)
-        self.assertEqual(len(evaluations), 2)
-        # The more specific idea should score higher
-        self.assertGreater(evaluations[0]["total_score"], evaluations[1]["total_score"])
+    def test_judge_returns_none_on_failure(self) -> None:
+        """When LLM fails, judge returns None (no heuristic fallback)."""
+        fake = FakeBackend(default="")
+        judge = JudgeAgent(backend=fake, model="sonnet")
+        ideas = [{"id": "1", "title": "Test idea", "description": "Test"}]
+        result = judge.evaluate(ideas)
+        self.assertIsNone(result)
 
     def test_weights_sum_to_one(self) -> None:
         self.assertAlmostEqual(sum(WEIGHTS.values()), 1.0)
@@ -280,13 +278,23 @@ class JudgeTests(unittest.TestCase):
 
 
 class BriefingTests(unittest.TestCase):
-    def test_heuristic_briefing_generates_markdown(self) -> None:
-        summaries = [{"dominant_topics": ["pricing", "SaaS"], "intent_signals": ["competitor analysis"], "cross_domain_hints": []}]
-        ideas = [{"title": "Cognitive load pricing", "total_score": 82, "description": "Study pricing psychology", "verdict": "include", "one_line_reason": "Novel angle"}]
-        text = _heuristic_briefing("2026-03-28", summaries, ideas)
-        self.assertIn("Daily Idea Briefing", text)
-        self.assertIn("pricing", text.lower())
-        self.assertIn("Cognitive load pricing", text)
+    def test_briefing_returns_none_on_failure(self) -> None:
+        """When LLM fails, briefing returns None (no heuristic fallback)."""
+        fake = FakeBackend(default="")
+        agent = BriefingAgent(backend=fake, model="opus")
+        summaries = [{"dominant_topics": ["pricing"]}]
+        ideas = [{"title": "Test idea", "total_score": 82}]
+        result = agent.generate(summaries, ideas, date_str="2026-03-28")
+        self.assertIsNone(result)
+
+    def test_briefing_with_fake_backend(self) -> None:
+        fake = FakeBackend(default="# Daily Briefing\n\nTest briefing content.")
+        agent = BriefingAgent(backend=fake, model="opus")
+        summaries = [{"dominant_topics": ["pricing"]}]
+        ideas = [{"title": "Test idea", "total_score": 82}]
+        result = agent.generate(summaries, ideas, date_str="2026-03-28")
+        self.assertIsNotNone(result)
+        self.assertIn("Briefing", result)
 
 
 # ---------------------------------------------------------------------------
@@ -1014,7 +1022,8 @@ class AIFeasibilityTests(unittest.TestCase):
             self.assertEqual(output.get("assessment_mode"), "ai")
             self.assertIn("regression", output["recommended_methods"])
 
-    def test_heuristic_fallback_without_backend(self) -> None:
+    def test_feasibility_without_backend_uses_heuristic_scoring(self) -> None:
+        """Feasibility stage still works without backend (legacy scoring)."""
         from du_research.stages.feasibility import run_stage
         from du_research.models import PaperCandidate
         papers = [
@@ -1023,7 +1032,6 @@ class AIFeasibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output, result = run_stage("Cognitive load in pricing", papers, Path(tmpdir))
             self.assertIn(output["decision"], {"proceed", "review", "archive"})
-            self.assertNotIn("assessment_mode", output)  # heuristic has no mode field
 
 
 if __name__ == "__main__":
