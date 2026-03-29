@@ -190,20 +190,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     argv = list(argv) if argv is not None else sys.argv[1:]
     if not argv:
-        # No arguments = launch the full desktop experience via windowless process
+        # No arguments = launch the full desktop experience via pythonw.exe
         # This detaches from the terminal so the user gets their prompt back
         if sys.platform == "win32":
-            from du_research.launcher import create_launcher_script
-            import subprocess as _sp
-            try:
-                vbs = create_launcher_script()
-                _sp.Popen(["wscript.exe", str(vbs)], creationflags=_sp.CREATE_NO_WINDOW)
+            from du_research.launcher import launch_windowless
+            if launch_windowless():
                 print("  Digital Unconscious started. Look for the icon in your taskbar.")
                 print("  (You may need to click the ^ arrow to find it.)")
                 return 0
-            except Exception:
-                pass
-        # Fallback: run tray inline
+        # Fallback: run tray inline (Mac/Linux or if launch failed)
         argv = ["tray"]
     args = parser.parse_args(argv)
     config = load_config(args.config)
