@@ -129,7 +129,7 @@ class ClaudeCodeBackend:
         session_id: str | None = None,
         allowed_tools: list[str] | None = None,
     ) -> AIResponse:
-        cmd: list[str] = ["claude", "--bare", "-p", prompt, "--output-format", "json"]
+        cmd: list[str] = ["claude", "-p", prompt, "--output-format", "json"]
 
         if model or self.model_override:
             resolved = model or self.model_override
@@ -160,28 +160,34 @@ class ClaudeCodeBackend:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout_seconds,
-                env={**os.environ, "ANTHROPIC_API_KEY": ""},  # force subscription mode
             )
         except subprocess.TimeoutExpired:
             return AIResponse(text="", raw={"error": "timeout"})
         except FileNotFoundError:
             return AIResponse(text="", raw={"error": "claude CLI not found"})
 
-        if result.returncode != 0:
-            logger.warning("claude -p returned %d: %s", result.returncode, result.stderr[:500])
-            return AIResponse(text=result.stderr[:2000], raw={"error": result.stderr[:2000]})
-
+        # Claude Code returns JSON on stdout even on non-zero exit codes
+        output = result.stdout.strip() or result.stderr.strip()
         try:
-            parsed = json.loads(result.stdout)
+            parsed = json.loads(output)
         except json.JSONDecodeError:
-            return AIResponse(text=result.stdout.strip(), raw={"raw_stdout": result.stdout[:2000]})
+            if result.returncode != 0:
+                logger.warning("claude -p returned %d: %s", result.returncode, output[:500])
+                return AIResponse(text="", raw={"error": output[:2000]})
+            return AIResponse(text=output, raw={"raw_stdout": output[:2000]})
+
+        # Check for is_error flag in Claude Code JSON response
+        if parsed.get("is_error"):
+            error_msg = parsed.get("result", "unknown error")
+            logger.warning("claude -p error: %s", error_msg)
+            return AIResponse(text="", raw={"error": error_msg, **parsed})
 
         return AIResponse(
             text=parsed.get("result", ""),
             model=model or self.model_override or "",
             session_id=parsed.get("session_id"),
-            input_tokens=parsed.get("total_input_tokens", 0),
-            output_tokens=parsed.get("total_output_tokens", 0),
+            input_tokens=parsed.get("usage", {}).get("input_tokens", 0),
+            output_tokens=parsed.get("usage", {}).get("output_tokens", 0),
             cost_usd=parsed.get("total_cost_usd", 0.0),
             raw=parsed,
             structured=parsed.get("structured_output"),

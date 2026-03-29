@@ -175,21 +175,26 @@ def _format_judge_model_context(model: dict[str, Any]) -> str:
 
 
 def _heuristic_evaluate(ideas: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Fallback scoring when AI is unavailable."""
+    """Fallback scoring when AI is unavailable.
+
+    Calibrated so that well-formed ideas (with description, research question,
+    data hint, and cross-domain signal) can reach the include threshold (75+).
+    """
     evaluations = []
     for idea in ideas:
         desc = idea.get("description", idea.get("title", ""))
-        # Simple length-based heuristic as proxy for specificity
-        specificity = min(len(desc) / 200, 1.0)
-        has_data_hint = 1.0 if idea.get("data_hint") else 0.5
-        has_question = 1.0 if idea.get("research_question") else 0.6
+        specificity = min(len(desc) / 150, 1.0)
+        has_data_hint = 1.0 if idea.get("data_hint") else 0.4
+        has_question = 1.0 if idea.get("research_question") else 0.5
+        has_novelty_signal = 1.0 if idea.get("novelty_signal") else 0.5
         domains = idea.get("domains", [])
-        cross_domain = 1.0 if len(domains) >= 2 else 0.7
+        cross_domain = 1.0 if len(domains) >= 2 else 0.6
+        has_source = 1.0 if idea.get("source_behaviour") else 0.6
 
-        novelty = round(55 + specificity * 25, 1)
-        feasibility = round(50 + has_data_hint * 20 + has_question * 10, 1)
-        domain_relevance = round(55 + cross_domain * 20, 1)
-        timeliness = 60.0  # can't assess without behaviour context
+        novelty = round(58 + specificity * 15 + has_novelty_signal * 12, 1)
+        feasibility = round(55 + has_data_hint * 18 + has_question * 12, 1)
+        domain_relevance = round(58 + cross_domain * 18 + has_source * 6, 1)
+        timeliness = round(62 + has_source * 12, 1)
 
         total = round(
             novelty * WEIGHTS["novelty"]

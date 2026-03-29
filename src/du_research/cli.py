@@ -151,6 +151,10 @@ def _build_parser() -> argparse.ArgumentParser:
     service_restart.add_argument("--interval-minutes", type=int, help="Override service interval in minutes")
     service_sub.add_parser("status", help="Show background daemon status")
 
+    dash_cmd = subparsers.add_parser("dashboard", help="Open the web dashboard in your browser")
+    dash_cmd.add_argument("--port", type=int, default=9830, help="Port for the dashboard server")
+    dash_cmd.add_argument("--no-open", action="store_true", help="Don't auto-open browser")
+
     logs_cmd = subparsers.add_parser("logs", help="Show logs for a run")
     logs_cmd.add_argument("--run-id", required=True, help="Run id to inspect")
     logs_cmd.add_argument("--follow", action="store_true", help="Follow logs in real time")
@@ -231,7 +235,16 @@ def main(argv: list[str] | None = None) -> int:
             log_file=args.log_file,
             date_str=args.date,
         )
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        # Human-friendly output
+        print(f"\n  Daily cycle complete for {result['date']}")
+        print(f"  Observed {result['frames_observed']} behaviour frames")
+        print(f"  Compressed into {result['windows_compressed']} time windows")
+        print(f"  Generated {result['ideas_generated']} ideas")
+        print(f"  Included: {result['ideas_included']}  |  Held: {result['ideas_held']}")
+        if result.get("research_runs_started"):
+            print(f"  Auto-research started for {result['research_runs_started']} idea(s)")
+        print(f"\n  Briefing: {result['briefing_path']}")
+        print(f"  Dashboard: du dashboard\n")
         return 0
 
     # --- daily-capture (legacy heuristic extraction) ------------------------
@@ -357,16 +370,19 @@ def main(argv: list[str] | None = None) -> int:
             }, indent=2, ensure_ascii=False))
         return 0
 
-    # --- start (placeholder) ------------------------------------------------
+    # --- start (foreground observation service) ------------------------------
     if args.command == "start":
         from du_research.engine import DigitalUnconsciousEngine
         engine = DigitalUnconsciousEngine(config)
+        interval = args.interval_minutes or config.observation.service_interval_minutes
+        print(f"\n  Digital Unconscious — observation service started")
+        print(f"  Mode: {config.ai.mode}  |  Interval: {interval}min  |  Briefing at: {config.daily.briefing_time}")
+        print(f"  Dashboard: du dashboard  |  Stop: Ctrl+C\n")
         result = engine.run_observation_service(
             log_file=args.log_file,
             interval_minutes=args.interval_minutes,
             iterations=args.iterations,
         )
-        print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
 
     if args.command == "service":
@@ -393,6 +409,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.service_command == "status":
             print(json.dumps(service_manager.status(), indent=2, ensure_ascii=False))
             return 0
+
+    # --- dashboard ------------------------------------------------------------
+    if args.command == "dashboard":
+        from du_research.dashboard import run_dashboard
+        run_dashboard(config, port=args.port, open_browser=not args.no_open)
+        return 0
 
     # --- logs ---------------------------------------------------------------
     if args.command == "logs":
