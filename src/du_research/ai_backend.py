@@ -1,8 +1,12 @@
 """AIBackend abstraction layer — dual-mode support for Claude Code and Anthropic API.
 
-Both backends expose the same ``call()`` interface so that every upstream agent
-can switch between Claude Code (headless) and the Anthropic Python SDK without
-changing a single line of agent logic.
+Uses latest Claude Code features:
+- --permission-mode auto for fully autonomous operation
+- --json-schema for forced structured output
+- --allowedTools with proper tool names (WebSearch, WebFetch, Bash, Read)
+- --chrome for browser automation
+- --session-id / --resume for multi-turn sessions
+- --max-turns for agent loop control
 """
 from __future__ import annotations
 
@@ -10,15 +14,10 @@ import json
 import logging
 import os
 import subprocess
-import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Unified interface
-# ---------------------------------------------------------------------------
 
 
 class AIBackend(Protocol):
@@ -35,6 +34,8 @@ class AIBackend(Protocol):
         json_schema: dict | None = None,
         session_id: str | None = None,
         allowed_tools: list[str] | None = None,
+        use_chrome: bool = False,
+        max_turns: int = 25,
     ) -> AIResponse:
         ...
 
@@ -68,7 +69,6 @@ _MODE_PARAMS: dict[str, dict[str, Any]] = {
     "deterministic": {"temperature": 0.0},
 }
 
-# Model tier shorthand → canonical model id
 MODEL_ALIASES: dict[str, str] = {
     "opus": "claude-opus-4-6",
     "sonnet": "claude-sonnet-4-6",
@@ -89,18 +89,17 @@ def _resolve_model(model: str | None, default: str = "claude-sonnet-4-6") -> str
 
 @dataclass
 class ClaudeCodeBackend:
-    """Calls ``claude -p --bare`` as a subprocess.
+    """Calls Claude Code CLI as a subprocess.
 
-    Temperature is **not** directly controllable via the CLI — creative
-    divergence is simulated through prompt-engineering (instructions in the
-    system prompt).  The ``mode`` parameter selects an ``--append-system-prompt``
-    that steers behaviour.
+    Uses --permission-mode auto for fully autonomous operation.
+    Uses --json-schema for guaranteed structured output.
+    Uses --allowedTools to grant specific capabilities per call.
+    Uses --chrome for browser automation when requested.
     """
 
     timeout_seconds: int = 300
-    model_override: str | None = None  # e.g. "opus"
+    model_override: str | None = None
 
-    # Mode → extra system-prompt snippet injected via --append-system-prompt
     _MODE_PROMPTS: dict[str, str] = field(default_factory=lambda: {
         "creative": (
             "You MUST think divergently. Break conventional patterns. "
@@ -128,32 +127,50 @@ class ClaudeCodeBackend:
         json_schema: dict | None = None,
         session_id: str | None = None,
         allowed_tools: list[str] | None = None,
+        use_chrome: bool = False,
+        max_turns: int = 25,
     ) -> AIResponse:
-        cmd: list[str] = ["claude", "-p", prompt, "--output-format", "json"]
+        cmd: list[str] = [
+            "claude",
+            "-p", prompt,
+            "--output-format", "json",
+            "--permission-mode", "auto",  # fully autonomous, no prompts
+        ]
 
+        # Model selection
         if model or self.model_override:
             resolved = model or self.model_override
             if resolved in MODEL_ALIASES:
                 resolved = MODEL_ALIASES[resolved]
             cmd.extend(["--model", resolved])
 
+        # System prompt with mode-specific instructions
         mode_snippet = self._MODE_PROMPTS.get(mode, "")
         combined_system = "\n\n".join(p for p in [system, mode_snippet] if p)
         if combined_system:
             cmd.extend(["--append-system-prompt", combined_system])
 
+        # Session resume for multi-turn conversations
         if session_id:
             cmd.extend(["--resume", session_id])
 
+        # Tool permissions — grant specific capabilities
         if allowed_tools:
             cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
+        # Forced structured JSON output via schema
         if json_schema:
             cmd.extend(["--json-schema", json.dumps(json_schema)])
 
-        cmd.extend(["--max-turns", "25"])
+        # Chrome browser automation
+        if use_chrome:
+            cmd.append("--chrome")
 
-        logger.debug("ClaudeCodeBackend cmd: %s", " ".join(cmd[:6]))
+        # Agent loop control
+        cmd.extend(["--max-turns", str(max_turns)])
+
+        logger.debug("ClaudeCodeBackend: %s (model=%s, mode=%s, tools=%s, chrome=%s)",
+                      prompt[:80], model, mode, allowed_tools, use_chrome)
         try:
             result = subprocess.run(
                 cmd,
@@ -166,7 +183,7 @@ class ClaudeCodeBackend:
         except FileNotFoundError:
             return AIResponse(text="", raw={"error": "claude CLI not found"})
 
-        # Claude Code returns JSON on stdout even on non-zero exit codes
+        # Parse response (Claude Code returns JSON on stdout even on errors)
         output = result.stdout.strip() or result.stderr.strip()
         try:
             parsed = json.loads(output)
@@ -176,7 +193,6 @@ class ClaudeCodeBackend:
                 return AIResponse(text="", raw={"error": output[:2000]})
             return AIResponse(text=output, raw={"raw_stdout": output[:2000]})
 
-        # Check for is_error flag in Claude Code JSON response
         if parsed.get("is_error"):
             error_msg = parsed.get("result", "unknown error")
             logger.warning("claude -p error: %s", error_msg)
@@ -201,11 +217,7 @@ class ClaudeCodeBackend:
 
 @dataclass
 class AnthropicAPIBackend:
-    """Calls the Anthropic Python SDK directly.
-
-    Requires ``pip install anthropic`` and ``ANTHROPIC_API_KEY`` in the
-    environment.
-    """
+    """Calls the Anthropic Python SDK directly."""
 
     api_key: str | None = None
     default_model: str = "claude-sonnet-4-6"
@@ -215,7 +227,7 @@ class AnthropicAPIBackend:
         if self._client is not None:
             return
         try:
-            import anthropic  # type: ignore[import-untyped]
+            import anthropic
         except ImportError as exc:
             raise ImportError(
                 "anthropic package is required for API mode: pip install anthropic"
@@ -236,6 +248,8 @@ class AnthropicAPIBackend:
         json_schema: dict | None = None,
         session_id: str | None = None,
         allowed_tools: list[str] | None = None,
+        use_chrome: bool = False,
+        max_turns: int = 25,
     ) -> AIResponse:
         resolved_model = _resolve_model(model, self.default_model)
         params = _MODE_PARAMS.get(mode, _MODE_PARAMS["balanced"])
@@ -275,7 +289,7 @@ class AnthropicAPIBackend:
             session_id=session_id,
             input_tokens=getattr(response.usage, "input_tokens", 0),
             output_tokens=getattr(response.usage, "output_tokens", 0),
-            cost_usd=0.0,  # calculated downstream
+            cost_usd=0.0,
             raw={"stop_reason": response.stop_reason},
             structured=structured,
         )

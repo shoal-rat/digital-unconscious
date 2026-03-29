@@ -86,8 +86,10 @@ class BrowserAutomationRunner:
             prompt,
             mode="strict",
             model="sonnet",
-            allowed_tools=["default"],
+            allowed_tools=["WebSearch", "WebFetch", "Bash", "Read", "Write"],
+            use_chrome=True,
             max_tokens=4000,
+            max_turns=15,
         )
         return {
             "runner": "claude_code",

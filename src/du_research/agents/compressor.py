@@ -89,18 +89,36 @@ class CompressionAgent:
             f"into a structured JSON summary:\n\n" + "\n".join(frame_descriptions)
         )
 
+        schema = {
+            "type": "object",
+            "properties": {
+                "time_range": {"type": "string"},
+                "dominant_topics": {"type": "array", "items": {"type": "string"}},
+                "high_weight_content": {"type": "array"},
+                "app_distribution": {"type": "object"},
+                "intent_signals": {"type": "array", "items": {"type": "string"}},
+                "cross_domain_hints": {"type": "array", "items": {"type": "string"}},
+                "search_queries": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["time_range", "dominant_topics", "intent_signals"],
+        }
+
         response = self.backend.call(
             prompt,
             mode="strict",
             system=self.system_prompt or COMPRESSOR_SYSTEM_PROMPT,
             model=self.model,
             max_tokens=800,
+            json_schema=schema,
         )
 
         if not response.ok:
             logger.warning("Compression failed — LLM unavailable")
             return None
 
+        # Prefer structured_output from --json-schema, fallback to text parsing
+        if response.structured:
+            return response.structured
         return _parse_json(response.text)
 
 

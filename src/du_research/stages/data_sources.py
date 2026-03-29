@@ -215,8 +215,10 @@ def _browse_and_download_datasets(
                 prompt,
                 mode="strict",
                 model="sonnet",
-                allowed_tools=["computer", "bash"],
+                allowed_tools=["WebSearch", "WebFetch", "Bash", "Read", "Write"],
+                use_chrome=True,
                 max_tokens=3000,
+                max_turns=10,
             )
             if response.ok:
                 downloads.append({

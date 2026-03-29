@@ -379,20 +379,23 @@ def _browse_and_download_papers(
                 prompt,
                 mode="strict",
                 model="sonnet",
-                allowed_tools=["computer", "bash"],
+                allowed_tools=["WebSearch", "WebFetch", "Bash", "Read", "Write"],
+                use_chrome=True,
                 max_tokens=3000,
+                max_turns=10,
             )
             if response.ok:
                 downloads.append({
                     "title": paper.title,
                     "url": url,
-                    "method": "claude_code_browser",
+                    "method": "claude_code_chrome",
+                    "session_id": response.session_id,
                     "response": response.text[:500],
                 })
             else:
-                errors.append(f"Claude Code browse failed for {paper.title}: {response.raw.get('error', 'unknown')}")
+                errors.append(f"Chrome browse failed for {paper.title}: {response.raw.get('error', 'unknown')}")
         except Exception as exc:
-            errors.append(f"Claude Code browse error for {paper.title}: {exc}")
+            errors.append(f"Chrome browse error for {paper.title}: {exc}")
 
     return downloads, errors
 
@@ -424,8 +427,9 @@ def _extract_paper_content(
                 prompt,
                 mode="strict",
                 model="sonnet",
-                allowed_tools=["Read"],
+                allowed_tools=["Read", "Bash"],
                 max_tokens=2000,
+                max_turns=5,
             )
             if response.ok:
                 try:
