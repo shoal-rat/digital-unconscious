@@ -10,7 +10,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import mimetypes
+import sys
 import webbrowser
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -156,6 +156,15 @@ a { color: var(--accent); }
   padding: 2px 8px; border-radius: 4px; font-size: 12px; margin: 2px; }
 pre { background: var(--card); padding: 16px; border-radius: 8px; overflow-x: auto;
   font-size: 13px; line-height: 1.5; border: 1px solid var(--border); }
+input[type=text], textarea, select { background: var(--card); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; font-size: 14px; width: 100%; margin-bottom: 12px; }
+input[type=text]:focus, textarea:focus { border-color: var(--accent); outline: none; }
+button { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 12px 24px;
+  font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+button:hover { opacity: 0.85; }
+label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+.form-group { margin-bottom: 20px; }
+.success { background: rgba(74,222,128,0.15); color: var(--green); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
 """
 
 
@@ -282,8 +291,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         workspace = _workspace(self.config)
 
+        # Redirect to setup if first run
+        setup_done = (workspace / "setup" / "user_settings.json").exists()
+        if not setup_done and path == "/":
+            self._serve_setup(workspace)
+            return
+
         if path == "/":
             self._serve_dashboard(workspace)
+        elif path == "/setup":
+            self._serve_setup(workspace)
         elif path == "/briefing":
             params = parse_qs(parsed.query)
             date = params.get("date", [None])[0]
@@ -303,6 +320,139 @@ class DashboardHandler(BaseHTTPRequestHandler):
         else:
             self._respond(404, "Not found")
 
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        if path == "/setup":
+            self._handle_setup_post()
+        else:
+            self._respond(404, "Not found")
+
+    def _serve_setup(self, workspace: Path):
+        content = f"""
+<h1>Welcome to Digital Unconscious</h1>
+<p class="subtitle">Let's set up your personal AI research companion. This takes 30 seconds.</p>
+
+<form method="POST" action="/setup">
+<div class="card">
+  <h2>1. What fields do you work in?</h2>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
+    Ideas will be filtered to land in these fields. Cross-domain inspiration is still welcome.
+  </p>
+  <div class="form-group">
+    <label>Focus fields (comma-separated)</label>
+    <input type="text" name="focus_fields" placeholder="e.g. economics research, management, behavioral finance" value="{', '.join(self.config.idea.focus_fields)}">
+  </div>
+  <div class="form-group">
+    <label>Primary domains (your core expertise)</label>
+    <input type="text" name="primary_domains" placeholder="e.g. AI tools, product design" value="{', '.join(self.config.idea.primary_domains)}">
+  </div>
+  <div class="form-group">
+    <label>Secondary domains (adjacent interests)</label>
+    <input type="text" name="secondary_domains" placeholder="e.g. cognitive science, business models" value="{', '.join(self.config.idea.secondary_domains)}">
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Observation source</h2>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
+    How should the system observe your screen behaviour?
+  </p>
+  <div class="form-group">
+    <label>Source</label>
+    <select name="observation_mode">
+      <option value="screenpipe">Screenpipe (recommended — install from screenpipe.com)</option>
+      <option value="logfile">Manual log file (JSONL or text)</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <h2>3. Briefing schedule</h2>
+  <div class="form-group">
+    <label>Daily briefing time</label>
+    <input type="text" name="briefing_time" placeholder="22:00" value="{self.config.daily.briefing_time}">
+  </div>
+</div>
+
+<div style="text-align:center;margin-top:24px">
+  <button type="submit">Start Digital Unconscious</button>
+  <p style="color:var(--muted);font-size:12px;margin-top:12px">
+    This will enable autostart so the system runs silently in the background.
+    You'll receive daily briefings automatically.
+  </p>
+</div>
+</form>
+"""
+        self._html_response(_page("Setup", content, active=""))
+
+    def _handle_setup_post(self):
+        import subprocess as _subprocess
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length).decode("utf-8")
+        params = parse_qs(body)
+
+        focus = params.get("focus_fields", [""])[0]
+        primary = params.get("primary_domains", [""])[0]
+        secondary = params.get("secondary_domains", [""])[0]
+        briefing_time = params.get("briefing_time", ["22:00"])[0]
+
+        # Update config
+        if focus:
+            self.config.idea.focus_fields = [f.strip() for f in focus.split(",") if f.strip()]
+        if primary:
+            self.config.idea.primary_domains = [d.strip() for d in primary.split(",") if d.strip()]
+        if secondary:
+            self.config.idea.secondary_domains = [d.strip() for d in secondary.split(",") if d.strip()]
+        self.config.daily.briefing_time = briefing_time.strip() or "22:00"
+
+        # Save settings
+        workspace = _workspace(self.config)
+        setup_dir = workspace / "setup"
+        setup_dir.mkdir(parents=True, exist_ok=True)
+        settings = {
+            "focus_fields": self.config.idea.focus_fields,
+            "primary_domains": self.config.idea.primary_domains,
+            "secondary_domains": self.config.idea.secondary_domains,
+            "briefing_time": self.config.daily.briefing_time,
+            "setup_completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        (setup_dir / "user_settings.json").write_text(
+            json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        # Initialize workspace dirs
+        for subdir in ["runs", "learning", "daily", "ideas", "prompts", "queue", "knowledge"]:
+            (workspace / subdir).mkdir(parents=True, exist_ok=True)
+
+        # Try to enable autostart
+        try:
+            from du_research.onboarding import enable_autostart
+            project_root = Path(__file__).resolve().parents[1]
+            enable_autostart(
+                project_root=project_root,
+                config_path=self.config.config_path or (project_root / "config" / "pipeline.toml"),
+                workspace_dir=workspace,
+            )
+        except Exception:
+            pass
+
+        # Start background service
+        try:
+            python = sys.executable
+            _subprocess.Popen(
+                [python, "-m", "du_research.cli", "service", "start"],
+                cwd=str(Path(__file__).resolve().parents[2]),
+                creationflags=_subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+        except Exception:
+            pass
+
+        # Redirect to dashboard
+        self.send_response(302)
+        self.send_header("Location", "/?setup=done")
+        self.end_headers()
+
     def _serve_dashboard(self, workspace: Path):
         cycles = _list_daily_cycles(workspace)
         ideas = _load_idea_backlog(workspace)
@@ -315,9 +465,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         model_version = learning["model"].get("model_version", 0)
         is_running = service["status"].get("running", False)
 
+        # Check for setup=done query param
+        setup_banner = ""
+        parsed_url = urlparse(self.path)
+        query_params = parse_qs(parsed_url.query)
+        if "setup" in query_params:
+            setup_banner = '<div class="success">Setup complete. The background service is starting. You\'ll receive your first briefing at your configured time. From now on, everything runs automatically.</div>'
+
         stats = f"""
 <h1>Digital Unconscious</h1>
 <p class="subtitle">Your AI research companion — passive observation, creative ideas, autonomous research</p>
+{setup_banner}
 <div class="stat-grid">
   <div class="stat"><div class="value">{total_cycles}</div><div class="label">Daily Cycles</div></div>
   <div class="stat"><div class="value">{total_ideas}</div><div class="label">Ideas Generated</div></div>

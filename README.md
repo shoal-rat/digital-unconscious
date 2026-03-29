@@ -36,14 +36,30 @@ You browse the web, read papers, write code, chat on Slack...
     Learning Engine — the system gets smarter about YOU over time
 ```
 
-## Quickstart
+## Quickstart (one line)
+
+```bash
+pip install -e ".[full]" && du
+```
+
+That's it. On first run, a setup wizard opens in your browser. Configure your research fields, click "Start", and the system runs silently in the background from then on. You'll receive daily briefings automatically.
+
+### What happens after setup
+
+1. The system registers itself in Windows Startup (runs on login)
+2. A background service observes your screen via screenpipe
+3. Every day at your configured time, it generates a briefing
+4. Open `du dashboard` anytime to view briefings and ideas
+5. You never need to touch it again
+
+### Manual quickstart
 
 ```bash
 # Install
-pip install -e ".[full]"      # or just: pip install -e .
+pip install -e ".[full]"
 
-# Initialize
-du init
+# One-time setup (opens browser wizard)
+du
 
 # Set your focus (ideas will be filtered to these fields)
 du config --focus "economics research,behavioral finance"

@@ -172,7 +172,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     argv = list(argv) if argv is not None else sys.argv[1:]
     if not argv:
-        argv = ["start"]
+        # First run: open dashboard with setup wizard
+        # Subsequent runs: start background service silently
+        config_check = load_config()
+        workspace = Path(config_check.pipeline.workspace_dir).resolve()
+        setup_done = (workspace / "setup" / "user_settings.json").exists()
+        if setup_done:
+            argv = ["start"]
+        else:
+            argv = ["dashboard"]
     args = parser.parse_args(argv)
     config = load_config(args.config)
     project_root = Path(__file__).resolve().parents[2]
