@@ -205,6 +205,10 @@ def main(argv: list[str] | None = None) -> int:
     project_root = Path(__file__).resolve().parents[2]
     apply_user_settings(config)
 
+    # Auto-install research skills on first run or after update
+    from du_research.skill_installer import ensure_skills_installed
+    ensure_skills_installed(project_root)
+
     if getattr(args, "workspace_dir", None):
         config.pipeline.workspace_dir = args.workspace_dir
         apply_user_settings(config)

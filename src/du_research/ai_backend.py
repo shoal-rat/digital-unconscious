@@ -36,6 +36,7 @@ class AIBackend(Protocol):
         allowed_tools: list[str] | None = None,
         use_chrome: bool = False,
         max_turns: int = 25,
+        agent: str | None = None,
     ) -> AIResponse:
         ...
 
@@ -129,13 +130,18 @@ class ClaudeCodeBackend:
         allowed_tools: list[str] | None = None,
         use_chrome: bool = False,
         max_turns: int = 25,
+        agent: str | None = None,
     ) -> AIResponse:
         cmd: list[str] = [
             "claude",
             "-p", prompt,
             "--output-format", "json",
-            "--permission-mode", "auto",  # fully autonomous, no prompts
+            "--permission-mode", "auto",
         ]
+
+        # Use a specific agent (e.g., lit-search, peer-review)
+        if agent:
+            cmd.extend(["--agent", agent])
 
         # Model selection
         if model or self.model_override:
@@ -250,6 +256,7 @@ class AnthropicAPIBackend:
         allowed_tools: list[str] | None = None,
         use_chrome: bool = False,
         max_turns: int = 25,
+        agent: str | None = None,
     ) -> AIResponse:
         resolved_model = _resolve_model(model, self.default_model)
         params = _MODE_PARAMS.get(mode, _MODE_PARAMS["balanced"])
