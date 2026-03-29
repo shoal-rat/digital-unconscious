@@ -190,8 +190,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     argv = list(argv) if argv is not None else sys.argv[1:]
     if not argv:
-        # No arguments = launch the full desktop experience
-        # Tray icon + dashboard server + background observation service
+        # No arguments = launch the full desktop experience via windowless process
+        # This detaches from the terminal so the user gets their prompt back
+        if sys.platform == "win32":
+            from du_research.launcher import create_launcher_script
+            import subprocess as _sp
+            try:
+                vbs = create_launcher_script()
+                _sp.Popen(["wscript.exe", str(vbs)], creationflags=_sp.CREATE_NO_WINDOW)
+                print("  Digital Unconscious started. Look for the icon in your taskbar.")
+                print("  (You may need to click the ^ arrow to find it.)")
+                return 0
+            except Exception:
+                pass
+        # Fallback: run tray inline
         argv = ["tray"]
     args = parser.parse_args(argv)
     config = load_config(args.config)
@@ -443,9 +455,16 @@ def main(argv: list[str] | None = None) -> int:
     # --- tray (system tray icon — the default "du" experience) ----------------
     if args.command == "tray":
         from du_research.tray import run_tray
+        from du_research.launcher import create_launcher_script
 
         workspace = Path(config.pipeline.workspace_dir).resolve()
         setup_done = (workspace / "setup" / "user_settings.json").exists()
+
+        # Create launcher scripts for future use (desktop shortcut, startup)
+        try:
+            create_launcher_script()
+        except Exception:
+            pass
 
         # 1. Start dashboard server in background
         threading.Thread(
