@@ -102,6 +102,7 @@ class DigitalUnconsciousEngine:
             system_prompt=prompt_overrides.get("idea_generator"),
             primary_domains=config.idea.primary_domains,
             secondary_domains=config.idea.secondary_domains,
+            focus_fields=config.idea.focus_fields,
         )
         self.judge = JudgeAgent(
             backend=self.backend,
@@ -187,6 +188,7 @@ class DigitalUnconsciousEngine:
             primary_domains=self.config.idea.primary_domains,
             existing_ideas=existing_ideas,
             human_idea_model=human_model,
+            focus_fields=self.config.idea.focus_fields or None,
         )
         logger.info("Evaluated %d ideas", len(evaluations))
 

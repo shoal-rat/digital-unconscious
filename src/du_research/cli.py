@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
 from pathlib import Path
 import sys
 
@@ -133,6 +134,7 @@ def _build_parser() -> argparse.ArgumentParser:
     config_cmd = subparsers.add_parser("config", help="Show or update domain configuration")
     config_cmd.add_argument("--primary", help="Comma-separated primary domains")
     config_cmd.add_argument("--secondary", help="Comma-separated secondary domains")
+    config_cmd.add_argument("--focus", help="Comma-separated focus fields (e.g. 'economics research,management')")
     config_cmd.add_argument("--show", action="store_true", help="Show current configuration")
 
     start_cmd = subparsers.add_parser("start", help="Start the passive observation service loop in the foreground")
@@ -150,6 +152,8 @@ def _build_parser() -> argparse.ArgumentParser:
     service_restart.add_argument("--log-file", help="Optional fallback log file when screenpipe is unavailable")
     service_restart.add_argument("--interval-minutes", type=int, help="Override service interval in minutes")
     service_sub.add_parser("status", help="Show background daemon status")
+
+    subparsers.add_parser("tray", help="Launch system tray icon (bottom-right corner)")
 
     dash_cmd = subparsers.add_parser("dashboard", help="Open the web dashboard in your browser")
     dash_cmd.add_argument("--port", type=int, default=9830, help="Port for the dashboard server")
@@ -344,11 +348,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- config -------------------------------------------------------------
     if args.command == "config":
-        if args.show or (not args.primary and not args.secondary):
+        if args.show or (not args.primary and not args.secondary and not args.focus):
             info = {
                 "ai_mode": config.ai.mode,
                 "primary_domains": config.idea.primary_domains,
                 "secondary_domains": config.idea.secondary_domains,
+                "focus_fields": config.idea.focus_fields,
                 "observation_enabled": config.observation.enabled,
                 "learning_enabled": config.learning.prompt_evolution,
                 "automation_enabled": config.automation.enabled,
@@ -363,9 +368,12 @@ def main(argv: list[str] | None = None) -> int:
                 config.idea.primary_domains = [d.strip() for d in args.primary.split(",")]
             if args.secondary:
                 config.idea.secondary_domains = [d.strip() for d in args.secondary.split(",")]
+            if args.focus:
+                config.idea.focus_fields = [d.strip() for d in args.focus.split(",")]
             print(json.dumps({
                 "primary_domains": config.idea.primary_domains,
                 "secondary_domains": config.idea.secondary_domains,
+                "focus_fields": config.idea.focus_fields,
                 "note": "Changes apply to this session only. Edit config/pipeline.toml for persistence.",
             }, indent=2, ensure_ascii=False))
         return 0
@@ -409,6 +417,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.service_command == "status":
             print(json.dumps(service_manager.status(), indent=2, ensure_ascii=False))
             return 0
+
+    # --- tray (system tray icon) ----------------------------------------------
+    if args.command == "tray":
+        from du_research.tray import run_tray
+        # Start dashboard server in background for tray to link to
+        threading.Thread(
+            target=lambda: __import__("du_research.dashboard", fromlist=["run_dashboard"]).run_dashboard(config, open_browser=False),
+            daemon=True,
+        ).start()
+        run_tray(config)
+        return 0
 
     # --- dashboard ------------------------------------------------------------
     if args.command == "dashboard":

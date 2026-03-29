@@ -1,104 +1,183 @@
-# Digital Unconscious
+<p align="center">
+  <h1 align="center">Digital Unconscious</h1>
+  <p align="center"><strong>Your screen behaviour is an unread research journal.<br>This system reads it for you.</strong></p>
+</p>
 
-Passive observation to research ideas, daily briefs, and reproducible dossier pipelines.
+<p align="center">
+  <code>Passive Screen Observation</code> &times; <code>AI Idea Generation</code> &times; <code>Autonomous Research</code>
+</p>
 
-`Digital Unconscious` is a local-first autonomous research engine that watches daily screen activity, compresses behavioral signals into ideas, ranks them, and can automatically promote strong ideas into a literature-to-manuscript workflow.
+---
 
-## What It Does
+**Digital Unconscious** watches what you browse, read, and search throughout your day. It compresses those behavioural signals into structured summaries, generates cross-domain research ideas, scores them with an adversarial judge, and delivers a daily briefing of your best ideas — all running locally, all automatic.
 
-- passively captures behavior from Screenpipe or a fallback activity log
-- accumulates observations in a long-running local daemon
-- generates a daily idea briefing at a configured time
-- deduplicates repeated ideas and avoids rerunning near-identical research
-- scouts literature and datasets from open providers
-- runs optional CSV analysis with figures and reproducibility artifacts
-- drafts, reviews, revises, and packages a research dossier
-- exports or runs Claude Code browser automation tasks for gated portals
-- learns across runs with prompt evolution and a persistent human idea model
+The best ideas get promoted into a full autonomous research pipeline: literature review, feasibility assessment, data acquisition, analysis, paper drafting, and AI peer review.
 
-## System Flow
+## How it works
 
-```text
-Screen Activity
-  -> Observation Journal
-  -> Compression Agent
-  -> Idea Generator
-  -> Judge Agent
-  -> Daily Briefing
-  -> Auto-Research Gate
-  -> Literature / Data / Analysis / Draft / Review / Submission Package
+```
+You browse the web, read papers, write code, chat on Slack...
+         |
+    Screenpipe captures screen text (local, private)
+         |
+    Compression Agent (Claude Haiku) distils 30-min windows
+         |
+    Idea Generator (Claude Opus, high temperature)
+    draws cross-domain connections from your behaviour
+         |
+    Judge Agent (Claude Sonnet, low temperature)
+    scores on novelty, feasibility, relevance, timeliness
+         |
+    Daily Briefing — your "hidden research agenda" revealed
+         |
+    Auto-Research Pipeline (optional, for top ideas)
+    Literature → Feasibility → Data → Analysis → Paper → Review
+         |
+    Learning Engine — the system gets smarter about YOU over time
 ```
 
 ## Quickstart
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e .
-python -m du_research.cli
+```bash
+# Install
+pip install -e ".[full]"      # or just: pip install -e .
+
+# Initialize
+du init
+
+# Set your focus (ideas will be filtered to these fields)
+du config --focus "economics research,behavioral finance"
+du config --primary "pricing psychology,decision science"
+
+# Run your first daily cycle (with a log file or screenpipe)
+du daily --log-file your_activity.jsonl
+
+# Open the dashboard
+du dashboard
+
+# Or launch the system tray icon
+du tray
 ```
 
-On first launch, the app stores default setup choices locally. After that, launching without arguments defaults to the long-running observation service.
+## Features
 
-## Main Commands
+### Passive observation
+- Integrates with [screenpipe](https://github.com/mediar-ai/screenpipe) for 24/7 screen capture
+- Falls back to JSONL or plain-text activity logs
+- Privacy-first: passwords, bank pages, incognito auto-filtered
+- Configurable app blacklist
 
-```powershell
-python -m du_research.cli
-python -m du_research.cli start
-python -m du_research.cli service start
-python -m du_research.cli service status
-python -m du_research.cli service stop
-python -m du_research.cli daily
-python -m du_research.cli research --idea "Cognitive load as a SaaS pricing axis"
-python -m du_research.cli research --idea-id idea_001
-python -m du_research.cli research --idea "Behavioral drivers of churn" --data-file tests/fixtures/sample_data.csv
-python -m du_research.cli learn
+### AI-powered idea generation
+- Claude Opus at high temperature for divergent, cross-domain ideas
+- Focus field filtering: ideas *inspired by* any domain but *applicable to* your field
+- RAG knowledge base (ChromaDB or file fallback) enriches context
+- Human Idea Model personalises output based on your intellectual fingerprint
+
+### Adversarial judging
+- Claude Sonnet scores each idea on 4 weighted dimensions
+- Conservative by design: ~1 in 200 ideas reaches the "include" threshold
+- Focus field alignment: off-topic ideas are heavily penalised
+- Heuristic fallback when AI is unavailable
+
+### Autonomous research pipeline
+- 6-stage pipeline: Literature → Feasibility → Data → Analysis → Drafting → Review
+- Claude Code computer-use for browsing papers and downloading datasets
+- AI-powered feasibility assessment, code generation, paper writing
+- Adversarial peer review loop with auto-revision
+
+### Self-improving
+- Prompt Evolution Engine proposes and shadow-tests incremental prompt improvements
+- Human Idea Model tracks your obsessions, blind spots, and productive crossings
+- Domain Knowledge Expander enriches the RAG base from successful runs
+- Meta-Learning Scheduler prevents over-fitting with conservative update rules
+
+### Desktop integration
+- System tray icon (right-click for quick actions)
+- Web dashboard at `localhost:9830`
+- Background service daemon with configurable intervals
+- Platform autostart (launch on login)
+
+## Commands
+
+| Command | What it does |
+|---------|-------------|
+| `du tray` | System tray icon with quick actions |
+| `du dashboard` | Web UI for briefings, ideas, learning |
+| `du start` | Foreground observation service |
+| `du daily` | Run one daily cycle now |
+| `du research --idea "..."` | Research a specific idea |
+| `du research --auto` | Auto-pick and research the best backlog idea |
+| `du learn` | Run the learning engine |
+| `du config --focus "field1,field2"` | Set focus fields for idea filtering |
+| `du service start/stop/status` | Background daemon management |
+| `du credential add/list` | Manage encrypted credentials |
+
+## Dual-mode AI backend
+
+| | Claude Code (subscription) | Anthropic API |
+|---|---|---|
+| Cost | Included in Pro/Max ($20-200/mo) | ~$7-13/mo (pay per token) |
+| Setup | `claude /login` | `export ANTHROPIC_API_KEY=sk-...` |
+| Temperature | Simulated via prompt engineering | Direct parameter control |
+| Computer use | Native Chrome browsing | Not available |
+
+The system auto-detects which mode to use. Set `mode = "claude_code"` or `mode = "api"` in `config/pipeline.toml` to force one.
+
+## Configuration
+
+All settings live in `config/pipeline.toml`:
+
+```toml
+[idea]
+primary_domains = ["AI tools", "product design"]
+secondary_domains = ["cognitive science", "business models"]
+focus_fields = ["economics research", "management"]  # ideas must land here
+include_threshold = 75
+max_ideas_per_cycle = 8
+
+[observation]
+enabled = true
+screenpipe_url = "http://localhost:3030"
+blacklist_apps = ["game", "video_player"]
+
+[automation]
+auto_execute = true
+checkpoint_policy = "best_effort"  # autonomous, no human gates
 ```
 
-## Background Operation
+## Architecture
 
-- first-run setup persists defaults under `workspace/setup/`
-- the foreground service polls on a schedule and writes status into `workspace/service/`
-- the background daemon can be started with `service start`
-- Windows autostart can be enabled once and then left alone
-- retention and maintenance settings prune old observation, browser, and daily artifacts over time
-
-## Claude Code Automation
-
-This repository supports browser automation through Claude Code task packs and direct execution via the configured automation runner. It does not silently take over your personal Chrome profile. Credential handling and supervised boundaries are documented in [docs/CLAUDE_CODE_INTEGRATION.md](docs/CLAUDE_CODE_INTEGRATION.md).
-
-## Repository Layout
-
-```text
+```
 src/du_research/
-  agents/          multi-agent prompting and learning
-  stages/          literature, data, analysis, drafting, review
-  automation.py    browser automation runner
-  engine.py        long-running observation and daily idea cycle
-  pipeline.py      end-to-end research orchestration
-  service_manager.py
-  maintenance.py
-docs/
-  PRD.md
-  ARCHITECTURE.md
-  IMPLEMENTATION_STATUS.md
-tests/
-workspace/         runtime artifacts, ignored by git
+  agents/           AI agents (compressor, idea generator, judge, briefing, writer, reviewer)
+  stages/           Research pipeline stages (literature, feasibility, data, analysis, drafting, review)
+  ai_backend.py     Dual-mode abstraction (Claude Code CLI / Anthropic SDK)
+  circuit_breaker.py Three-state resilience with exponential backoff
+  engine.py         Main orchestrator (daily cycle, learning, observation service)
+  pipeline.py       6-stage research pipeline
+  rag.py            ChromaDB vector store for RAG knowledge base
+  dashboard.py      Web UI server
+  tray.py           System tray application
+  observation.py    Screenpipe integration + file fallback
 ```
 
-## Documentation
+## Privacy
 
-- Product scope: [docs/PRD.md](docs/PRD.md)
-- System design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Claude Code integration boundary: [docs/CLAUDE_CODE_INTEGRATION.md](docs/CLAUDE_CODE_INTEGRATION.md)
-- Implementation tracking: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
+- All data stays on your device. Screenshots never leave.
+- Only compressed text summaries go to Claude (Code or API).
+- Configurable app and domain blacklists.
+- No telemetry, no cross-user learning, no phone-home.
 
 ## Testing
 
-```powershell
-python -m unittest discover -s tests -v
+```bash
+PYTHONPATH=src python -m pytest tests/ -v  # 57 tests
 ```
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT
+
+---
+
+<p align="center"><em>"The system that learns from you becomes, over time, more you than any tool you have ever used."</em></p>

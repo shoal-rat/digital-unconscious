@@ -17,7 +17,8 @@ dependencies = []
 [project.optional-dependencies]
 api = ["anthropic>=0.40"]
 rag = ["chromadb>=0.5"]
-full = ["anthropic>=0.40", "chromadb>=0.5"]
+tray = ["pystray>=0.19", "Pillow>=10.0"]
+full = ["anthropic>=0.40", "chromadb>=0.5", "pystray>=0.19", "Pillow>=10.0"]
 
 [project.scripts]
 du = "du_research.cli:main"

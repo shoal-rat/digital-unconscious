@@ -48,6 +48,7 @@ class IdeaSection:
     """Idea generation and judging settings."""
     primary_domains: list[str] = field(default_factory=lambda: ["AI tools", "product design"])
     secondary_domains: list[str] = field(default_factory=lambda: ["cognitive science", "business models"])
+    focus_fields: list[str] = field(default_factory=list)  # e.g. ["economics research", "management"]
     max_ideas_per_cycle: int = 8
     include_threshold: int = 75
     hold_threshold: int = 60

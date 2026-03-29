@@ -90,6 +90,7 @@ class JudgeAgent:
         primary_domains: list[str] | None = None,
         existing_ideas: list[str] | None = None,
         human_idea_model: dict[str, Any] | None = None,
+        focus_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Score each idea and return evaluations sorted by total_score."""
         if not ideas:
@@ -112,6 +113,15 @@ class JudgeAgent:
                 + "\n".join(f"- {idea}" for idea in existing_ideas[:20])
             )
 
+        if focus_fields:
+            parts.append(
+                f"\n## Focus Fields (CRITICAL)\n"
+                f"The user ONLY cares about ideas applicable to: {', '.join(focus_fields)}\n"
+                f"Ideas whose application_field does NOT match any focus field should get\n"
+                f"domain_relevance < 30 regardless of other qualities.\n"
+                f"Cross-domain INSPIRATION is fine — but the idea must LAND in a focus field."
+            )
+
         if human_idea_model:
             model_hints = _format_judge_model_context(human_idea_model)
             if model_hints:
@@ -130,11 +140,11 @@ class JudgeAgent:
 
         if not response.ok:
             logger.warning("Judge evaluation failed, using heuristic scoring")
-            return _heuristic_evaluate(ideas)
+            return _heuristic_evaluate(ideas, focus_fields=focus_fields)
 
         evaluations = _parse_evaluations(response.text)
         if not evaluations:
-            return _heuristic_evaluate(ideas)
+            return _heuristic_evaluate(ideas, focus_fields=focus_fields)
 
         # Ensure total_score is computed consistently
         for ev in evaluations:
@@ -174,27 +184,48 @@ def _format_judge_model_context(model: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _heuristic_evaluate(ideas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _heuristic_evaluate(
+    ideas: list[dict[str, Any]],
+    focus_fields: list[str] | None = None,
+) -> list[dict[str, Any]]:
     """Fallback scoring when AI is unavailable.
 
-    Calibrated so that well-formed ideas (with description, research question,
-    data hint, and cross-domain signal) can reach the include threshold (75+).
+    Conservative by design: at ~1-in-200 selectivity, most ideas score 55-70.
+    Only exceptionally well-formed ideas with strong focus-field alignment
+    reach the include threshold (75+).
     """
+    _focus_lower = {f.lower() for f in (focus_fields or [])}
     evaluations = []
     for idea in ideas:
         desc = idea.get("description", idea.get("title", ""))
-        specificity = min(len(desc) / 150, 1.0)
-        has_data_hint = 1.0 if idea.get("data_hint") else 0.4
-        has_question = 1.0 if idea.get("research_question") else 0.5
-        has_novelty_signal = 1.0 if idea.get("novelty_signal") else 0.5
+        specificity = min(len(desc) / 200, 1.0)
+        has_data_hint = 1.0 if idea.get("data_hint") else 0.5
+        has_question = 1.0 if idea.get("research_question") else 0.6
+        has_novelty_signal = 1.0 if idea.get("novelty_signal") else 0.6
         domains = idea.get("domains", [])
-        cross_domain = 1.0 if len(domains) >= 2 else 0.6
-        has_source = 1.0 if idea.get("source_behaviour") else 0.6
+        cross_domain = 1.0 if len(domains) >= 2 else 0.7
+        has_source = 1.0 if idea.get("source_behaviour") else 0.7
 
-        novelty = round(58 + specificity * 15 + has_novelty_signal * 12, 1)
-        feasibility = round(55 + has_data_hint * 18 + has_question * 12, 1)
-        domain_relevance = round(58 + cross_domain * 18 + has_source * 6, 1)
-        timeliness = round(62 + has_source * 12, 1)
+        # Focus field matching: check if the idea lands in a user focus field
+        focus_match = 1.0  # no focus fields configured = no penalty
+        if _focus_lower:
+            app_field = (idea.get("application_field") or "").lower()
+            idea_domains_lower = [d.lower() for d in domains]
+            title_lower = (idea.get("title") or "").lower()
+            desc_lower = desc.lower()
+            # Check application_field, domains, title, description for focus match
+            matched = any(
+                ff in app_field or ff in title_lower or
+                any(ff in d for d in idea_domains_lower) or
+                ff in desc_lower
+                for ff in _focus_lower
+            )
+            focus_match = 1.0 if matched else 0.2  # heavy penalty for off-focus
+
+        novelty = round(55 + specificity * 20 + has_novelty_signal * 5, 1)
+        feasibility = round(50 + has_data_hint * 20 + has_question * 10, 1)
+        domain_relevance = round((55 + cross_domain * 20) * focus_match, 1)
+        timeliness = round(55 + has_source * 10, 1)
 
         total = round(
             novelty * WEIGHTS["novelty"]

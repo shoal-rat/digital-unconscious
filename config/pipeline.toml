@@ -34,6 +34,7 @@ recent_frame_hash_limit = 5000
 [idea]
 primary_domains = ["AI tools", "product design"]
 secondary_domains = ["cognitive science", "business models"]
+focus_fields = []                # e.g. ["economics research", "management"] — ideas must land in these fields
 max_ideas_per_cycle = 8
 include_threshold = 75       # score > 75 goes into daily briefing
 hold_threshold = 60          # score 60-75 goes to observation pool

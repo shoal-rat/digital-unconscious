@@ -65,6 +65,7 @@ class IdeaGeneratorAgent:
     system_prompt: str | None = None
     primary_domains: list[str] = field(default_factory=lambda: ["AI tools"])
     secondary_domains: list[str] = field(default_factory=lambda: ["cognitive science"])
+    focus_fields: list[str] = field(default_factory=list)
 
     def generate(
         self,
@@ -82,6 +83,16 @@ class IdeaGeneratorAgent:
             f"- Secondary domains: {', '.join(self.secondary_domains)}\n"
             f"- Open domain: any cross-domain connection is welcome",
         ]
+
+        if self.focus_fields:
+            parts.append(
+                f"\n## Focus Fields (IMPORTANT)\n"
+                f"The user's research/work focus: {', '.join(self.focus_fields)}\n"
+                f"Every idea MUST be applicable to at least one of these fields.\n"
+                f"Cross-domain inspiration is encouraged — draw from ANY field — but the\n"
+                f"idea's application and research question must land in the focus fields.\n"
+                f"Add an 'application_field' key to each idea indicating which focus field it serves."
+            )
 
         if rag_context:
             parts.append(f"\n## Knowledge Base Context\n{rag_context[:3000]}")
