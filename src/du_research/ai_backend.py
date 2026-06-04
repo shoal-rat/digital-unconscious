@@ -33,6 +33,7 @@ class AIBackend(Protocol):
         use_chrome: bool = False,
         max_turns: int = 25,
         agent: str | None = None,
+        think: int | str | None = None,
     ) -> AIResponse:
         ...
 
@@ -151,6 +152,61 @@ def _usage_value(usage: Any, key: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Extended-thinking helpers
+# ---------------------------------------------------------------------------
+#
+# ``think`` is a single knob exposed on every backend so the rest of the
+# pipeline can ask a model to reason harder without caring which provider
+# serves the call. It accepts an integer token budget, a "low"/"medium"/"high"
+# string, or a bool. Each backend translates it into its native control:
+# Anthropic extended thinking (budget tokens), OpenAI reasoning effort, the
+# Kimi thinking toggle, or a Claude Code thinking keyword.
+
+_EFFORT_BUDGETS = {"low": 2048, "medium": 8192, "high": 16384}
+
+
+def _thinking_budget(think: int | str | bool | None) -> int:
+    """Normalise ``think`` to an Anthropic-style token budget (0 == off)."""
+    if think is None or think is False:
+        return 0
+    if think is True:
+        return _EFFORT_BUDGETS["medium"]
+    if isinstance(think, str):
+        return _EFFORT_BUDGETS.get(think.strip().lower(), 0)
+    try:
+        return max(0, int(think))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _reasoning_effort(think: int | str | bool | None) -> str | None:
+    """Normalise ``think`` to an OpenAI reasoning-effort label (None == off)."""
+    if isinstance(think, str):
+        label = think.strip().lower()
+        return label if label in _EFFORT_BUDGETS else "medium"
+    budget = _thinking_budget(think)
+    if budget <= 0:
+        return None
+    if budget <= _EFFORT_BUDGETS["low"]:
+        return "low"
+    if budget <= _EFFORT_BUDGETS["high"] - 1:
+        return "medium"
+    return "high"
+
+
+def _claude_code_think_keyword(think: int | str | bool | None) -> str | None:
+    """Map ``think`` onto a Claude Code thinking trigger keyword."""
+    budget = _thinking_budget(think)
+    if budget <= 0:
+        return None
+    if budget >= _EFFORT_BUDGETS["high"]:
+        return "ultrathink"
+    if budget >= _EFFORT_BUDGETS["medium"]:
+        return "think harder"
+    return "think hard"
+
+
+# ---------------------------------------------------------------------------
 # Claude Code backend (headless ``claude -p``)
 # ---------------------------------------------------------------------------
 
@@ -196,6 +252,7 @@ class ClaudeCodeBackend:
         use_chrome: bool = False,
         max_turns: int = 25,
         agent: str | None = None,
+        think: int | str | None = None,
     ) -> AIResponse:
         cmd: list[str] = [
             "claude",
@@ -212,7 +269,13 @@ class ClaudeCodeBackend:
             cmd.extend(["--model", _resolve_model(requested_model)])
 
         mode_snippet = self._MODE_PROMPTS.get(mode, "")
-        combined_system = "\n\n".join(p for p in [system, mode_snippet] if p)
+        think_keyword = _claude_code_think_keyword(think)
+        think_snippet = (
+            f"Before answering, {think_keyword} about the problem step by step."
+            if think_keyword
+            else ""
+        )
+        combined_system = "\n\n".join(p for p in [system, mode_snippet, think_snippet] if p)
         if combined_system:
             cmd.extend(["--append-system-prompt", combined_system])
 
@@ -320,10 +383,12 @@ class AnthropicAPIBackend:
         use_chrome: bool = False,
         max_turns: int = 25,
         agent: str | None = None,
+        think: int | str | None = None,
     ) -> AIResponse:
         resolved_model = _resolve_model(model, self.default_model)
         params = _MODE_PARAMS.get(mode, _MODE_PARAMS["balanced"])
         temperature = params["temperature"]
+        thinking_budget = _thinking_budget(think)
 
         system_parts = [system]
         if json_schema:
@@ -336,9 +401,16 @@ class AnthropicAPIBackend:
         kwargs: dict[str, Any] = {
             "model": resolved_model,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
+        if thinking_budget > 0:
+            # Extended thinking needs token headroom beyond the budget and must
+            # keep the default temperature (a custom temperature is rejected).
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+            if max_tokens <= thinking_budget:
+                kwargs["max_tokens"] = thinking_budget + max_tokens
+        else:
+            kwargs["temperature"] = temperature
         if combined_system:
             kwargs["system"] = combined_system
 
@@ -423,6 +495,7 @@ class OpenAICompatibleChatBackend:
         use_chrome: bool = False,
         max_turns: int = 25,
         agent: str | None = None,
+        think: int | str | None = None,
     ) -> AIResponse:
         resolved_model = _resolve_provider_model(
             model,
@@ -445,13 +518,19 @@ class OpenAICompatibleChatBackend:
             )
         messages.append({"role": "user", "content": prompt})
 
+        effort = _reasoning_effort(think)
         kwargs: dict[str, Any] = {
             "model": resolved_model,
             "messages": messages,
             "max_tokens": max_tokens,
         }
-        if not self.omit_temperature:
+        # Reasoning models reject a custom sampling temperature, so only send a
+        # temperature when no reasoning effort was requested.
+        if not self.omit_temperature and not (effort and self.provider_name == "openai"):
             kwargs["temperature"] = params["temperature"]
+
+        if effort and self.provider_name == "openai":
+            kwargs["reasoning_effort"] = effort
 
         if json_schema and self.provider_name == "openai":
             kwargs["response_format"] = {
@@ -465,6 +544,8 @@ class OpenAICompatibleChatBackend:
 
         if self.provider_name in {"kimi", "moonshot"}:
             thinking_enabled = self.kimi_thinking
+            if think:
+                thinking_enabled = _thinking_budget(think) > 0
             if thinking_enabled is None:
                 thinking_enabled = not (json_schema or mode == "deterministic")
             kwargs["extra_body"] = {
@@ -540,6 +621,10 @@ class MultiProviderBackend:
     openai_default_model: str = "gpt-5.5"
     kimi_default_model: str = "kimi-k2.6"
     timeout_seconds: int = 300
+    enable_fallback: bool = True
+    fallback_order: list[str] = field(
+        default_factory=lambda: ["anthropic", "openai", "kimi", "claude_code"]
+    )
     _providers: dict[str, AIBackend] = field(default_factory=dict, repr=False)
 
     def call(
@@ -556,26 +641,56 @@ class MultiProviderBackend:
         use_chrome: bool = False,
         max_turns: int = 25,
         agent: str | None = None,
+        think: int | str | None = None,
     ) -> AIResponse:
         provider, bare_model = self._select_provider(model)
-        try:
-            backend = self._get_provider(provider)
-        except Exception as exc:
-            logger.error("Could not initialize %s backend: %s", provider, exc)
-            return AIResponse(text="", raw={"error": str(exc), "provider": provider})
-        return backend.call(
-            prompt,
-            mode=mode,
-            system=system,
-            model=bare_model,
-            max_tokens=max_tokens,
-            json_schema=json_schema,
-            session_id=session_id,
-            allowed_tools=allowed_tools,
-            use_chrome=use_chrome,
-            max_turns=max_turns,
-            agent=agent,
-        )
+        chain = self._provider_chain(provider)
+        last = AIResponse(text="", raw={"error": "no provider available", "provider": provider})
+        for index, prov in enumerate(chain):
+            try:
+                backend = self._get_provider(prov)
+            except Exception as exc:
+                logger.warning("Skipping %s backend (initialisation failed): %s", prov, exc)
+                last = AIResponse(text="", raw={"error": str(exc), "provider": prov})
+                continue
+            # Only the primary provider receives the caller's requested model; a
+            # fallback provider uses its own default model instead.
+            call_model = bare_model if prov == provider else None
+            response = backend.call(
+                prompt,
+                mode=mode,
+                system=system,
+                model=call_model,
+                max_tokens=max_tokens,
+                json_schema=json_schema,
+                session_id=session_id,
+                allowed_tools=allowed_tools,
+                use_chrome=use_chrome,
+                max_turns=max_turns,
+                agent=agent,
+                think=think,
+            )
+            if isinstance(response.raw, dict):
+                response.raw.setdefault("router_provider", prov)
+                if index > 0:
+                    response.raw["router_fallback_from"] = provider
+            if response.ok:
+                if index > 0:
+                    logger.info(
+                        "Router failed over to %s after primary provider %s failed",
+                        prov,
+                        provider,
+                    )
+                return response
+            error = response.raw.get("error", "empty response") if isinstance(response.raw, dict) else "empty response"
+            logger.warning(
+                "Provider %s returned no usable response (%s); %s",
+                prov,
+                error,
+                "falling back to next provider" if index + 1 < len(chain) else "no fallback left",
+            )
+            last = response
+        return last
 
     def _select_provider(self, model: str | None) -> tuple[str, str | None]:
         prefix, bare_model = _split_provider_model(model)
@@ -618,6 +733,34 @@ class MultiProviderBackend:
         self._providers[provider] = backend
         return backend
 
+    def _provider_available(self, provider: str) -> bool:
+        """Whether a provider can be tried: already built, has a key, or is local."""
+        if provider in self._providers:
+            return True
+        if provider == "anthropic":
+            return bool(self.api_key or os.environ.get("ANTHROPIC_API_KEY"))
+        if provider == "openai":
+            return bool(self.openai_api_key or os.environ.get("OPENAI_API_KEY"))
+        if provider == "kimi":
+            return bool(
+                self.kimi_api_key
+                or os.environ.get("MOONSHOT_API_KEY")
+                or os.environ.get("KIMI_API_KEY")
+            )
+        if provider == "claude_code":
+            return True  # local CLI; if absent it returns a clean error and the chain ends
+        return False
+
+    def _provider_chain(self, primary: str) -> list[str]:
+        """Ordered providers to attempt: the primary first, then available fallbacks."""
+        if not self.enable_fallback:
+            return [primary]
+        chain = [primary]
+        for prov in self.fallback_order:
+            if prov != primary and prov not in chain and self._provider_available(prov):
+                chain.append(prov)
+        return chain
+
 
 # ---------------------------------------------------------------------------
 # Factory
@@ -641,13 +784,28 @@ def create_backend(mode: str = "auto", **kwargs: Any) -> AIBackend:
     openai_api_key = kwargs.get("openai_api_key")
     kimi_api_key = kwargs.get("kimi_api_key") or kwargs.get("moonshot_api_key")
     default_model = kwargs.get("default_model")
+    enable_fallback = kwargs.get("enable_fallback", True)
+    fallback_order = kwargs.get("fallback_order") or ["anthropic", "openai", "kimi", "claude_code"]
+
+    has_anthropic = bool(api_key or os.environ.get("ANTHROPIC_API_KEY"))
+    has_openai = bool(openai_api_key or os.environ.get("OPENAI_API_KEY"))
+    has_kimi = bool(
+        kimi_api_key or os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY")
+    )
+
+    # When at least one hosted provider is configured and fallback is enabled,
+    # auto mode uses the multi-provider router so a failing primary provider
+    # transparently fails over (ultimately to the local Claude Code CLI). With no
+    # hosted keys there is nothing to fail over to, so auto stays single-backend.
+    if mode == "auto" and enable_fallback and (has_anthropic or has_openai or has_kimi):
+        mode = "multi"
 
     if mode == "auto":
-        if api_key or os.environ.get("ANTHROPIC_API_KEY"):
+        if has_anthropic:
             mode = "api"
-        elif openai_api_key or os.environ.get("OPENAI_API_KEY"):
+        elif has_openai:
             mode = "openai"
-        elif kimi_api_key or os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY"):
+        elif has_kimi:
             mode = "kimi"
         else:
             mode = "claude_code"
@@ -661,6 +819,8 @@ def create_backend(mode: str = "auto", **kwargs: Any) -> AIBackend:
             openai_default_model=kwargs.get("openai_default_model", "gpt-5.5"),
             kimi_default_model=kwargs.get("kimi_default_model", "kimi-k2.6"),
             timeout_seconds=kwargs.get("timeout_seconds", 300),
+            enable_fallback=enable_fallback,
+            fallback_order=fallback_order,
         )
 
     if mode in {"api", "anthropic", "claude"}:

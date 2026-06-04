@@ -32,6 +32,18 @@ class AISection:
     kimi_api_key: str = ""  # prefer MOONSHOT_API_KEY or KIMI_API_KEY env var
     openai_default_model: str = "gpt-5.5"
     kimi_default_model: str = "kimi-k2.6"
+    # Multi-provider failover: when a provider call fails, try the next available
+    # provider in fallback_order. Used by "multi" mode and by "auto" whenever a
+    # hosted key is configured.
+    fallback: bool = True
+    fallback_order: list[str] = field(
+        default_factory=lambda: ["anthropic", "openai", "kimi", "claude_code"]
+    )
+    # Extended-thinking token budgets (0 disables). Wired to the two
+    # reasoning-heavy steps and translated per provider: an Anthropic budget,
+    # OpenAI reasoning effort, the Kimi thinking toggle, or a Claude Code keyword.
+    think_idea_budget: int = 0
+    think_judge_budget: int = 0
 
 
 @dataclass

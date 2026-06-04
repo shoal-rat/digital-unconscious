@@ -83,6 +83,8 @@ class DigitalUnconsciousEngine:
         backend_kwargs["default_model"] = config.ai.default_model
         backend_kwargs["openai_default_model"] = config.ai.openai_default_model
         backend_kwargs["kimi_default_model"] = config.ai.kimi_default_model
+        backend_kwargs["enable_fallback"] = config.ai.fallback
+        backend_kwargs["fallback_order"] = config.ai.fallback_order
         raw_backend: AIBackend = create_backend(config.ai.mode, **backend_kwargs)
 
         # Wrap in circuit breaker
@@ -109,11 +111,13 @@ class DigitalUnconsciousEngine:
             primary_domains=config.idea.primary_domains,
             secondary_domains=config.idea.secondary_domains,
             focus_fields=config.idea.focus_fields,
+            think=config.ai.think_idea_budget,
         )
         self.judge = JudgeAgent(
             backend=self.backend,
             model=config.ai.judge_model,
             system_prompt=prompt_overrides.get("judge"),
+            think=config.ai.think_judge_budget,
         )
         self.briefing_agent = BriefingAgent(
             backend=self.backend,

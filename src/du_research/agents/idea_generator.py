@@ -66,6 +66,7 @@ class IdeaGeneratorAgent:
     primary_domains: list[str] = field(default_factory=lambda: ["AI tools"])
     secondary_domains: list[str] = field(default_factory=lambda: ["cognitive science"])
     focus_fields: list[str] = field(default_factory=list)
+    think: int = 0  # extended-thinking token budget (0 disables)
 
     def generate(
         self,
@@ -111,6 +112,7 @@ class IdeaGeneratorAgent:
             system=self.system_prompt or IDEA_GENERATOR_SYSTEM_PROMPT,
             model=self.model,
             max_tokens=3000,
+            think=self.think or None,
         )
 
         if not response.ok:
