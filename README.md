@@ -37,7 +37,7 @@ It works best for:
 - analysts who want research questions from daily work
 - builders who want a private idea pipeline instead of another cloud notebook
 
-It is not meant to record secrets, reuse your browser profile, bypass logins, or make final submissions without review.
+Final research submissions always wait for your review.
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ du dashboard
 
 ## How It Works
 
-1. **Observe**: Read recent screen text from [screenpipe](https://github.com/mediar-ai/screenpipe), or use a JSONL/plain-text log file.
+1. **Observe**: Read your screen with a vision model (screenshots → topics and intent), or via [screenpipe](https://github.com/mediar-ai/screenpipe) OCR, or a JSONL/plain-text log file.
 2. **Compress**: Turn 30-minute windows into compact behavior summaries.
 3. **Generate**: Ask a creative model to find cross-domain research ideas.
 4. **Judge**: Score each idea against novelty, feasibility, relevance, and timing.
@@ -125,10 +125,10 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 
 ### Passive Observation
 
-- screenpipe integration for local screen-text capture
+- vision screen reading (screenshots → a multimodal model) — the easy default, no extra software
+- screenpipe integration for local OCR capture (optional)
 - JSONL and plain-text fallback logs
-- configurable app blacklist
-- local storage for raw observation files
+- optional app blacklist
 
 ### Idea Generation And Judging
 
@@ -169,6 +169,13 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 - circuit breaker with retries and exponential backoff
 - bounded long-term memory: deduplicated RAG store, consolidated profiles, and retention caps so months of use never bloat prompts or disk
 
+### Vision And Web Search (LLM-native)
+
+- read your screen with a multimodal model — no OCR or extra software to install
+- agents can search the web when they hit an unfamiliar or trending topic
+- `du usage` shows token/cost; `du models` shows how each agent routes to a provider
+- run a cycle or start/stop the background service from the dashboard — no commands needed
+
 ## Commands
 
 | Command | Use it for |
@@ -181,6 +188,8 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 | `du research --idea "..."` | Run the research pipeline for one idea |
 | `du research --auto` | Pick the strongest backlog idea |
 | `du learn` | Update the learning model |
+| `du usage` | Token and cost report across daily cycles |
+| `du models` | Show how each agent routes to a provider/model |
 | `du config --focus "field1,field2"` | Set focus fields for idea filtering |
 | `du service start` | Start the background daemon |
 | `du service status` | Check daemon state |
@@ -231,15 +240,12 @@ $env:OPENAI_API_KEY = "..."
 $env:MOONSHOT_API_KEY = "..."
 ```
 
-## Privacy And Safety
+## Notes
 
-- Raw screenshots stay local. The pipeline works from text summaries.
-- Only compressed summaries and selected task prompts are sent to model APIs.
-- No telemetry and no cross-user learning.
-- App and domain blacklists are configurable.
+- Local-first: your data lives in `workspace/` on your machine; no telemetry, no cross-user learning.
+- Vision mode sends screenshots to your chosen model (Claude, OpenAI, or Kimi); text modes send summaries. An optional app blacklist skips anything you'd rather not capture.
 - Credentials are stored in an encrypted local vault.
-- Browser automation uses explicit task packs and manual checkpoints for CAPTCHA, MFA, consent, and payment walls.
-- Final submission workflows require approval.
+- Final research submissions wait for your review.
 
 ## Project Map
 

@@ -64,6 +64,83 @@ def _build_backend(config):
     )
 
 
+def _cmd_usage(config, as_json: bool = False) -> int:
+    """Report token/cost usage aggregated across daily cycles."""
+    workspace = Path(config.pipeline.workspace_dir).resolve()
+    daily_dir = workspace / "daily"
+    rows: list[dict] = []
+    totals = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
+    by_model: dict[str, dict] = {}
+    if daily_dir.exists():
+        for cycle_dir in sorted(daily_dir.glob("cycle_*")):
+            usage_path = cycle_dir / "usage.json"
+            if not usage_path.exists():
+                continue
+            try:
+                usage = json.loads(usage_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            rows.append({
+                "date": cycle_dir.name.replace("cycle_", ""),
+                "calls": usage.get("calls", 0),
+                "total_tokens": usage.get("total_tokens", 0),
+                "cost_usd": usage.get("cost_usd", 0.0),
+            })
+            for key in ("calls", "input_tokens", "output_tokens", "total_tokens"):
+                totals[key] += usage.get(key, 0)
+            totals["cost_usd"] += usage.get("cost_usd", 0.0)
+            for model, bucket in (usage.get("by_model") or {}).items():
+                agg = by_model.setdefault(model, {"calls": 0, "total_tokens": 0, "cost_usd": 0.0})
+                agg["calls"] += bucket.get("calls", 0)
+                agg["total_tokens"] += bucket.get("input_tokens", 0) + bucket.get("output_tokens", 0)
+                agg["cost_usd"] += bucket.get("cost_usd", 0.0)
+
+    if as_json:
+        print(json.dumps({"by_day": rows, "totals": totals, "by_model": by_model}, indent=2, ensure_ascii=False))
+        return 0
+
+    if not rows:
+        print("\n  No usage recorded yet. Run `du daily` to generate your first cycle.\n")
+        return 0
+
+    print("\n  Model usage — Digital Unconscious\n")
+    print(f"  {'Date':<12}{'Calls':>8}{'Tokens':>14}{'Cost':>12}")
+    print(f"  {'-' * 44}")
+    for row in rows[-30:]:
+        print(f"  {row['date']:<12}{row['calls']:>8}{row['total_tokens']:>14,}{'$' + format(row['cost_usd'], '.4f'):>12}")
+    print(f"  {'-' * 44}")
+    print(f"  {'Total':<12}{totals['calls']:>8}{totals['total_tokens']:>14,}{'$' + format(totals['cost_usd'], '.4f'):>12}")
+    if by_model:
+        print("\n  By model:")
+        for model, agg in sorted(by_model.items(), key=lambda kv: kv[1]['total_tokens'], reverse=True):
+            print(f"    {model:<24}{agg['calls']:>6} calls{agg['total_tokens']:>14,} tok   ${agg['cost_usd']:.4f}")
+    print()
+    return 0
+
+
+def _cmd_models(config, as_json: bool = False) -> int:
+    """Show how each agent routes to a provider/model under the current config."""
+    from du_research.ai_backend import resolve_routing
+
+    info = resolve_routing(config)
+    if as_json:
+        print(json.dumps(info, indent=2, ensure_ascii=False))
+        return 0
+
+    print("\n  Model routing — Digital Unconscious\n")
+    print(f"  Mode: {info['mode']}   Fallback: {'on' if info['fallback'] else 'off'}")
+    print(f"  Available providers: {', '.join(info['available_providers']) or 'none (local Claude Code only)'}")
+    if info["fallback"]:
+        print(f"  Fallback order: {' -> '.join(info['fallback_order'])}")
+    print(f"\n  {'Agent':<16}{'Configured':<16}{'Resolves to':<30}")
+    print(f"  {'-' * 60}")
+    for entry in info["routing"]:
+        flag = "" if entry["available"] else "  (no key — will fall back)"
+        print(f"  {entry['agent']:<16}{entry['configured']:<16}{entry['provider'] + ':' + entry['model']:<30}{flag}")
+    print()
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="du",
@@ -170,6 +247,12 @@ def _build_parser() -> argparse.ArgumentParser:
     logs_cmd = subparsers.add_parser("logs", help="Show logs for a run")
     logs_cmd.add_argument("--run-id", required=True, help="Run id to inspect")
     logs_cmd.add_argument("--follow", action="store_true", help="Follow logs in real time")
+
+    usage_cmd = subparsers.add_parser("usage", help="Show token and cost usage across daily cycles")
+    usage_cmd.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+
+    models_cmd = subparsers.add_parser("models", help="Show how each agent routes to a provider/model")
+    models_cmd.add_argument("--json", action="store_true", help="Machine-readable JSON output")
 
     return parser
 
@@ -462,7 +545,10 @@ def main(argv: list[str] | None = None) -> int:
         from du_research.launcher import create_launcher_script
 
         workspace = Path(config.pipeline.workspace_dir).resolve()
-        setup_done = (workspace / "setup" / "user_settings.json").exists()
+        # Gate on a marker written only when the user finishes the web wizard —
+        # NOT on user_settings.json, which ensure_first_run_setup writes with
+        # defaults non-interactively (which would suppress the wizard forever).
+        setup_done = (workspace / "setup" / "setup_complete.json").exists()
 
         # Create launcher scripts for future use (desktop shortcut, startup)
         try:
@@ -538,6 +624,12 @@ def main(argv: list[str] | None = None) -> int:
                 event = entry.get("event", "")
                 print(f"[{ts}] {stage}: {event}")
         return 0
+
+    if args.command == "usage":
+        return _cmd_usage(config, as_json=args.json)
+
+    if args.command == "models":
+        return _cmd_models(config, as_json=args.json)
 
     parser.error(f"Unknown command: {args.command}")
     return 2

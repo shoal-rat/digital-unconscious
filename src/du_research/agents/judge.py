@@ -85,6 +85,7 @@ class JudgeAgent:
     model: str = "sonnet"
     system_prompt: str | None = None
     think: int = 0  # extended-thinking token budget (0 disables)
+    web_search: bool = False  # let the judge check novelty/timeliness against the web
 
     def evaluate(
         self,
@@ -144,6 +145,7 @@ class JudgeAgent:
             model=self.model,
             max_tokens=2000,
             think=self.think or None,
+            web_search=self.web_search,
         )
 
         if not response.ok:

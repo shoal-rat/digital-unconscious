@@ -67,6 +67,7 @@ class IdeaGeneratorAgent:
     secondary_domains: list[str] = field(default_factory=lambda: ["cognitive science"])
     focus_fields: list[str] = field(default_factory=list)
     think: int = 0  # extended-thinking token budget (0 disables)
+    web_search: bool = False  # let the model look up unfamiliar/trending topics
 
     def generate(
         self,
@@ -113,6 +114,7 @@ class IdeaGeneratorAgent:
             model=self.model,
             max_tokens=3000,
             think=self.think or None,
+            web_search=self.web_search,
         )
 
         if not response.ok:

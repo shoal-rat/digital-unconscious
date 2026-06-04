@@ -13,11 +13,10 @@
 - Per-call model prefixes are supported: `openai:gpt-5.5`, `kimi:kimi-k2.6`, `anthropic:claude-opus-4-8`, and `claude_code:opus`.
 - Do not commit real API keys. Prefer `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MOONSHOT_API_KEY`, or `KIMI_API_KEY`.
 
-## Safety And Privacy
-- Raw screenshots should remain local. Only compressed text summaries should be sent to model APIs.
-- Do not add browser profile reuse, cookie export, password export, unsupervised payments, or automatic terms acceptance.
+## Safety
+- Vision mode sends screenshots to the configured model — that is expected. Keep everything else local under `workspace/`.
 - Credential storage must remain encrypted; keep `cryptography` as a runtime dependency for vault writes.
-- Browser automation should use allowlisted task packs and manual checkpoints for CAPTCHA, MFA, consent, or payment walls.
+- Do not add cookie/password export or unsupervised payments.
 
 ## Verification
 - Before finishing code changes, run:

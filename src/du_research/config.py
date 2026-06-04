@@ -50,6 +50,9 @@ class AISection:
 class ObservationSection:
     """Screen observation layer settings."""
     enabled: bool = True
+    source: str = "auto"  # "auto" | "screenpipe" | "vision" | "file"
+    vision_model: str = "sonnet"  # vision-capable model for screenshot reading
+    vision_max_dimension: int = 1568  # downscale long edge before sending to the model
     screenpipe_url: str = "http://localhost:3030"
     window_minutes: int = 30
     lookback_multiplier: int = 4
@@ -65,6 +68,7 @@ class IdeaSection:
     primary_domains: list[str] = field(default_factory=lambda: ["AI tools", "product design"])
     secondary_domains: list[str] = field(default_factory=lambda: ["cognitive science", "business models"])
     focus_fields: list[str] = field(default_factory=list)  # e.g. ["economics research", "management"]
+    web_search: bool = True  # let idea generation look up unfamiliar/trending topics online
     max_ideas_per_cycle: int = 8
     include_threshold: int = 75
     hold_threshold: int = 60

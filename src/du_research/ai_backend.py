@@ -6,6 +6,7 @@ pipeline.
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -34,6 +35,8 @@ class AIBackend(Protocol):
         max_turns: int = 25,
         agent: str | None = None,
         think: int | str | None = None,
+        images: list[bytes] | None = None,
+        web_search: bool = False,
     ) -> AIResponse:
         ...
 
@@ -139,7 +142,14 @@ def _parse_structured_text(text: str, json_schema: dict | None) -> dict | None:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        return None
+        # The model may wrap JSON in prose (e.g. when web search adds citations).
+        start, end = text.find("{"), text.rfind("}") + 1
+        if start < 0 or end <= start:
+            return None
+        try:
+            parsed = json.loads(text[start:end])
+        except json.JSONDecodeError:
+            return None
     return parsed if isinstance(parsed, dict) else {"result": parsed}
 
 
@@ -207,6 +217,49 @@ def _claude_code_think_keyword(think: int | str | bool | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Multimodal image helpers (vision input)
+# ---------------------------------------------------------------------------
+
+
+def _b64(data: bytes) -> str:
+    return base64.standard_b64encode(data).decode("ascii")
+
+
+def _image_media_type(data: bytes) -> str:
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
+
+
+def _anthropic_user_content(prompt: str, images: list[bytes] | None):
+    if not images:
+        return prompt
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": _image_media_type(img), "data": _b64(img)},
+        }
+        for img in images
+    ]
+    blocks.append({"type": "text", "text": prompt})
+    return blocks
+
+
+def _openai_user_content(prompt: str, images: list[bytes] | None):
+    if not images:
+        return prompt
+    parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+    for img in images:
+        url = f"data:{_image_media_type(img)};base64,{_b64(img)}"
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return parts
+
+
+# ---------------------------------------------------------------------------
 # Claude Code backend (headless ``claude -p``)
 # ---------------------------------------------------------------------------
 
@@ -253,7 +306,11 @@ class ClaudeCodeBackend:
         max_turns: int = 25,
         agent: str | None = None,
         think: int | str | None = None,
+        images: list[bytes] | None = None,
+        web_search: bool = False,
     ) -> AIResponse:
+        # The headless Claude Code CLI does not take inline images; vision input
+        # requires an API backend. Ignore images here rather than erroring.
         cmd: list[str] = [
             "claude",
             "-p", prompt,
@@ -282,8 +339,11 @@ class ClaudeCodeBackend:
         if session_id:
             cmd.extend(["--resume", session_id])
 
-        if allowed_tools:
-            cmd.extend(["--allowedTools", ",".join(allowed_tools)])
+        tools = list(allowed_tools or [])
+        if web_search and "WebSearch" not in tools:
+            tools.append("WebSearch")
+        if tools:
+            cmd.extend(["--allowedTools", ",".join(tools)])
 
         if json_schema:
             cmd.extend(["--json-schema", json.dumps(json_schema)])
@@ -384,6 +444,8 @@ class AnthropicAPIBackend:
         max_turns: int = 25,
         agent: str | None = None,
         think: int | str | None = None,
+        images: list[bytes] | None = None,
+        web_search: bool = False,
     ) -> AIResponse:
         resolved_model = _resolve_model(model, self.default_model)
         params = _MODE_PARAMS.get(mode, _MODE_PARAMS["balanced"])
@@ -401,7 +463,7 @@ class AnthropicAPIBackend:
         kwargs: dict[str, Any] = {
             "model": resolved_model,
             "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": _anthropic_user_content(prompt, images)}],
         }
         if thinking_budget > 0:
             # Extended thinking needs token headroom beyond the budget and must
@@ -413,6 +475,9 @@ class AnthropicAPIBackend:
             kwargs["temperature"] = temperature
         if combined_system:
             kwargs["system"] = combined_system
+        if web_search:
+            # Server-side web search: Claude decides when to search, capped by max_uses.
+            kwargs["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}]
 
         try:
             response = self._client.messages.create(**kwargs)
@@ -496,6 +561,8 @@ class OpenAICompatibleChatBackend:
         max_turns: int = 25,
         agent: str | None = None,
         think: int | str | None = None,
+        images: list[bytes] | None = None,
+        web_search: bool = False,
     ) -> AIResponse:
         resolved_model = _resolve_provider_model(
             model,
@@ -516,7 +583,7 @@ class OpenAICompatibleChatBackend:
                     ),
                 }
             )
-        messages.append({"role": "user", "content": prompt})
+        messages.append({"role": "user", "content": _openai_user_content(prompt, images)})
 
         effort = _reasoning_effort(think)
         kwargs: dict[str, Any] = {
@@ -573,7 +640,7 @@ class OpenAICompatibleChatBackend:
             raw={
                 "provider": self.provider_name,
                 "finish_reason": getattr(choice, "finish_reason", None),
-                "ignored_tools": bool(allowed_tools or use_chrome or agent),
+                "ignored_tools": bool(allowed_tools or use_chrome or agent or web_search),
             },
             structured=_parse_structured_text(full_text, json_schema),
         )
@@ -642,6 +709,8 @@ class MultiProviderBackend:
         max_turns: int = 25,
         agent: str | None = None,
         think: int | str | None = None,
+        images: list[bytes] | None = None,
+        web_search: bool = False,
     ) -> AIResponse:
         provider, bare_model = self._select_provider(model)
         chain = self._provider_chain(provider)
@@ -669,6 +738,8 @@ class MultiProviderBackend:
                 max_turns=max_turns,
                 agent=agent,
                 think=think,
+                images=images,
+                web_search=web_search,
             )
             if isinstance(response.raw, dict):
                 response.raw.setdefault("router_provider", prov)
@@ -845,3 +916,83 @@ def create_backend(mode: str = "auto", **kwargs: Any) -> AIBackend:
         timeout_seconds=kwargs.get("timeout_seconds", 300),
         model_override=kwargs.get("model_override"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Routing inspection (shared by the CLI and dashboard)
+# ---------------------------------------------------------------------------
+
+
+def resolve_routing(config: Any) -> dict[str, Any]:
+    """Resolve how each agent's model alias maps to a provider, given config.
+
+    Drives ``du models`` and the dashboard routing panel. Provider selection for a
+    prefix-less alias follows the same first-available order the router uses
+    (``fallback_order``), so the displayed provider matches runtime behaviour.
+    """
+    ai = config.ai
+    available = {
+        "anthropic": bool(getattr(ai, "api_key", "") or os.environ.get("ANTHROPIC_API_KEY")),
+        "openai": bool(getattr(ai, "openai_api_key", "") or os.environ.get("OPENAI_API_KEY")),
+        "kimi": bool(
+            getattr(ai, "kimi_api_key", "")
+            or os.environ.get("MOONSHOT_API_KEY")
+            or os.environ.get("KIMI_API_KEY")
+        ),
+        "claude_code": True,
+    }
+    order = list(getattr(ai, "fallback_order", ["anthropic", "openai", "kimi", "claude_code"]))
+    alias_tables = {
+        "anthropic": ANTHROPIC_MODEL_ALIASES,
+        "openai": OPENAI_MODEL_ALIASES,
+        "kimi": KIMI_MODEL_ALIASES,
+        "claude_code": ANTHROPIC_MODEL_ALIASES,
+    }
+
+    def first_available() -> str:
+        for provider in order:
+            if provider != "claude_code" and available.get(provider):
+                return provider
+        return "claude_code"
+
+    def resolve(alias: str) -> tuple[str, str]:
+        prefix, bare = _split_provider_model(alias)
+        if prefix in {"openai", "codex"}:
+            provider = "openai"
+        elif prefix in {"kimi", "moonshot"}:
+            provider = "kimi"
+        elif prefix == "claude_code":
+            provider = "claude_code"
+        elif prefix in {"anthropic", "claude"}:
+            provider = "anthropic"
+        else:
+            provider = first_available()
+        return provider, alias_tables[provider].get(bare or "", bare or "")
+
+    agents = [
+        ("compressor", ai.compressor_model),
+        ("idea_generator", ai.creative_model),
+        ("judge", ai.judge_model),
+        ("briefing", ai.briefing_model),
+        ("writer", ai.writer_model),
+        ("reviewer", ai.reviewer_model),
+        ("revision", ai.revision_model),
+        ("analysis", ai.analysis_model),
+    ]
+    routing = []
+    for name, alias in agents:
+        provider, model = resolve(alias)
+        routing.append({
+            "agent": name,
+            "configured": alias,
+            "provider": provider,
+            "model": model,
+            "available": available.get(provider, False),
+        })
+    return {
+        "mode": ai.mode,
+        "fallback": ai.fallback,
+        "fallback_order": order,
+        "available_providers": [p for p, ok in available.items() if ok],
+        "routing": routing,
+    }

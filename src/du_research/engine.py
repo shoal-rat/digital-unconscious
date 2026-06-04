@@ -47,6 +47,7 @@ from du_research.observation import (
     BehaviorFrame,
     FileObserver,
     ScreenpipeObserver,
+    VisionObserver,
     deduplicate_frames,
     group_into_windows,
 )
@@ -112,12 +113,14 @@ class DigitalUnconsciousEngine:
             secondary_domains=config.idea.secondary_domains,
             focus_fields=config.idea.focus_fields,
             think=config.ai.think_idea_budget,
+            web_search=config.idea.web_search,
         )
         self.judge = JudgeAgent(
             backend=self.backend,
             model=config.ai.judge_model,
             system_prompt=prompt_overrides.get("judge"),
             think=config.ai.think_judge_budget,
+            web_search=config.idea.web_search,
         )
         self.briefing_agent = BriefingAgent(
             backend=self.backend,
@@ -133,6 +136,23 @@ class DigitalUnconsciousEngine:
             blacklist_apps=_blacklist,
         )
         self.file_observer = FileObserver(blacklist_apps=_blacklist)
+        # Vision observation needs a multimodal API backend (the local Claude Code
+        # CLI cannot take inline images), so only enable it when a hosted key exists.
+        import os as _os
+        _vision_capable = bool(
+            config.ai.api_key or _os.environ.get("ANTHROPIC_API_KEY")
+            or config.ai.openai_api_key or _os.environ.get("OPENAI_API_KEY")
+            or config.ai.kimi_api_key or _os.environ.get("MOONSHOT_API_KEY") or _os.environ.get("KIMI_API_KEY")
+        )
+        self.vision = (
+            VisionObserver(
+                backend=self.backend,
+                model=config.observation.vision_model,
+                max_dimension=config.observation.vision_max_dimension,
+            )
+            if _vision_capable
+            else None
+        )
         self.research_pipeline = ResearchPipeline(config, backend=self.backend)
         self.maintenance = WorkspaceMaintenance(self.workspace, config)
         # Use file-based RAG in temp directories (avoids ChromaDB locking issues)
@@ -646,16 +666,33 @@ class DigitalUnconsciousEngine:
     # ------------------------------------------------------------------
 
     def _observe(self, log_file: str | None = None) -> list[BehaviorFrame]:
-        """Collect behaviour frames from screenpipe or file fallback."""
-        # Try screenpipe first
-        if self.config.observation.enabled and self.screenpipe.is_available():
+        """Collect behaviour frames from the configured source.
+
+        ``source = "auto"`` tries screenpipe, then vision (screenshot -> model),
+        then a manual log file. An explicit source uses only that path.
+        """
+        source = (self.config.observation.source or "auto").lower()
+        auto = source == "auto"
+
+        if self.config.observation.enabled and (auto or source == "screenpipe") and self.screenpipe.is_available():
             logger.info("Using screenpipe for observation")
             return self.screenpipe.fetch_recent(
                 minutes=self.config.observation.window_minutes * self.config.observation.lookback_multiplier,
                 limit=200,
             )
 
-        # Fallback to file
+        if self.config.observation.enabled and (auto or source == "vision") and self.vision is not None and self.vision.is_available():
+            logger.info("Using vision observer (screenshot -> multimodal model)")
+            frames = self.vision.capture()
+            if frames:
+                return frames
+
+        if source == "vision" and self.vision is None:
+            logger.warning(
+                "Observation source is 'vision' but no API key is configured — "
+                "add one in Setup. Falling back to a log file if available."
+            )
+
         fallback = log_file or self.config.observation.fallback_log_path
         if fallback:
             path = Path(fallback).expanduser().resolve()

@@ -269,6 +269,7 @@ def _page(title: str, content: str, active: str = "") -> str:
         ("ideas", "Idea Backlog"),
         ("learning", "Learning"),
         ("status", "Status"),
+        ("setup", "Settings"),
     ]
     nav_html = ""
     for href, label in nav_items:
@@ -304,8 +305,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         workspace = _workspace(self.config)
 
-        # Redirect to setup if first run
-        setup_done = (workspace / "setup" / "user_settings.json").exists()
+        # Redirect to setup until the user finishes the web wizard (marker is
+        # written only by _handle_setup_post, not by the non-interactive defaults).
+        setup_done = (workspace / "setup" / "setup_complete.json").exists()
         if not setup_done and path == "/":
             self._serve_setup(workspace)
             return
@@ -338,8 +340,43 @@ class DashboardHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/")
         if path == "/setup":
             self._handle_setup_post()
+        elif path == "/api/run":
+            self._handle_run_now()
+        elif path == "/api/service":
+            self._handle_service(parsed)
         else:
             self._respond(404, "Not found")
+
+    def _spawn_cli(self, *cli_args: str) -> None:
+        import subprocess as _sp
+        import sys as _sys
+        cmd = [_sys.executable, "-m", "du_research.cli"]
+        config_path = getattr(self.config, "config_path", None)
+        if config_path:
+            cmd += ["--config", str(config_path)]  # use the same config the dashboard rendered
+        cmd += list(cli_args)
+        _sp.Popen(
+            cmd,
+            creationflags=_sp.CREATE_NO_WINDOW if _sys.platform == "win32" else 0,
+            stdout=_sp.DEVNULL,
+            stderr=_sp.DEVNULL,
+        )
+
+    def _handle_run_now(self):
+        try:
+            self._spawn_cli("daily")
+            self._json_response({"status": "started", "message": "Daily cycle started — refresh in a minute."})
+        except Exception as exc:
+            self._json_response({"status": "error", "error": str(exc)}, status=500)
+
+    def _handle_service(self, parsed):
+        action = parse_qs(parsed.query).get("action", ["start"])[0]
+        action = action if action in {"start", "stop", "restart"} else "start"
+        try:
+            self._spawn_cli("service", action)
+            self._json_response({"status": "ok", "action": action})
+        except Exception as exc:
+            self._json_response({"status": "error", "error": str(exc)}, status=500)
 
     def _serve_setup(self, workspace: Path):
         content = f"""
@@ -350,7 +387,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <div class="card">
   <h2>1. What fields do you work in?</h2>
   <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
-    Ideas will be filtered to land in these fields. Cross-domain inspiration is still welcome.
+    Topics you want ideas to stay close to. Leave blank to get ideas from everything.
   </p>
   <div class="form-group">
     <label>Focus fields (comma-separated)</label>
@@ -369,14 +406,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <div class="card">
   <h2>2. Observation source</h2>
   <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
-    How should the system observe your screen behaviour?
+    How should the system observe your screen? <b>Automatic</b> uses whatever is available.
+    <b>Vision</b> reads your whole screen with AI and needs an API key below.
   </p>
   <div class="form-group">
     <label>Source</label>
     <select name="observation_mode">
-      <option value="screenpipe">Screenpipe (recommended — install from screenpipe.com)</option>
+      <option value="auto">Automatic — use the best available (recommended)</option>
+      <option value="vision">Vision — read my screen with AI (needs a key below)</option>
+      <option value="screenpipe">Screenpipe (if installed)</option>
       <option value="logfile">Manual log file (JSONL or text)</option>
     </select>
+  </div>
+  <div class="form-group">
+    <label>AI API key (optional — enables vision and the strongest models)</label>
+    <input type="password" name="api_key" placeholder="sk-ant-… / sk-… / Kimi key — blank uses local Claude Code" value="">
   </div>
 </div>
 
@@ -409,6 +453,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         primary = params.get("primary_domains", [""])[0]
         secondary = params.get("secondary_domains", [""])[0]
         briefing_time = params.get("briefing_time", ["22:00"])[0]
+        source = params.get("observation_mode", ["auto"])[0].strip().lower()
+        api_key = params.get("api_key", [""])[0].strip()
 
         # Update config
         if focus:
@@ -419,19 +465,45 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.config.idea.secondary_domains = [d.strip() for d in secondary.split(",") if d.strip()]
         self.config.daily.briefing_time = briefing_time.strip() or "22:00"
 
-        # Save settings
+        source = {"logfile": "file"}.get(source, source)
+        if source in {"auto", "vision", "screenpipe", "file"}:
+            self.config.observation.source = source
+
+        ai_settings: dict[str, str] = {}
+        if api_key:
+            if api_key.startswith("sk-ant"):
+                self.config.ai.api_key = api_key
+                ai_settings["api_key"] = api_key
+            elif api_key.startswith("sk-"):
+                self.config.ai.openai_api_key = api_key
+                ai_settings["openai_api_key"] = api_key
+            else:
+                self.config.ai.kimi_api_key = api_key
+                ai_settings["kimi_api_key"] = api_key
+
+        # Save settings as a nested dict so apply_user_settings reloads them on
+        # every future start (a flat dict would be silently ignored).
         workspace = _workspace(self.config)
         setup_dir = workspace / "setup"
         setup_dir.mkdir(parents=True, exist_ok=True)
         settings = {
-            "focus_fields": self.config.idea.focus_fields,
-            "primary_domains": self.config.idea.primary_domains,
-            "secondary_domains": self.config.idea.secondary_domains,
-            "briefing_time": self.config.daily.briefing_time,
-            "setup_completed_at": datetime.now(timezone.utc).isoformat(),
+            "idea": {
+                "focus_fields": self.config.idea.focus_fields,
+                "primary_domains": self.config.idea.primary_domains,
+                "secondary_domains": self.config.idea.secondary_domains,
+            },
+            "daily": {"briefing_time": self.config.daily.briefing_time},
+            "observation": {"enabled": True, "source": self.config.observation.source},
         }
+        if ai_settings:
+            settings["ai"] = ai_settings
         (setup_dir / "user_settings.json").write_text(
             json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        # Mark setup complete so the wizard stops auto-opening on launch.
+        (setup_dir / "setup_complete.json").write_text(
+            json.dumps({"completed_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False),
+            encoding="utf-8",
         )
 
         # Initialize workspace dirs
@@ -441,7 +513,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # Try to enable autostart
         try:
             from du_research.onboarding import enable_autostart
-            project_root = Path(__file__).resolve().parents[1]
+            project_root = Path(__file__).resolve().parents[2]  # repo root (src/du_research/dashboard.py)
             enable_autostart(
                 project_root=project_root,
                 config_path=self.config.config_path or (project_root / "config" / "pipeline.toml"),
@@ -500,6 +572,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <div class="stat"><div class="value">{usage_value}</div><div class="label">{usage_label}</div></div>
   <div class="stat"><div class="value">{"ON" if is_running else "OFF"}</div><div class="label">Service</div></div>
 </div>"""
+
+        stats += """
+<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <button onclick="duRun()">Run a cycle now</button>
+  <button onclick="duService('start')">Start background service</button>
+  <button onclick="duService('stop')">Stop</button>
+  <span id="du-msg" style="color:var(--muted);font-size:13px"></span>
+</div>
+<script>
+function duMsg(t){document.getElementById('du-msg').textContent=t;}
+async function duRun(){duMsg('Starting...');try{const r=await fetch('/api/run',{method:'POST'});const j=await r.json();duMsg(j.message||j.status||'');}catch(e){duMsg('Error');}}
+async function duService(a){duMsg(a+'...');try{const r=await fetch('/api/service?action='+a,{method:'POST'});const j=await r.json();duMsg('Service '+a+': '+(j.status||j.error||''));}catch(e){duMsg('Error');}}
+</script>"""
 
         if not cycles:
             content = stats + """
@@ -657,6 +742,22 @@ or <code>du start</code> to begin passive observation.</p>
             color = "var(--accent2)" if error else "var(--green)" if briefing else "var(--muted)"
             runs_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">{ts}</span> &mdash; {new_frames} new frames <span style="color:{color}">{briefing}{error}</span></div>'
 
+        from du_research.ai_backend import resolve_routing
+        cycles = _list_daily_cycles(workspace)
+        total_tokens = sum(c.get("tokens", 0) for c in cycles)
+        total_cost = sum(c.get("cost_usd", 0.0) for c in cycles)
+        usage_line = (
+            f"${total_cost:.4f} &middot; {total_tokens:,} tokens across {len(cycles)} cycle(s)"
+            if cycles else "No usage yet — run a cycle from the Dashboard."
+        )
+        info = resolve_routing(self.config)
+        routing_rows = "".join(
+            f'<tr><td style="padding:4px 14px 4px 0">{e["agent"]}</td>'
+            f'<td style="padding:4px 14px 4px 0;color:var(--muted)">{e["configured"]}</td>'
+            f'<td style="padding:4px 0">{e["provider"]}:{e["model"]}{"" if e["available"] else " <span style=\'color:var(--muted)\'>(fallback)</span>"}</td></tr>'
+            for e in info["routing"]
+        )
+
         content = f"""
 <h1>System Status</h1>
 <div class="stat-grid">
@@ -665,15 +766,20 @@ or <code>du start</code> to begin passive observation.</p>
   <div class="stat"><div class="value">{completed}</div><div class="label">Cycles Done</div></div>
 </div>
 
+<h2>Usage</h2>
+<div class="card">{usage_line}</div>
+
+<h2>Model Routing</h2>
+<div class="card">
+  <p style="color:var(--muted);font-size:13px">Mode: {info['mode']} &middot; Providers: {', '.join(info['available_providers'])}</p>
+  <table style="font-size:13px;border-collapse:collapse">{routing_rows}</table>
+</div>
+
 <h2>Recent Activity</h2>
 <div class="card">{runs_html or "<p>No recent activity.</p>"}</div>
 
-<h2>Quick Actions</h2>
 <div class="card">
-  <p>Start service: <code>du start</code> or <code>du service start</code></p>
-  <p>Run daily cycle: <code>du daily</code></p>
-  <p>Run learning: <code>du learn</code></p>
-  <p>Configure domains: <code>du config --primary "AI,design" --secondary "psychology"</code></p>
+  <p>Change your focus fields, observation source, or API key on the <a href="/setup">Settings</a> page.</p>
 </div>
 """
         self._html_response(_page("Status", content, active="status"))

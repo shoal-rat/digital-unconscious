@@ -1,5 +1,43 @@
 # Releases
 
+## v1.6.0 - Vision Screen Reading, Web Search, Easy Webpage UX
+
+LLM-native upgrades:
+- Vision observation: a multimodal model reads screenshots directly — no OCR or
+  screenpipe required. Selectable via `[observation].source` =
+  `auto`|`vision`|`screenpipe`|`file`; screenshots are captured with mss and
+  downscaled before sending.
+- Multimodal backend input: `AIBackend.call` now accepts `images=[...]` for
+  Anthropic, OpenAI, and Kimi (image-then-text blocks / data-URL `image_url`).
+- Web search as a tool: idea generation can search the web for unfamiliar or
+  trending topics (Anthropic `web_search` server tool; Claude Code `WebSearch`).
+  Toggle with `[idea].web_search`.
+- `du usage` — token/cost report across cycles; `du models` — per-agent provider routing.
+
+Easier to use:
+- The setup page collects an API key and observation source; the dashboard has
+  Run-now and start/stop-service buttons, so the whole loop runs from the webpage
+  with no commands or config editing.
+- Fixed: the dashboard setup wrote a flat settings dict that was silently ignored
+  on restart; it now writes nested settings that re-apply on every launch.
+
+Trimmed:
+- Removed redundant privacy boilerplate and the password/bank content filter
+  (vision sends screenshots to your chosen model by design); kept the optional
+  app blacklist and the encrypted credential vault.
+
+New extra: `digital-unconscious[vision]` (mss + Pillow).
+
+Refined after a PM + coder subagent audit: the setup wizard now reliably opens
+on first launch (it keyed off the wrong marker), vision warns instead of silently
+dead-ending without a key, usage and model routing are visible in the dashboard
+with a Settings page, `du models`/dashboard share one routing resolver, and
+structured-output parsing tolerates web-search prose.
+
+Tests: 70 -> 80 passing.
+
+---
+
 ## v1.5.0 - Bounded Long-Term Memory
 
 Keeps months of daily use from bloating prompts or disk. The prompt context was
