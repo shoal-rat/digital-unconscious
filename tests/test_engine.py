@@ -469,6 +469,93 @@ class BoundedMemoryTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Vision input, web search, and vision observer tests
+# ---------------------------------------------------------------------------
+
+
+_PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x00"
+
+
+class VisionAndToolsTests(unittest.TestCase):
+    def test_anthropic_accepts_image_content_blocks(self) -> None:
+        class FakeMessages:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                block = type("Block", (), {"text": "ok"})()
+                return type("Resp", (), {"content": [block], "usage": None, "stop_reason": "end_turn"})()
+
+        messages = FakeMessages()
+        client = type("Client", (), {"messages": messages})()
+        backend = AnthropicAPIBackend(_client=client)
+        backend.call("describe", images=[_PNG])
+        content = messages.kwargs["messages"][0]["content"]
+        self.assertIsInstance(content, list)
+        self.assertEqual(content[0]["type"], "image")
+        self.assertEqual(content[0]["source"]["media_type"], "image/png")
+        self.assertEqual(content[-1]["type"], "text")  # image before text
+
+    def test_openai_accepts_image_url_content(self) -> None:
+        class FakeCompletions:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                message = type("Message", (), {"content": "ok"})()
+                choice = type("Choice", (), {"message": message, "finish_reason": "stop"})()
+                return type("Response", (), {"choices": [choice], "usage": None})()
+
+        completions = FakeCompletions()
+        client = type("Client", (), {"chat": type("Chat", (), {"completions": completions})()})()
+        backend = OpenAIAPIBackend(_client=client)
+        backend.call("describe", images=[_PNG])
+        content = completions.kwargs["messages"][-1]["content"]
+        self.assertIsInstance(content, list)
+        image_parts = [p for p in content if p["type"] == "image_url"]
+        self.assertEqual(len(image_parts), 1)
+        self.assertTrue(image_parts[0]["image_url"]["url"].startswith("data:image/png;base64,"))
+
+    def test_anthropic_web_search_adds_server_tool(self) -> None:
+        class FakeMessages:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                block = type("Block", (), {"text": "ok"})()
+                return type("Resp", (), {"content": [block], "usage": None, "stop_reason": "end_turn"})()
+
+        messages = FakeMessages()
+        client = type("Client", (), {"messages": messages})()
+        backend = AnthropicAPIBackend(_client=client)
+        backend.call("look it up", web_search=True)
+        self.assertEqual(messages.kwargs["tools"][0]["type"], "web_search_20250305")
+
+    def test_vision_observer_produces_behavior_frame(self) -> None:
+        from du_research import observation as obs
+
+        fake = FakeBackend(default=json.dumps({
+            "app": "VSCode",
+            "window": "estimation.py",
+            "topics": ["nested logit", "BLP"],
+            "intent": "debugging the GMM weight matrix",
+            "cross_domain_hints": ["psychology"],
+        }))
+        with mock.patch.object(obs, "capture_screenshot", return_value=_PNG):
+            observer = obs.VisionObserver(backend=fake, model="sonnet")
+            frames = observer.capture()
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(frames[0].frame_type, "vision")
+        self.assertEqual(frames[0].app_name, "VSCode")
+        self.assertIn("Topics", frames[0].text_content)
+        # the screenshot was passed to the backend as an image
+        self.assertEqual(len(fake.calls[0]["images"]), 1)
+
+
+# ---------------------------------------------------------------------------
 # Observation tests
 # ---------------------------------------------------------------------------
 

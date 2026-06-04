@@ -64,6 +64,143 @@ def _build_backend(config):
     )
 
 
+def _cmd_usage(config, as_json: bool = False) -> int:
+    """Report token/cost usage aggregated across daily cycles."""
+    workspace = Path(config.pipeline.workspace_dir).resolve()
+    daily_dir = workspace / "daily"
+    rows: list[dict] = []
+    totals = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
+    by_model: dict[str, dict] = {}
+    if daily_dir.exists():
+        for cycle_dir in sorted(daily_dir.glob("cycle_*")):
+            usage_path = cycle_dir / "usage.json"
+            if not usage_path.exists():
+                continue
+            try:
+                usage = json.loads(usage_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            rows.append({
+                "date": cycle_dir.name.replace("cycle_", ""),
+                "calls": usage.get("calls", 0),
+                "total_tokens": usage.get("total_tokens", 0),
+                "cost_usd": usage.get("cost_usd", 0.0),
+            })
+            for key in ("calls", "input_tokens", "output_tokens", "total_tokens"):
+                totals[key] += usage.get(key, 0)
+            totals["cost_usd"] += usage.get("cost_usd", 0.0)
+            for model, bucket in (usage.get("by_model") or {}).items():
+                agg = by_model.setdefault(model, {"calls": 0, "total_tokens": 0, "cost_usd": 0.0})
+                agg["calls"] += bucket.get("calls", 0)
+                agg["total_tokens"] += bucket.get("input_tokens", 0) + bucket.get("output_tokens", 0)
+                agg["cost_usd"] += bucket.get("cost_usd", 0.0)
+
+    if as_json:
+        print(json.dumps({"by_day": rows, "totals": totals, "by_model": by_model}, indent=2, ensure_ascii=False))
+        return 0
+
+    if not rows:
+        print("\n  No usage recorded yet. Run `du daily` to generate your first cycle.\n")
+        return 0
+
+    print("\n  Model usage — Digital Unconscious\n")
+    print(f"  {'Date':<12}{'Calls':>8}{'Tokens':>14}{'Cost':>12}")
+    print(f"  {'-' * 44}")
+    for row in rows[-30:]:
+        print(f"  {row['date']:<12}{row['calls']:>8}{row['total_tokens']:>14,}{'$' + format(row['cost_usd'], '.4f'):>12}")
+    print(f"  {'-' * 44}")
+    print(f"  {'Total':<12}{totals['calls']:>8}{totals['total_tokens']:>14,}{'$' + format(totals['cost_usd'], '.4f'):>12}")
+    if by_model:
+        print("\n  By model:")
+        for model, agg in sorted(by_model.items(), key=lambda kv: kv[1]['total_tokens'], reverse=True):
+            print(f"    {model:<24}{agg['calls']:>6} calls{agg['total_tokens']:>14,} tok   ${agg['cost_usd']:.4f}")
+    print()
+    return 0
+
+
+def _cmd_models(config, as_json: bool = False) -> int:
+    """Show how each agent routes to a provider/model under the current config."""
+    import os
+    from du_research.ai_backend import (
+        ANTHROPIC_MODEL_ALIASES,
+        OPENAI_MODEL_ALIASES,
+        KIMI_MODEL_ALIASES,
+        _split_provider_model,
+    )
+
+    available = {
+        "anthropic": bool(config.ai.api_key or os.environ.get("ANTHROPIC_API_KEY")),
+        "openai": bool(config.ai.openai_api_key or os.environ.get("OPENAI_API_KEY")),
+        "kimi": bool(config.ai.kimi_api_key or os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY")),
+        "claude_code": True,
+    }
+    alias_tables = {
+        "anthropic": ANTHROPIC_MODEL_ALIASES,
+        "openai": OPENAI_MODEL_ALIASES,
+        "kimi": KIMI_MODEL_ALIASES,
+        "claude_code": ANTHROPIC_MODEL_ALIASES,
+    }
+
+    def first_available() -> str:
+        for provider in ("anthropic", "openai", "kimi"):
+            if available[provider]:
+                return provider
+        return "claude_code"
+
+    def resolve(model_alias: str) -> tuple[str, str]:
+        prefix, bare = _split_provider_model(model_alias)
+        if prefix in {"openai", "codex"}:
+            provider = "openai"
+        elif prefix in {"kimi", "moonshot"}:
+            provider = "kimi"
+        elif prefix == "claude_code":
+            provider = "claude_code"
+        elif prefix in {"anthropic", "claude"}:
+            provider = "anthropic"
+        else:
+            provider = first_available()
+        resolved = alias_tables[provider].get(bare or "", bare or "")
+        return provider, resolved
+
+    agents = [
+        ("compressor", config.ai.compressor_model),
+        ("idea_generator", config.ai.creative_model),
+        ("judge", config.ai.judge_model),
+        ("briefing", config.ai.briefing_model),
+        ("writer", config.ai.writer_model),
+        ("reviewer", config.ai.reviewer_model),
+        ("revision", config.ai.revision_model),
+        ("analysis", config.ai.analysis_model),
+    ]
+    routing = [
+        {"agent": name, "configured": alias, "provider": resolve(alias)[0], "model": resolve(alias)[1]}
+        for name, alias in agents
+    ]
+
+    if as_json:
+        print(json.dumps({
+            "mode": config.ai.mode,
+            "fallback": config.ai.fallback,
+            "fallback_order": config.ai.fallback_order,
+            "available_providers": [p for p, ok in available.items() if ok],
+            "routing": routing,
+        }, indent=2, ensure_ascii=False))
+        return 0
+
+    print("\n  Model routing — Digital Unconscious\n")
+    print(f"  Mode: {config.ai.mode}   Fallback: {'on' if config.ai.fallback else 'off'}")
+    print(f"  Available providers: {', '.join(p for p, ok in available.items() if ok) or 'none (local Claude Code only)'}")
+    if config.ai.fallback:
+        print(f"  Fallback order: {' -> '.join(config.ai.fallback_order)}")
+    print(f"\n  {'Agent':<16}{'Configured':<16}{'Resolves to':<28}")
+    print(f"  {'-' * 58}")
+    for entry in routing:
+        flag = "" if available.get(entry["provider"]) else "  (no key — will fall back)"
+        print(f"  {entry['agent']:<16}{entry['configured']:<16}{entry['provider'] + ':' + entry['model']:<28}{flag}")
+    print()
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="du",
@@ -170,6 +307,12 @@ def _build_parser() -> argparse.ArgumentParser:
     logs_cmd = subparsers.add_parser("logs", help="Show logs for a run")
     logs_cmd.add_argument("--run-id", required=True, help="Run id to inspect")
     logs_cmd.add_argument("--follow", action="store_true", help="Follow logs in real time")
+
+    usage_cmd = subparsers.add_parser("usage", help="Show token and cost usage across daily cycles")
+    usage_cmd.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+
+    models_cmd = subparsers.add_parser("models", help="Show how each agent routes to a provider/model")
+    models_cmd.add_argument("--json", action="store_true", help="Machine-readable JSON output")
 
     return parser
 
@@ -538,6 +681,12 @@ def main(argv: list[str] | None = None) -> int:
                 event = entry.get("event", "")
                 print(f"[{ts}] {stage}: {event}")
         return 0
+
+    if args.command == "usage":
+        return _cmd_usage(config, as_json=args.json)
+
+    if args.command == "models":
+        return _cmd_models(config, as_json=args.json)
 
     parser.error(f"Unknown command: {args.command}")
     return 2

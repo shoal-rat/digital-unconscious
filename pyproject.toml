@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digital-unconscious"
-version = "1.5.0"
+version = "1.6.0"
 description = "Passive Screen Observation × AI-Powered Idea Generation — from daily screen behaviour to validated research ideas with zero human intervention"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,8 +21,9 @@ kimi = ["openai>=1.0"]
 rag = ["chromadb>=0.5"]
 browser = ["selenium>=4.20"]
 figures = ["reportlab>=4.0", "Pillow>=10.0"]
+vision = ["mss>=9.0", "Pillow>=10.0"]
 tray = ["pystray>=0.19", "Pillow>=10.0"]
-full = ["anthropic>=0.40", "openai>=1.0", "chromadb>=0.5", "selenium>=4.20", "pystray>=0.19", "Pillow>=10.0", "reportlab>=4.0"]
+full = ["anthropic>=0.40", "openai>=1.0", "chromadb>=0.5", "selenium>=4.20", "pystray>=0.19", "Pillow>=10.0", "reportlab>=4.0", "mss>=9.0"]
 
 [project.scripts]
 du = "du_research.cli:main"

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -60,27 +59,24 @@ class BehaviorFrame:
 _SCREENPIPE_BASE = "http://localhost:3030"
 
 # Apps / titles that are filtered out by default
+# Pure-noise apps that never carry useful signal. This is noise reduction, not a
+# privacy filter — the observation layer trusts the model with whatever is on screen.
 _BLACKLIST_APPS = {
     "screensaver", "lock screen", "loginwindow", "systemuiserver",
 }
-_BLACKLIST_PATTERNS = [
-    re.compile(r"password", re.IGNORECASE),
-    re.compile(r"bank|payment|checkout", re.IGNORECASE),
-]
 
 
 def _is_filtered(
     frame: BehaviorFrame,
     extra_blacklist_apps: set[str] | None = None,
 ) -> bool:
-    """Return True if the frame should be dropped (privacy / noise)."""
+    """Return True if the frame is pure noise or in the user's optional app blacklist."""
     app_lower = frame.app_name.lower()
     if app_lower in _BLACKLIST_APPS:
         return True
     if extra_blacklist_apps and app_lower in extra_blacklist_apps:
         return True
-    combined = f"{frame.window_title} {frame.text_content}"
-    return any(pat.search(combined) for pat in _BLACKLIST_PATTERNS)
+    return False
 
 
 @dataclass
@@ -201,6 +197,158 @@ class FileObserver:
                 ))
 
         return [f for f in frames if not _is_filtered(f, extra_blacklist_apps=self.blacklist_apps)]
+
+
+# ---------------------------------------------------------------------------
+# Vision observer — screenshot → multimodal model (no OCR dependency)
+# ---------------------------------------------------------------------------
+
+
+VISION_PROMPT = (
+    "Look at this screenshot of a knowledge worker's screen and report what they "
+    "are working on, as JSON only:\n"
+    "- app: the foreground application or website (short)\n"
+    "- window: the document/page title or main subject (short)\n"
+    "- topics: 3-6 specific topics or keywords visible\n"
+    "- intent: one sentence on what the user is trying to do\n"
+    "- cross_domain_hints: 0-3 connections to other fields, if any\n"
+    'Output ONLY JSON: {"app":"","window":"","topics":[],"intent":"","cross_domain_hints":[]}'
+)
+
+VISION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "app": {"type": "string"},
+        "window": {"type": "string"},
+        "topics": {"type": "array", "items": {"type": "string"}},
+        "intent": {"type": "string"},
+        "cross_domain_hints": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
+def capture_available() -> bool:
+    """Whether a screenshot backend (mss or Pillow) is importable."""
+    try:
+        import mss  # noqa: F401
+        return True
+    except ImportError:
+        try:
+            from PIL import ImageGrab  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+
+def _maybe_downscale_png(png_bytes: bytes, max_dim: int) -> bytes:
+    """Downscale a PNG so its largest side is <= max_dim (keeps vision cost sane)."""
+    try:
+        import io
+        from PIL import Image
+    except ImportError:
+        return png_bytes
+    try:
+        image = Image.open(io.BytesIO(png_bytes))
+        width, height = image.size
+        scale = min(1.0, max_dim / max(width, height)) if max(width, height) else 1.0
+        if scale < 1.0:
+            image = image.resize((max(1, int(width * scale)), max(1, int(height * scale))))
+        out = io.BytesIO()
+        image.convert("RGB").save(out, format="PNG", optimize=True)
+        return out.getvalue()
+    except Exception:
+        return png_bytes
+
+
+def capture_screenshot(max_dimension: int = 1568) -> bytes | None:
+    """Capture the primary screen as downscaled PNG bytes, or None if unavailable."""
+    try:
+        import mss
+        import mss.tools
+        with mss.mss() as sct:
+            monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+            raw = sct.grab(monitor)
+            png = mss.tools.to_png(raw.rgb, raw.size)
+            return _maybe_downscale_png(png, max_dimension)
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.warning("mss screenshot failed: %s", exc)
+        return None
+    try:
+        import io
+        from PIL import ImageGrab
+        image = ImageGrab.grab()
+        out = io.BytesIO()
+        image.convert("RGB").save(out, format="PNG")
+        return _maybe_downscale_png(out.getvalue(), max_dimension)
+    except Exception as exc:
+        logger.warning("Pillow screenshot failed: %s", exc)
+        return None
+
+
+def _vision_frame_text(data: dict[str, Any]) -> str:
+    topics = ", ".join(str(t) for t in (data.get("topics") or [])[:6])
+    hints = ", ".join(str(h) for h in (data.get("cross_domain_hints") or [])[:3])
+    parts: list[str] = []
+    if data.get("intent"):
+        parts.append(str(data["intent"]))
+    if topics:
+        parts.append(f"Topics: {topics}")
+    if hints:
+        parts.append(f"Cross-domain: {hints}")
+    return " | ".join(parts) or str(data.get("window", ""))
+
+
+@dataclass
+class VisionObserver:
+    """Reads the screen by sending a screenshot to a multimodal model.
+
+    Replaces OCR/screenpipe: each capture grabs the current screen and asks a
+    vision-capable model what the user is working on, returning a normal
+    BehaviorFrame so the rest of the pipeline is unchanged.
+    """
+
+    backend: Any
+    model: str = "sonnet"
+    max_dimension: int = 1568
+
+    def is_available(self) -> bool:
+        return capture_available()
+
+    def capture(self) -> list[BehaviorFrame]:
+        image = capture_screenshot(self.max_dimension)
+        if image is None:
+            logger.warning("Vision observer: no screenshot backend (pip install digital-unconscious[vision])")
+            return []
+        response = self.backend.call(
+            VISION_PROMPT,
+            mode="strict",
+            model=self.model,
+            max_tokens=600,
+            images=[image],
+            json_schema=VISION_SCHEMA,
+        )
+        if not response.ok:
+            logger.warning("Vision model call failed: %s", response.raw.get("error"))
+            return []
+        data = response.structured
+        if not isinstance(data, dict):
+            try:
+                text = response.text.strip()
+                start, end = text.find("{"), text.rfind("}") + 1
+                data = json.loads(text[start:end]) if start >= 0 and end > start else {}
+            except (json.JSONDecodeError, ValueError):
+                data = {}
+        if not isinstance(data, dict) or not data:
+            return []
+        return [BehaviorFrame(
+            timestamp=iso_now(),
+            app_name=str(data.get("app", "screen"))[:80] or "screen",
+            window_title=str(data.get("window", ""))[:200],
+            text_content=_vision_frame_text(data)[:1000],
+            frame_type="vision",
+        )]
 
 
 # ---------------------------------------------------------------------------

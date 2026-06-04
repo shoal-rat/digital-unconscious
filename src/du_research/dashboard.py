@@ -338,8 +338,38 @@ class DashboardHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/")
         if path == "/setup":
             self._handle_setup_post()
+        elif path == "/api/run":
+            self._handle_run_now()
+        elif path == "/api/service":
+            self._handle_service(parsed)
         else:
             self._respond(404, "Not found")
+
+    def _spawn_cli(self, *cli_args: str) -> None:
+        import subprocess as _sp
+        import sys as _sys
+        _sp.Popen(
+            [_sys.executable, "-m", "du_research.cli", *cli_args],
+            creationflags=_sp.CREATE_NO_WINDOW if _sys.platform == "win32" else 0,
+            stdout=_sp.DEVNULL,
+            stderr=_sp.DEVNULL,
+        )
+
+    def _handle_run_now(self):
+        try:
+            self._spawn_cli("daily")
+            self._json_response({"status": "started", "message": "Daily cycle started — refresh in a minute."})
+        except Exception as exc:
+            self._json_response({"status": "error", "error": str(exc)}, status=500)
+
+    def _handle_service(self, parsed):
+        action = parse_qs(parsed.query).get("action", ["start"])[0]
+        action = action if action in {"start", "stop", "restart"} else "start"
+        try:
+            self._spawn_cli("service", action)
+            self._json_response({"status": "ok", "action": action})
+        except Exception as exc:
+            self._json_response({"status": "error", "error": str(exc)}, status=500)
 
     def _serve_setup(self, workspace: Path):
         content = f"""
@@ -374,9 +404,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <div class="form-group">
     <label>Source</label>
     <select name="observation_mode">
-      <option value="screenpipe">Screenpipe (recommended — install from screenpipe.com)</option>
+      <option value="auto">Automatic — use the best available (recommended)</option>
+      <option value="vision">Vision — read my screen with AI (needs a key below)</option>
+      <option value="screenpipe">Screenpipe (if installed)</option>
       <option value="logfile">Manual log file (JSONL or text)</option>
     </select>
+  </div>
+  <div class="form-group">
+    <label>AI API key (optional — enables vision and the strongest models)</label>
+    <input type="password" name="api_key" placeholder="sk-ant-… / sk-… / Kimi key — blank uses local Claude Code" value="">
   </div>
 </div>
 
@@ -409,6 +445,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         primary = params.get("primary_domains", [""])[0]
         secondary = params.get("secondary_domains", [""])[0]
         briefing_time = params.get("briefing_time", ["22:00"])[0]
+        source = params.get("observation_mode", ["auto"])[0].strip().lower()
+        api_key = params.get("api_key", [""])[0].strip()
 
         # Update config
         if focus:
@@ -419,17 +457,38 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.config.idea.secondary_domains = [d.strip() for d in secondary.split(",") if d.strip()]
         self.config.daily.briefing_time = briefing_time.strip() or "22:00"
 
-        # Save settings
+        source = {"logfile": "file"}.get(source, source)
+        if source in {"auto", "vision", "screenpipe", "file"}:
+            self.config.observation.source = source
+
+        ai_settings: dict[str, str] = {}
+        if api_key:
+            if api_key.startswith("sk-ant"):
+                self.config.ai.api_key = api_key
+                ai_settings["api_key"] = api_key
+            elif api_key.startswith("sk-"):
+                self.config.ai.openai_api_key = api_key
+                ai_settings["openai_api_key"] = api_key
+            else:
+                self.config.ai.kimi_api_key = api_key
+                ai_settings["kimi_api_key"] = api_key
+
+        # Save settings as a nested dict so apply_user_settings reloads them on
+        # every future start (a flat dict would be silently ignored).
         workspace = _workspace(self.config)
         setup_dir = workspace / "setup"
         setup_dir.mkdir(parents=True, exist_ok=True)
         settings = {
-            "focus_fields": self.config.idea.focus_fields,
-            "primary_domains": self.config.idea.primary_domains,
-            "secondary_domains": self.config.idea.secondary_domains,
-            "briefing_time": self.config.daily.briefing_time,
-            "setup_completed_at": datetime.now(timezone.utc).isoformat(),
+            "idea": {
+                "focus_fields": self.config.idea.focus_fields,
+                "primary_domains": self.config.idea.primary_domains,
+                "secondary_domains": self.config.idea.secondary_domains,
+            },
+            "daily": {"briefing_time": self.config.daily.briefing_time},
+            "observation": {"enabled": True, "source": self.config.observation.source},
         }
+        if ai_settings:
+            settings["ai"] = ai_settings
         (setup_dir / "user_settings.json").write_text(
             json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8"
         )
@@ -500,6 +559,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <div class="stat"><div class="value">{usage_value}</div><div class="label">{usage_label}</div></div>
   <div class="stat"><div class="value">{"ON" if is_running else "OFF"}</div><div class="label">Service</div></div>
 </div>"""
+
+        stats += """
+<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <button onclick="duRun()">Run a cycle now</button>
+  <button onclick="duService('start')">Start background service</button>
+  <button onclick="duService('stop')">Stop</button>
+  <span id="du-msg" style="color:var(--muted);font-size:13px"></span>
+</div>
+<script>
+function duMsg(t){document.getElementById('du-msg').textContent=t;}
+async function duRun(){duMsg('Starting...');try{const r=await fetch('/api/run',{method:'POST'});const j=await r.json();duMsg(j.message||j.status||'');}catch(e){duMsg('Error');}}
+async function duService(a){duMsg(a+'...');try{const r=await fetch('/api/service?action='+a,{method:'POST'});const j=await r.json();duMsg('Service '+a+': '+(j.status||j.error||''));}catch(e){duMsg('Error');}}
+</script>"""
 
         if not cycles:
             content = stats + """

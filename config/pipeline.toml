@@ -36,6 +36,9 @@ think_judge_budget = 0
 
 [observation]
 enabled = true
+source = "auto"              # "auto" | "vision" | "screenpipe" | "file"
+vision_model = "sonnet"      # vision-capable model for reading screenshots
+vision_max_dimension = 1568  # downscale long edge before sending to the model
 screenpipe_url = "http://localhost:3030"
 window_minutes = 30
 lookback_multiplier = 4
@@ -48,6 +51,7 @@ recent_frame_hash_limit = 5000
 primary_domains = ["AI tools", "product design"]
 secondary_domains = ["cognitive science", "business models"]
 focus_fields = []                # e.g. ["economics research", "management"] — ideas must land in these fields
+web_search = true                # let idea generation look up unfamiliar/trending topics online
 max_ideas_per_cycle = 8
 include_threshold = 75       # score > 75 goes into daily briefing
 hold_threshold = 60          # score 60-75 goes to observation pool

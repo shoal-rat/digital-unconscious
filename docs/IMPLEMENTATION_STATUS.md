@@ -1,6 +1,7 @@
-# Implementation Status — v1.5.0
+# Implementation Status — v1.6.0
 
-## Recent Additions (v1.3–v1.5)
+## Recent Additions (v1.3–v1.6)
+- [x] Vision screen reading (screenshots → multimodal model), multimodal backend input, agent web search, `du usage`/`du models`, dashboard run/service controls, trimmed privacy boilerplate
 - [x] Bounded long-term memory: domain-knowledge nesting fix, RAG dedup + size cap, prompt-evolution retention, idea-backlog cap, retention knobs wired into maintenance
 - [x] Multi-provider backends: Claude Code, Anthropic API, OpenAI/Codex, Kimi/Moonshot
 - [x] Provider failover across the configured `fallback_order` (and in `auto` when a key is set)
