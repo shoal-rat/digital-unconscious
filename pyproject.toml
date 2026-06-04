@@ -12,13 +12,16 @@ license = { text = "MIT" }
 authors = [
   { name = "Digital Unconscious Contributors" }
 ]
-dependencies = []
+dependencies = ["cryptography>=42"]
 
 [project.optional-dependencies]
 api = ["anthropic>=0.40"]
+openai = ["openai>=1.0"]
+kimi = ["openai>=1.0"]
 rag = ["chromadb>=0.5"]
+browser = ["selenium>=4.20"]
 tray = ["pystray>=0.19", "Pillow>=10.0"]
-full = ["anthropic>=0.40", "chromadb>=0.5", "pystray>=0.19", "Pillow>=10.0"]
+full = ["anthropic>=0.40", "openai>=1.0", "chromadb>=0.5", "selenium>=4.20", "pystray>=0.19", "Pillow>=10.0"]
 
 [project.scripts]
 du = "du_research.cli:main"

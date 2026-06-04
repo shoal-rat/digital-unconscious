@@ -1,5 +1,20 @@
 # Releases
 
+## v1.3.0 - Multi-Provider Agent Backends
+
+New backend routing:
+- Claude Code, Anthropic API, OpenAI/Codex, and Kimi/Moonshot now share one `AIBackend` interface.
+- `mode = "multi"` can route per agent with model prefixes such as `openai:gpt-5.5`, `kimi:kimi-k2.6`, `anthropic:claude-opus-4-8`, or `claude_code:opus`.
+- `mode = "auto"` now checks Anthropic, OpenAI, Kimi/Moonshot, then local Claude Code.
+- Kimi support uses the OpenAI-compatible API endpoint and defaults to `kimi-k2.6`.
+
+Reliability:
+- Selenium is now a true optional browser extra instead of an import-time requirement.
+- The encrypted credential vault now declares `cryptography` as a runtime dependency and lazy-loads it for clearer lightweight behavior.
+- Added `AGENTS.md` with repo-specific guidance for future coding-agent runs.
+
+---
+
 ## v1.2.0 — Research Skills (Latest)
 
 **11 AI research skills auto-installed as Claude Code agents.**

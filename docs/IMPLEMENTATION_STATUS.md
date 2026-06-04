@@ -4,6 +4,8 @@
 
 ### Digital Unconscious Core (PRD Features)
 - [x] Dual-mode AI backend (Claude Code headless + Anthropic API SDK)
+- [x] Multi-provider backend routing (Claude Code, Anthropic API, OpenAI/Codex, Kimi/Moonshot)
+- [x] Lazy optional browser automation imports for lightweight installs
 - [x] Circuit breaker with 3-state resilience and exponential backoff
 - [x] Screenpipe observation layer with HTTP API integration
 - [x] File-based fallback observation (text + JSONL)

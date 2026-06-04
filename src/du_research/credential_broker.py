@@ -7,9 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
 from du_research.utils import iso_now
+
+
+def _aesgcm_class():
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError as exc:
+        raise RuntimeError(
+            "cryptography is required for the encrypted credential vault. "
+            "Install digital-unconscious normally or add the cryptography package."
+        ) from exc
+    return AESGCM
 
 
 def _ensure_bytes_key(value: bytes) -> bytes:
@@ -38,13 +47,14 @@ class CredentialBroker:
                 return _ensure_bytes_key(env_key.encode("utf-8"))
         if self.key_path.exists():
             return _ensure_bytes_key(base64.urlsafe_b64decode(self.key_path.read_text(encoding="utf-8").encode("utf-8")))
-        key = AESGCM.generate_key(bit_length=256)
+        key = _aesgcm_class().generate_key(bit_length=256)
         self.key_path.write_text(base64.urlsafe_b64encode(key).decode("utf-8"), encoding="utf-8")
         return key
 
     def _load_vault(self) -> dict[str, Any]:
         if not self.vault_path.exists():
             return {"credentials": {}}
+        AESGCM = _aesgcm_class()
         key = self._load_key()
         payload = json.loads(self.vault_path.read_text(encoding="utf-8"))
         nonce = base64.urlsafe_b64decode(payload["nonce"].encode("utf-8"))
@@ -53,6 +63,7 @@ class CredentialBroker:
         return json.loads(plaintext.decode("utf-8"))
 
     def _save_vault(self, vault: dict[str, Any]) -> None:
+        AESGCM = _aesgcm_class()
         key = self._load_key()
         nonce = os.urandom(12)
         ciphertext = AESGCM(key).encrypt(nonce, json.dumps(vault, ensure_ascii=False).encode("utf-8"), None)

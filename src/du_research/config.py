@@ -16,8 +16,8 @@ class PipelineSection:
 
 @dataclass
 class AISection:
-    """Configuration for the AI backend (dual-mode)."""
-    mode: str = "auto"  # "auto" | "claude_code" | "api"
+    """Configuration for AI backends."""
+    mode: str = "auto"  # "auto" | "multi" | "claude_code" | "api" | "openai" | "kimi"
     default_model: str = "sonnet"
     creative_model: str = "opus"
     judge_model: str = "sonnet"
@@ -28,6 +28,10 @@ class AISection:
     revision_model: str = "sonnet"
     analysis_model: str = "sonnet"
     api_key: str = ""  # only for API mode; prefer env var
+    openai_api_key: str = ""  # prefer OPENAI_API_KEY env var
+    kimi_api_key: str = ""  # prefer MOONSHOT_API_KEY or KIMI_API_KEY env var
+    openai_default_model: str = "gpt-5.5"
+    kimi_default_model: str = "kimi-k2.6"
 
 
 @dataclass

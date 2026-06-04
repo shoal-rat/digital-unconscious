@@ -47,8 +47,13 @@ def _build_backend(config):
     backend_kwargs = {}
     if config.ai.api_key:
         backend_kwargs["api_key"] = config.ai.api_key
-    if config.ai.mode == "api":
-        backend_kwargs["default_model"] = config.ai.default_model
+    if config.ai.openai_api_key:
+        backend_kwargs["openai_api_key"] = config.ai.openai_api_key
+    if config.ai.kimi_api_key:
+        backend_kwargs["kimi_api_key"] = config.ai.kimi_api_key
+    backend_kwargs["default_model"] = config.ai.default_model
+    backend_kwargs["openai_default_model"] = config.ai.openai_default_model
+    backend_kwargs["kimi_default_model"] = config.ai.kimi_default_model
     raw_backend = create_backend(config.ai.mode, **backend_kwargs)
     return CircuitBreaker(
         backend=raw_backend,
