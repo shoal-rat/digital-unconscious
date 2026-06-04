@@ -16,7 +16,14 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from du_research.ai_backend import AIResponse, ClaudeCodeBackend, AnthropicAPIBackend, create_backend
+from du_research.ai_backend import (
+    AIResponse,
+    ClaudeCodeBackend,
+    AnthropicAPIBackend,
+    KimiAPIBackend,
+    MultiProviderBackend,
+    create_backend,
+)
 from du_research.circuit_breaker import CircuitBreaker, CircuitState
 from du_research.observation import (
     BehaviorFrame,
@@ -72,16 +79,59 @@ class AIBackendTests(unittest.TestCase):
     def test_create_backend_auto_picks_claude_code_without_env(self) -> None:
         import os
         old = os.environ.pop("ANTHROPIC_API_KEY", None)
+        old_openai = os.environ.pop("OPENAI_API_KEY", None)
+        old_moonshot = os.environ.pop("MOONSHOT_API_KEY", None)
+        old_kimi = os.environ.pop("KIMI_API_KEY", None)
         try:
             backend = create_backend("auto")
             self.assertIsInstance(backend, ClaudeCodeBackend)
         finally:
             if old:
                 os.environ["ANTHROPIC_API_KEY"] = old
+            if old_openai:
+                os.environ["OPENAI_API_KEY"] = old_openai
+            if old_moonshot:
+                os.environ["MOONSHOT_API_KEY"] = old_moonshot
+            if old_kimi:
+                os.environ["KIMI_API_KEY"] = old_kimi
 
     def test_ai_response_ok_property(self) -> None:
         self.assertTrue(AIResponse(text="hello").ok)
         self.assertFalse(AIResponse(text="").ok)
+
+    def test_multi_provider_routes_by_model_prefix(self) -> None:
+        fake = FakeBackend(default="ok")
+        router = MultiProviderBackend(_providers={"openai": fake})
+        response = router.call("hello", model="openai:gpt-5.5", mode="strict")
+        self.assertTrue(response.ok)
+        self.assertEqual(fake.calls[0]["model"], "gpt-5.5")
+        self.assertEqual(fake.calls[0]["mode"], "strict")
+
+    def test_kimi_backend_uses_openai_compatible_extra_body(self) -> None:
+        class FakeCompletions:
+            def __init__(self):
+                self.kwargs = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                message = type("Message", (), {"content": "{}"})()
+                choice = type("Choice", (), {"message": message, "finish_reason": "stop"})()
+                usage = type("Usage", (), {"prompt_tokens": 3, "completion_tokens": 2})()
+                return type("Response", (), {"choices": [choice], "usage": usage})()
+
+        completions = FakeCompletions()
+        client = type(
+            "Client",
+            (),
+            {"chat": type("Chat", (), {"completions": completions})()},
+        )()
+        backend = KimiAPIBackend(_client=client)
+        response = backend.call("hello", model="kimi", mode="deterministic", json_schema={"type": "object"})
+        self.assertTrue(response.ok)
+        assert completions.kwargs is not None
+        self.assertEqual(completions.kwargs["model"], "kimi-k2.6")
+        self.assertNotIn("temperature", completions.kwargs)
+        self.assertEqual(completions.kwargs["extra_body"]["thinking"], {"type": "disabled"})
 
 
 # ---------------------------------------------------------------------------

@@ -1,12 +1,8 @@
-"""AIBackend abstraction layer — dual-mode support for Claude Code and Anthropic API.
+"""AI backend abstraction layer.
 
-Uses latest Claude Code features:
-- --permission-mode auto for fully autonomous operation
-- --json-schema for forced structured output
-- --allowedTools with proper tool names (WebSearch, WebFetch, Bash, Read)
-- --chrome for browser automation
-- --session-id / --resume for multi-turn sessions
-- --max-turns for agent loop control
+The project can run against Claude Code, Anthropic API, OpenAI API, or
+Kimi/Moonshot API while exposing one small call interface to the rest of the
+pipeline.
 """
 from __future__ import annotations
 
@@ -60,7 +56,7 @@ class AIResponse:
 
 
 # ---------------------------------------------------------------------------
-# Mode → parameter mapping
+# Shared model and mode mappings
 # ---------------------------------------------------------------------------
 
 _MODE_PARAMS: dict[str, dict[str, Any]] = {
@@ -70,17 +66,88 @@ _MODE_PARAMS: dict[str, dict[str, Any]] = {
     "deterministic": {"temperature": 0.0},
 }
 
-MODEL_ALIASES: dict[str, str] = {
-    "opus": "claude-opus-4-6",
+ANTHROPIC_MODEL_ALIASES: dict[str, str] = {
+    "opus": "claude-opus-4-8",
     "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4-5",
 }
 
+OPENAI_MODEL_ALIASES: dict[str, str] = {
+    "codex": "gpt-5.5",
+    "gpt": "gpt-5.5",
+    "opus": "gpt-5.5",
+    "sonnet": "gpt-5.5",
+    "haiku": "gpt-5.4-mini",
+}
+
+KIMI_MODEL_ALIASES: dict[str, str] = {
+    "kimi": "kimi-k2.6",
+    "k2": "kimi-k2.6",
+    "k2.6": "kimi-k2.6",
+    "opus": "kimi-k2.6",
+    "sonnet": "kimi-k2.6",
+    "haiku": "kimi-k2.6",
+}
+
+# Backward-compatible export used by older callers/tests.
+MODEL_ALIASES = ANTHROPIC_MODEL_ALIASES
+
+_PROVIDER_PREFIXES = {
+    "anthropic",
+    "claude",
+    "claude_code",
+    "openai",
+    "codex",
+    "kimi",
+    "moonshot",
+}
+
+
+def _split_provider_model(model: str | None) -> tuple[str | None, str | None]:
+    if not model or ":" not in model:
+        return None, model
+    provider, bare_model = model.split(":", 1)
+    provider = provider.strip().lower()
+    if provider in _PROVIDER_PREFIXES:
+        return provider, bare_model.strip()
+    return None, model
+
 
 def _resolve_model(model: str | None, default: str = "claude-sonnet-4-6") -> str:
-    if model is None:
+    _, bare_model = _split_provider_model(model)
+    if bare_model is None:
         return default
-    return MODEL_ALIASES.get(model, model)
+    return ANTHROPIC_MODEL_ALIASES.get(bare_model, bare_model)
+
+
+def _resolve_provider_model(
+    model: str | None,
+    *,
+    default: str,
+    aliases: dict[str, str],
+) -> str:
+    _, bare_model = _split_provider_model(model)
+    if bare_model is None:
+        return default
+    return aliases.get(bare_model, bare_model)
+
+
+def _parse_structured_text(text: str, json_schema: dict | None) -> dict | None:
+    if not json_schema:
+        return None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else {"result": parsed}
+
+
+def _usage_value(usage: Any, key: str) -> int:
+    if usage is None:
+        return 0
+    if isinstance(usage, dict):
+        return int(usage.get(key, 0) or 0)
+    return int(getattr(usage, key, 0) or 0)
 
 
 # ---------------------------------------------------------------------------
@@ -92,10 +159,8 @@ def _resolve_model(model: str | None, default: str = "claude-sonnet-4-6") -> str
 class ClaudeCodeBackend:
     """Calls Claude Code CLI as a subprocess.
 
-    Uses --permission-mode auto for fully autonomous operation.
-    Uses --json-schema for guaranteed structured output.
-    Uses --allowedTools to grant specific capabilities per call.
-    Uses --chrome for browser automation when requested.
+    The flags are best-effort: older Claude Code versions may reject a newer
+    flag, in which case the raw CLI error is returned as a failed AIResponse.
     """
 
     timeout_seconds: int = 300
@@ -113,7 +178,7 @@ class ClaudeCodeBackend:
         ),
         "deterministic": (
             "Produce the single most likely correct answer. No creativity, "
-            "no hedging — deterministic precision only."
+            "no hedging: deterministic precision only."
         ),
     })
 
@@ -139,44 +204,40 @@ class ClaudeCodeBackend:
             "--permission-mode", "auto",
         ]
 
-        # Use a specific agent (e.g., lit-search, peer-review)
         if agent:
             cmd.extend(["--agent", agent])
 
-        # Model selection
-        if model or self.model_override:
-            resolved = model or self.model_override
-            if resolved in MODEL_ALIASES:
-                resolved = MODEL_ALIASES[resolved]
-            cmd.extend(["--model", resolved])
+        requested_model = model or self.model_override
+        if requested_model:
+            cmd.extend(["--model", _resolve_model(requested_model)])
 
-        # System prompt with mode-specific instructions
         mode_snippet = self._MODE_PROMPTS.get(mode, "")
         combined_system = "\n\n".join(p for p in [system, mode_snippet] if p)
         if combined_system:
             cmd.extend(["--append-system-prompt", combined_system])
 
-        # Session resume for multi-turn conversations
         if session_id:
             cmd.extend(["--resume", session_id])
 
-        # Tool permissions — grant specific capabilities
         if allowed_tools:
             cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
-        # Forced structured JSON output via schema
         if json_schema:
             cmd.extend(["--json-schema", json.dumps(json_schema)])
 
-        # Chrome browser automation
         if use_chrome:
             cmd.append("--chrome")
 
-        # Agent loop control
         cmd.extend(["--max-turns", str(max_turns)])
 
-        logger.debug("ClaudeCodeBackend: %s (model=%s, mode=%s, tools=%s, chrome=%s)",
-                      prompt[:80], model, mode, allowed_tools, use_chrome)
+        logger.debug(
+            "ClaudeCodeBackend: %s (model=%s, mode=%s, tools=%s, chrome=%s)",
+            prompt[:80],
+            requested_model,
+            mode,
+            allowed_tools,
+            use_chrome,
+        )
         try:
             result = subprocess.run(
                 cmd,
@@ -189,7 +250,6 @@ class ClaudeCodeBackend:
         except FileNotFoundError:
             return AIResponse(text="", raw={"error": "claude CLI not found"})
 
-        # Parse response (Claude Code returns JSON on stdout even on errors)
         output = result.stdout.strip() or result.stderr.strip()
         try:
             parsed = json.loads(output)
@@ -204,15 +264,18 @@ class ClaudeCodeBackend:
             logger.warning("claude -p error: %s", error_msg)
             return AIResponse(text="", raw={"error": error_msg, **parsed})
 
+        text = parsed.get("result", "")
+        structured = parsed.get("structured_output") or _parse_structured_text(text, json_schema)
+        usage = parsed.get("usage", {})
         return AIResponse(
-            text=parsed.get("result", ""),
-            model=model or self.model_override or "",
+            text=text,
+            model=_resolve_model(requested_model) if requested_model else "",
             session_id=parsed.get("session_id"),
-            input_tokens=parsed.get("usage", {}).get("input_tokens", 0),
-            output_tokens=parsed.get("usage", {}).get("output_tokens", 0),
+            input_tokens=_usage_value(usage, "input_tokens"),
+            output_tokens=_usage_value(usage, "output_tokens"),
             cost_usd=parsed.get("total_cost_usd", 0.0),
             raw=parsed,
-            structured=parsed.get("structured_output"),
+            structured=structured,
         )
 
 
@@ -236,11 +299,11 @@ class AnthropicAPIBackend:
             import anthropic
         except ImportError as exc:
             raise ImportError(
-                "anthropic package is required for API mode: pip install anthropic"
+                "anthropic package is required for Anthropic API mode: pip install anthropic"
             ) from exc
         key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
-            raise ValueError("ANTHROPIC_API_KEY must be set for API mode")
+            raise ValueError("ANTHROPIC_API_KEY must be set for Anthropic API mode")
         self._client = anthropic.Anthropic(api_key=key)
 
     def call(
@@ -262,44 +325,298 @@ class AnthropicAPIBackend:
         params = _MODE_PARAMS.get(mode, _MODE_PARAMS["balanced"])
         temperature = params["temperature"]
 
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+        system_parts = [system]
+        if json_schema:
+            system_parts.append(
+                "Return only a JSON object that conforms to this schema: "
+                + json.dumps(json_schema, ensure_ascii=False)
+            )
+        combined_system = "\n\n".join(p for p in system_parts if p)
+
         kwargs: dict[str, Any] = {
             "model": resolved_model,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "messages": messages,
+            "messages": [{"role": "user", "content": prompt}],
         }
-        if system:
-            kwargs["system"] = system
+        if combined_system:
+            kwargs["system"] = combined_system
 
         try:
             response = self._client.messages.create(**kwargs)
         except Exception as exc:
             logger.error("Anthropic API error: %s", exc)
-            return AIResponse(text="", raw={"error": str(exc)})
+            return AIResponse(text="", raw={"error": str(exc), "provider": "anthropic"})
 
         text_parts = [
             block.text for block in response.content if hasattr(block, "text")
         ]
         full_text = "\n".join(text_parts)
-
-        structured = None
-        if json_schema:
-            try:
-                structured = json.loads(full_text)
-            except json.JSONDecodeError:
-                pass
+        usage = getattr(response, "usage", None)
 
         return AIResponse(
             text=full_text,
             model=resolved_model,
             session_id=session_id,
-            input_tokens=getattr(response.usage, "input_tokens", 0),
-            output_tokens=getattr(response.usage, "output_tokens", 0),
+            input_tokens=_usage_value(usage, "input_tokens"),
+            output_tokens=_usage_value(usage, "output_tokens"),
             cost_usd=0.0,
-            raw={"stop_reason": response.stop_reason},
-            structured=structured,
+            raw={"stop_reason": getattr(response, "stop_reason", None), "provider": "anthropic"},
+            structured=_parse_structured_text(full_text, json_schema),
         )
+
+
+# ---------------------------------------------------------------------------
+# OpenAI-compatible chat backends
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class OpenAICompatibleChatBackend:
+    """Backend for OpenAI SDK compatible chat completions providers."""
+
+    api_key: str | None = None
+    default_model: str = "gpt-5.5"
+    base_url: str | None = None
+    env_key: str = "OPENAI_API_KEY"
+    alternate_env_keys: tuple[str, ...] = ()
+    provider_name: str = "openai"
+    model_aliases: dict[str, str] = field(default_factory=lambda: OPENAI_MODEL_ALIASES.copy())
+    omit_temperature: bool = False
+    kimi_thinking: bool | None = None
+    _client: Any = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self._client is not None:
+            return
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ImportError(
+                "openai package is required for OpenAI-compatible API modes: pip install openai"
+            ) from exc
+        key = self.api_key or os.environ.get(self.env_key)
+        if not key:
+            for env_key in self.alternate_env_keys:
+                key = os.environ.get(env_key)
+                if key:
+                    break
+        if not key:
+            all_keys = ", ".join((self.env_key, *self.alternate_env_keys))
+            raise ValueError(f"{all_keys} must be set for {self.provider_name} API mode")
+        kwargs: dict[str, Any] = {"api_key": key}
+        if self.base_url:
+            kwargs["base_url"] = self.base_url
+        self._client = OpenAI(**kwargs)
+
+    def call(
+        self,
+        prompt: str,
+        *,
+        mode: str = "balanced",
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int = 2048,
+        json_schema: dict | None = None,
+        session_id: str | None = None,
+        allowed_tools: list[str] | None = None,
+        use_chrome: bool = False,
+        max_turns: int = 25,
+        agent: str | None = None,
+    ) -> AIResponse:
+        resolved_model = _resolve_provider_model(
+            model,
+            default=self.default_model,
+            aliases=self.model_aliases,
+        )
+        params = _MODE_PARAMS.get(mode, _MODE_PARAMS["balanced"])
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        if json_schema:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "Return only a JSON object that conforms to this schema: "
+                        + json.dumps(json_schema, ensure_ascii=False)
+                    ),
+                }
+            )
+        messages.append({"role": "user", "content": prompt})
+
+        kwargs: dict[str, Any] = {
+            "model": resolved_model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if not self.omit_temperature:
+            kwargs["temperature"] = params["temperature"]
+
+        if json_schema and self.provider_name == "openai":
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "digital_unconscious_response",
+                    "schema": json_schema,
+                    "strict": False,
+                },
+            }
+
+        if self.provider_name in {"kimi", "moonshot"}:
+            thinking_enabled = self.kimi_thinking
+            if thinking_enabled is None:
+                thinking_enabled = not (json_schema or mode == "deterministic")
+            kwargs["extra_body"] = {
+                "thinking": {"type": "enabled" if thinking_enabled else "disabled"}
+            }
+
+        try:
+            response = self._client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            logger.error("%s API error: %s", self.provider_name, exc)
+            return AIResponse(text="", raw={"error": str(exc), "provider": self.provider_name})
+
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        message = getattr(choice, "message", None)
+        full_text = getattr(message, "content", "") or ""
+        usage = getattr(response, "usage", None)
+
+        return AIResponse(
+            text=full_text,
+            model=resolved_model,
+            session_id=session_id,
+            input_tokens=_usage_value(usage, "prompt_tokens"),
+            output_tokens=_usage_value(usage, "completion_tokens"),
+            cost_usd=0.0,
+            raw={
+                "provider": self.provider_name,
+                "finish_reason": getattr(choice, "finish_reason", None),
+                "ignored_tools": bool(allowed_tools or use_chrome or agent),
+            },
+            structured=_parse_structured_text(full_text, json_schema),
+        )
+
+
+@dataclass
+class OpenAIAPIBackend(OpenAICompatibleChatBackend):
+    provider_name: str = "openai"
+    env_key: str = "OPENAI_API_KEY"
+    default_model: str = "gpt-5.5"
+    model_aliases: dict[str, str] = field(default_factory=lambda: OPENAI_MODEL_ALIASES.copy())
+
+
+@dataclass
+class KimiAPIBackend(OpenAICompatibleChatBackend):
+    provider_name: str = "kimi"
+    env_key: str = "MOONSHOT_API_KEY"
+    alternate_env_keys: tuple[str, ...] = ("KIMI_API_KEY",)
+    base_url: str | None = "https://api.moonshot.ai/v1"
+    default_model: str = "kimi-k2.6"
+    model_aliases: dict[str, str] = field(default_factory=lambda: KIMI_MODEL_ALIASES.copy())
+    omit_temperature: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Multi-provider router
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class MultiProviderBackend:
+    """Routes calls by provider prefix or available credentials.
+
+    Examples:
+    - ``model="openai:gpt-5.5"`` uses OpenAI.
+    - ``model="kimi:kimi-k2.6"`` uses Kimi/Moonshot.
+    - ``model="claude_code:opus"`` uses the local Claude Code CLI.
+    - no prefix falls back to Anthropic API, OpenAI, Kimi, then Claude Code.
+    """
+
+    api_key: str | None = None
+    openai_api_key: str | None = None
+    kimi_api_key: str | None = None
+    default_model: str = "claude-sonnet-4-6"
+    openai_default_model: str = "gpt-5.5"
+    kimi_default_model: str = "kimi-k2.6"
+    timeout_seconds: int = 300
+    _providers: dict[str, AIBackend] = field(default_factory=dict, repr=False)
+
+    def call(
+        self,
+        prompt: str,
+        *,
+        mode: str = "balanced",
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int = 2048,
+        json_schema: dict | None = None,
+        session_id: str | None = None,
+        allowed_tools: list[str] | None = None,
+        use_chrome: bool = False,
+        max_turns: int = 25,
+        agent: str | None = None,
+    ) -> AIResponse:
+        provider, bare_model = self._select_provider(model)
+        try:
+            backend = self._get_provider(provider)
+        except Exception as exc:
+            logger.error("Could not initialize %s backend: %s", provider, exc)
+            return AIResponse(text="", raw={"error": str(exc), "provider": provider})
+        return backend.call(
+            prompt,
+            mode=mode,
+            system=system,
+            model=bare_model,
+            max_tokens=max_tokens,
+            json_schema=json_schema,
+            session_id=session_id,
+            allowed_tools=allowed_tools,
+            use_chrome=use_chrome,
+            max_turns=max_turns,
+            agent=agent,
+        )
+
+    def _select_provider(self, model: str | None) -> tuple[str, str | None]:
+        prefix, bare_model = _split_provider_model(model)
+        if prefix in {"openai", "codex"}:
+            return "openai", bare_model
+        if prefix in {"kimi", "moonshot"}:
+            return "kimi", bare_model
+        if prefix == "claude_code":
+            return "claude_code", bare_model
+        if prefix in {"anthropic", "claude"}:
+            return "anthropic", bare_model
+        if self.api_key or os.environ.get("ANTHROPIC_API_KEY"):
+            return "anthropic", bare_model
+        if self.openai_api_key or os.environ.get("OPENAI_API_KEY"):
+            return "openai", bare_model
+        if self.kimi_api_key or os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY"):
+            return "kimi", bare_model
+        return "claude_code", bare_model
+
+    def _get_provider(self, provider: str) -> AIBackend:
+        if provider in self._providers:
+            return self._providers[provider]
+        if provider == "anthropic":
+            backend: AIBackend = AnthropicAPIBackend(
+                api_key=self.api_key,
+                default_model=self.default_model,
+            )
+        elif provider == "openai":
+            backend = OpenAIAPIBackend(
+                api_key=self.openai_api_key,
+                default_model=self.openai_default_model,
+            )
+        elif provider == "kimi":
+            backend = KimiAPIBackend(
+                api_key=self.kimi_api_key,
+                default_model=self.kimi_default_model,
+            )
+        else:
+            backend = ClaudeCodeBackend(timeout_seconds=self.timeout_seconds)
+        self._providers[provider] = backend
+        return backend
 
 
 # ---------------------------------------------------------------------------
@@ -308,18 +625,63 @@ class AnthropicAPIBackend:
 
 
 def create_backend(mode: str = "auto", **kwargs: Any) -> AIBackend:
-    """Create the appropriate backend based on *mode*.
+    """Create the appropriate backend based on ``mode``.
 
-    ``auto`` — pick API if ``ANTHROPIC_API_KEY`` is set, otherwise Claude Code.
-    ``claude_code`` — always use headless Claude Code CLI.
-    ``api`` — always use the Anthropic Python SDK.
+    Modes:
+    - ``auto``: Anthropic API, OpenAI API, Kimi API, then Claude Code.
+    - ``multi``: route each call by provider prefix or available credentials.
+    - ``claude_code``: local Claude Code CLI.
+    - ``api``/``anthropic``: Anthropic API.
+    - ``openai``/``codex``: OpenAI API.
+    - ``kimi``/``moonshot``: Kimi/Moonshot API.
     """
+    mode = (mode or "auto").strip().lower()
+
+    api_key = kwargs.get("api_key")
+    openai_api_key = kwargs.get("openai_api_key")
+    kimi_api_key = kwargs.get("kimi_api_key") or kwargs.get("moonshot_api_key")
+    default_model = kwargs.get("default_model")
+
     if mode == "auto":
-        if os.environ.get("ANTHROPIC_API_KEY"):
+        if api_key or os.environ.get("ANTHROPIC_API_KEY"):
             mode = "api"
+        elif openai_api_key or os.environ.get("OPENAI_API_KEY"):
+            mode = "openai"
+        elif kimi_api_key or os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY"):
+            mode = "kimi"
         else:
             mode = "claude_code"
 
-    if mode == "api":
-        return AnthropicAPIBackend(**kwargs)
-    return ClaudeCodeBackend(**kwargs)
+    if mode in {"multi", "router"}:
+        return MultiProviderBackend(
+            api_key=api_key,
+            openai_api_key=openai_api_key,
+            kimi_api_key=kimi_api_key,
+            default_model=default_model or "claude-sonnet-4-6",
+            openai_default_model=kwargs.get("openai_default_model", "gpt-5.5"),
+            kimi_default_model=kwargs.get("kimi_default_model", "kimi-k2.6"),
+            timeout_seconds=kwargs.get("timeout_seconds", 300),
+        )
+
+    if mode in {"api", "anthropic", "claude"}:
+        return AnthropicAPIBackend(
+            api_key=api_key,
+            default_model=default_model or "claude-sonnet-4-6",
+        )
+
+    if mode in {"openai", "codex"}:
+        return OpenAIAPIBackend(
+            api_key=openai_api_key or api_key,
+            default_model=kwargs.get("openai_default_model") or default_model or "gpt-5.5",
+        )
+
+    if mode in {"kimi", "moonshot"}:
+        return KimiAPIBackend(
+            api_key=kimi_api_key or api_key,
+            default_model=kwargs.get("kimi_default_model") or default_model or "kimi-k2.6",
+        )
+
+    return ClaudeCodeBackend(
+        timeout_seconds=kwargs.get("timeout_seconds", 300),
+        model_override=kwargs.get("model_override"),
+    )

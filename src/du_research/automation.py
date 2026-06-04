@@ -5,12 +5,20 @@ from pathlib import Path
 import time
 from typing import Any
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options as ChromeOptions
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.ui import WebDriverWait
+except ImportError:
+    webdriver = None
+    ChromeOptions = None
+    By = None
+    Keys = None
+    EC = None
+    WebDriverWait = None
 
 from du_research.ai_backend import ClaudeCodeBackend
 from du_research.utils import iso_now
@@ -120,6 +128,12 @@ class BrowserAutomationRunner:
         *,
         credential_lookup: callable | None = None,
     ) -> dict[str, Any]:
+        if webdriver is None:
+            return {
+                "runner": "selenium",
+                "ok": False,
+                "error": "Selenium is not installed. Install digital-unconscious[browser] to use the selenium runner.",
+            }
         if "flow" in task:
             return self._execute_flow(task["flow"], credential_lookup=credential_lookup)
         return {

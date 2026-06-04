@@ -148,16 +148,17 @@ du tray
 | `du service start/stop/status` | Background daemon management |
 | `du credential add/list` | Manage encrypted credentials |
 
-## Dual-mode AI backend
+## Multi-provider AI backend
 
-| | Claude Code (subscription) | Anthropic API |
-|---|---|---|
-| Cost | Included in Pro/Max ($20-200/mo) | ~$7-13/mo (pay per token) |
-| Setup | `claude /login` | `export ANTHROPIC_API_KEY=sk-...` |
-| Temperature | Simulated via prompt engineering | Direct parameter control |
-| Computer use | Native Chrome browsing | Not available |
+| | Claude Code | Anthropic API | OpenAI / Codex | Kimi API |
+|---|---|---|---|---|
+| Setup | `claude /login` | `ANTHROPIC_API_KEY` | `OPENAI_API_KEY` | `MOONSHOT_API_KEY` or `KIMI_API_KEY` |
+| Best for | Local computer-use tasks | Claude model calls | GPT/Codex model calls | Long-context multimodal calls |
+| Browser/computer use | Native Claude Code tools | Not available | Via external tools | Via external tools |
 
-The system auto-detects which mode to use. Set `mode = "claude_code"` or `mode = "api"` in `config/pipeline.toml` to force one.
+The system auto-detects which mode to use. Set `mode = "multi"` in `config/pipeline.toml` to route individual agents with provider prefixes such as `openai:gpt-5.5`, `kimi:kimi-k2.6`, or `claude_code:opus`.
+
+See `docs/MULTI_PROVIDER_BACKENDS.md` for examples and setup details.
 
 ## Configuration
 

@@ -64,12 +64,23 @@ class AnthropicAPIBackend(AIBackend):
     # anthropic.Anthropic().messages.create()
     # Direct temperature control per call
 
+class OpenAIAPIBackend(AIBackend):
+    # OpenAI SDK chat completions for OpenAI/Codex model calls
+
+class KimiAPIBackend(AIBackend):
+    # OpenAI-compatible Kimi/Moonshot chat completions
+
+class MultiProviderBackend(AIBackend):
+    # Routes by provider prefix, e.g. openai:gpt-5.5 or kimi:kimi-k2.6
+
 class CircuitBreaker(AIBackend):
     # Wraps any backend with retry + backoff + circuit breaking
     # States: CLOSED → OPEN → HALF_OPEN
 ```
 
-Mode aliases: `{"opus": "claude-opus-4-6", "sonnet": "claude-sonnet-4-6", "haiku": "claude-haiku-4-5"}`
+Mode aliases are provider-aware. Claude aliases include `{"opus": "claude-opus-4-8", "sonnet": "claude-sonnet-4-6", "haiku": "claude-haiku-4-5"}`. OpenAI aliases map role names to GPT defaults, and Kimi aliases map role names to `kimi-k2.6`.
+
+Provider prefixes: `openai:`, `codex:`, `kimi:`, `moonshot:`, `anthropic:`, and `claude_code:`.
 
 Temperature-as-mode: `creative=0.95, balanced=0.7, strict=0.1, deterministic=0.0`
 
