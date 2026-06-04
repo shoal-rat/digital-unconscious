@@ -1,5 +1,28 @@
 # Releases
 
+## v1.4.0 - Failover, Thinking, Usage Tracking, Import Fix
+
+Reliability and capability:
+- Provider failover: in `multi` mode (and `auto` when a hosted key is set) a
+  failing provider transparently fails over to the next available one, ending at
+  the local Claude Code CLI. Configurable via `[ai].fallback` and
+  `[ai].fallback_order`.
+- Extended thinking / reasoning effort: a `think` budget on every backend call,
+  wired to idea generation and judging via `[ai].think_idea_budget` and
+  `[ai].think_judge_budget`. Translated to Anthropic thinking budgets, OpenAI
+  reasoning effort, the Kimi thinking toggle, or a Claude Code keyword.
+- Per-cycle token/cost usage tracking, written to `usage.json`, appended as a
+  briefing footer, and surfaced on the dashboard.
+
+Fixes:
+- The research pipeline crashed on import because `stages/analysis.py` imported
+  reportlab (an undeclared dependency) and Pillow at module scope. Both are now
+  lazy with graceful SVG-only degradation, and a `figures` extra declares them.
+
+Tests: 60 -> 70 passing.
+
+---
+
 ## v1.3.0 - Multi-Provider Agent Backends
 
 New backend routing:

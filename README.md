@@ -104,6 +104,10 @@ Default mode is `auto`:
 3. Kimi/Moonshot if `MOONSHOT_API_KEY` or `KIMI_API_KEY` exists
 4. local Claude Code otherwise
 
+When a hosted key is set, `auto` routes through the multi-provider layer so a
+failing provider fails over to the next available one — ending at the local
+Claude Code CLI. Set `[ai].fallback = false` to pin a single provider.
+
 For deliberate routing, use `mode = "multi"`:
 
 ```toml
@@ -157,6 +161,13 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 - background service daemon
 - optional autostart on login
 
+### Reliability, Reasoning, And Cost
+
+- automatic provider failover across Claude, OpenAI, Kimi, and local Claude Code
+- optional extended-thinking budgets for idea generation and judging
+- per-cycle token and cost tracking in the briefing footer and dashboard
+- circuit breaker with retries and exponential backoff
+
 ## Commands
 
 | Command | Use it for |
@@ -180,6 +191,12 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 Most settings live in [config/pipeline.toml](config/pipeline.toml).
 
 ```toml
+[ai]
+mode = "auto"            # auto-upgrades to multi-provider failover when a key is set
+fallback = true
+think_idea_budget = 0    # set e.g. 8192 to enable extended thinking for ideas
+think_judge_budget = 0
+
 [idea]
 primary_domains = ["AI tools", "product design"]
 secondary_domains = ["cognitive science", "business models"]

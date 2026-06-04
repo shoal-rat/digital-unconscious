@@ -1,5 +1,5 @@
 # Digital Unconscious — Pipeline Configuration
-# v0.2.0
+# v1.4.0
 
 [pipeline]
 workspace_dir = "workspace"
@@ -25,6 +25,14 @@ analysis_model = "sonnet"
 # kimi_api_key = ""          # prefer MOONSHOT_API_KEY or KIMI_API_KEY env var
 openai_default_model = "gpt-5.5"
 kimi_default_model = "kimi-k2.6"
+# Multi-provider failover: on a failed call, try the next available provider.
+fallback = true
+fallback_order = ["anthropic", "openai", "kimi", "claude_code"]
+# Extended-thinking token budgets (0 disables). Adds deeper reasoning to the two
+# reasoning-heavy steps; translated per provider (Anthropic thinking budget,
+# OpenAI reasoning effort, Kimi thinking toggle, Claude Code think keyword).
+think_idea_budget = 0
+think_judge_budget = 0
 
 [observation]
 enabled = true
