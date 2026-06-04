@@ -34,6 +34,16 @@ def _load_json(path: Path) -> Any:
         return None
 
 
+def _fmt_compact(n: int) -> str:
+    """Format a token count compactly (1234 -> '1.2k', 2_000_000 -> '2.0M')."""
+    n = int(n or 0)
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
 def _list_daily_cycles(workspace: Path) -> list[dict[str, Any]]:
     daily_dir = workspace / "daily"
     if not daily_dir.exists():
@@ -57,12 +67,15 @@ def _list_daily_cycles(workspace: Path) -> list[dict[str, Any]]:
                     n_included = len(json.loads(ideas_included_path.read_text(encoding="utf-8")))
                 except Exception:
                     pass
+            usage = _load_json(d / "usage.json") or {}
             cycles.append({
                 "date": date,
                 "dir": str(d),
                 "has_briefing": briefing_path.exists(),
                 "ideas_total": n_ideas,
                 "ideas_included": n_included,
+                "tokens": usage.get("total_tokens", 0),
+                "cost_usd": usage.get("cost_usd", 0.0),
             })
     return cycles[:30]
 
@@ -464,6 +477,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         total_cycles = len(cycles)
         model_version = learning["model"].get("model_version", 0)
         is_running = service["status"].get("running", False)
+        total_cost = sum(c.get("cost_usd", 0.0) for c in cycles)
+        total_tokens = sum(c.get("tokens", 0) for c in cycles)
+        usage_value = f"${total_cost:.2f}" if total_cost else _fmt_compact(total_tokens)
+        usage_label = "Est. Spend" if total_cost else "Tokens Used"
 
         # Check for setup=done query param
         setup_banner = ""
@@ -480,6 +497,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <div class="stat"><div class="value">{total_cycles}</div><div class="label">Daily Cycles</div></div>
   <div class="stat"><div class="value">{total_ideas}</div><div class="label">Ideas Generated</div></div>
   <div class="stat"><div class="value">v{model_version}</div><div class="label">Idea Model</div></div>
+  <div class="stat"><div class="value">{usage_value}</div><div class="label">{usage_label}</div></div>
   <div class="stat"><div class="value">{"ON" if is_running else "OFF"}</div><div class="label">Service</div></div>
 </div>"""
 
@@ -494,13 +512,19 @@ or <code>du start</code> to begin passive observation.</p>
             cycle_html = ""
             for c in cycles[:10]:
                 inc = f'<span class="badge badge-include">{c["ideas_included"]} included</span>' if c["ideas_included"] else ""
+                if c.get("cost_usd"):
+                    usage_note = f' · ${c["cost_usd"]:.4f}'
+                elif c.get("tokens"):
+                    usage_note = f' · {_fmt_compact(c["tokens"])} tokens'
+                else:
+                    usage_note = ""
                 cycle_html += f"""
 <a class="cycle-link" href="/briefing?date={c['date']}">
 <div class="card">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <div>
       <div style="font-weight:600">{c['date']}</div>
-      <div style="color:var(--muted);font-size:13px">{c['ideas_total']} ideas generated {inc}</div>
+      <div style="color:var(--muted);font-size:13px">{c['ideas_total']} ideas generated {inc}{usage_note}</div>
     </div>
     <div style="color:var(--muted);font-size:20px">&rarr;</div>
   </div>

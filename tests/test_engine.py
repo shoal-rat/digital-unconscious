@@ -335,6 +335,30 @@ class CircuitBreakerTests(unittest.TestCase):
         self.assertEqual(stats["total_calls"], 1)
         self.assertEqual(stats["total_failures"], 0)
 
+    def test_usage_tracking_accumulates_and_resets(self) -> None:
+        class TokenBackend:
+            def call(self, prompt: str, **kwargs: Any) -> AIResponse:
+                return AIResponse(
+                    text="ok",
+                    model="claude-sonnet-4-6",
+                    input_tokens=10,
+                    output_tokens=5,
+                    cost_usd=0.002,
+                )
+
+        cb = CircuitBreaker(backend=TokenBackend(), max_retries=1)
+        cb.call("a")
+        cb.call("b")
+        usage = cb.usage
+        self.assertEqual(usage["calls"], 2)
+        self.assertEqual(usage["total_tokens"], 30)
+        self.assertAlmostEqual(usage["cost_usd"], 0.004, places=6)
+        self.assertEqual(usage["by_model"]["claude-sonnet-4-6"]["calls"], 2)
+        cb.reset_usage()
+        self.assertEqual(cb.usage["calls"], 0)
+        self.assertEqual(cb.usage["total_tokens"], 0)
+        self.assertEqual(cb.usage["by_model"], {})
+
 
 # ---------------------------------------------------------------------------
 # Observation tests
