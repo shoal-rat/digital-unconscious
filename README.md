@@ -1,174 +1,189 @@
+# Digital Unconscious
+
+**A local-first research assistant that turns the traces of your workday into sharper research ideas.**
+
+Digital Unconscious watches the text signals around your screen activity, compresses them into private working notes, proposes cross-domain ideas, scores them, and saves a daily briefing. The strongest ideas can be handed into a staged research pipeline for literature review, feasibility checks, dataset search, analysis, drafting, and review.
+
+It is not a second brain with a chat box. It is closer to a quiet research notebook that notices what you keep circling back to.
+
 <p align="center">
-  <h1 align="center">Digital Unconscious</h1>
-  <p align="center"><strong>Your screen behaviour is an unread research journal.<br>This system reads it for you.</strong></p>
+  <a href="https://github.com/shoal-rat/digital-unconscious/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-111827.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-2563eb.svg" alt="Python 3.11 plus">
+  <img src="https://img.shields.io/badge/local--first-private-059669.svg" alt="Local-first and private">
+  <img src="https://img.shields.io/badge/backends-Claude%20%7C%20OpenAI%20%7C%20Kimi-7c3aed.svg" alt="Claude, OpenAI, and Kimi backends">
 </p>
 
 <p align="center">
-  <code>Passive Screen Observation</code> &times; <code>AI Idea Generation</code> &times; <code>Autonomous Research</code>
+  <img src="docs/assets/readme-daily-loop.svg" alt="Daily idea loop chart">
 </p>
 
----
+## What You Get
 
-**Digital Unconscious** watches what you browse, read, and search throughout your day. It compresses those behavioural signals into structured summaries, generates cross-domain research ideas, scores them with an adversarial judge, and delivers a daily briefing of your best ideas — all running locally, all automatic.
+- A daily Markdown briefing based on what you read, search, and build.
+- Idea scoring that favors novelty, feasibility, domain fit, and timing.
+- A research backlog you can search later instead of losing half-formed ideas.
+- A six-stage research pipeline for ideas worth pursuing.
+- Multi-provider model routing across Claude Code, Anthropic API, OpenAI/Codex, and Kimi/Moonshot.
+- A small local dashboard at `localhost:9830`.
 
-The best ideas get promoted into a full autonomous research pipeline: literature review, feasibility assessment, data acquisition, analysis, paper drafting, and AI peer review.
+## Where It Fits
 
-## How it works
+Use it when useful ideas tend to appear sideways: while reading papers, comparing tools, debugging code, scanning datasets, or bouncing between fields. Digital Unconscious is designed to preserve those weak signals before they disappear.
 
-```
-You browse the web, read papers, write code, chat on Slack...
-         |
-    Screenpipe captures screen text (local, private)
-         |
-    Compression Agent (Claude Haiku) distils 30-min windows
-         |
-    Idea Generator (Claude Opus, high temperature)
-    draws cross-domain connections from your behaviour
-         |
-    Judge Agent (Claude Sonnet, low temperature)
-    scores on novelty, feasibility, relevance, timeliness
-         |
-    Daily Briefing — your "hidden research agenda" revealed
-         |
-    Auto-Research Pipeline (optional, for top ideas)
-    Literature → Feasibility → Data → Analysis → Paper → Review
-         |
-    Learning Engine — the system gets smarter about YOU over time
-```
+It works best for:
 
-## Install & Run (two commands)
+- researchers who read across several fields
+- founders and product thinkers collecting patterns
+- analysts who want research questions from daily work
+- builders who want a private idea pipeline instead of another cloud notebook
 
-**Windows (PowerShell):**
+It is not meant to record secrets, reuse your browser profile, bypass logins, or make final submissions without review.
+
+## Quick Start
+
+### Install From GitHub
+
+Windows PowerShell:
+
 ```powershell
 pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git"
 du
 ```
 
-**Mac / Linux (bash):**
+macOS or Linux:
+
 ```bash
-pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git" && du
+pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git"
+du
 ```
 
-That's it. On first run, a setup wizard opens in your browser. Configure your research fields, click "Start", and the system runs silently in the background from then on. You'll receive daily briefings automatically.
+On first run, the setup page opens in your browser. Pick your focus fields, choose an observation source, and set a briefing time.
 
-### What happens after setup
+### Run From Source
 
-1. The system registers itself in Startup (runs on login)
-2. A background service observes your screen via screenpipe
-3. Every day at your configured time, it generates a briefing
-4. Open `du dashboard` anytime to view briefings and ideas
-5. You never need to touch it again — just read your briefings
-
-### Update to latest version
-
-```powershell
-du update
-```
-
-### Uninstall
-
-```powershell
-pip uninstall digital-unconscious -y
-```
-
-This removes the program completely. Your workspace data (ideas, briefings, settings) stays in the `workspace/` folder — delete that manually if you want a full cleanup.
-
-### Alternative install (from source)
-
-```powershell
+```bash
 git clone https://github.com/shoal-rat/digital-unconscious.git
 cd digital-unconscious
 pip install -e ".[full]"
 du
-
-# Set your focus (ideas will be filtered to these fields)
-du config --focus "economics research,behavioral finance"
-du config --primary "pricing psychology,decision science"
-
-# Run your first daily cycle (with a log file or screenpipe)
-du daily --log-file your_activity.jsonl
-
-# Open the dashboard
-du dashboard
-
-# Or launch the system tray icon
-du tray
 ```
 
-## Features
+Try a manual log before wiring up passive capture:
 
-### Passive observation
-- Integrates with [screenpipe](https://github.com/mediar-ai/screenpipe) for 24/7 screen capture
-- Falls back to JSONL or plain-text activity logs
-- Privacy-first: passwords, bank pages, incognito auto-filtered
-- Configurable app blacklist
+```bash
+du daily --log-file tests/fixtures/daily_log.txt
+du dashboard
+```
 
-### AI-powered idea generation
-- Claude Opus at high temperature for divergent, cross-domain ideas
-- Focus field filtering: ideas *inspired by* any domain but *applicable to* your field
-- RAG knowledge base (ChromaDB or file fallback) enriches context
-- Human Idea Model personalises output based on your intellectual fingerprint
+## How It Works
 
-### Adversarial judging
-- Claude Sonnet scores each idea on 4 weighted dimensions
-- Conservative by design: ~1 in 200 ideas reaches the "include" threshold
-- Focus field alignment: off-topic ideas are heavily penalised
-- Heuristic fallback when AI is unavailable
+1. **Observe**: Read recent screen text from [screenpipe](https://github.com/mediar-ai/screenpipe), or use a JSONL/plain-text log file.
+2. **Compress**: Turn 30-minute windows into compact behavior summaries.
+3. **Generate**: Ask a creative model to find cross-domain research ideas.
+4. **Judge**: Score each idea against novelty, feasibility, relevance, and timing.
+5. **Brief**: Save a short daily briefing and append strong ideas to the backlog.
+6. **Research**: Optionally promote top ideas into the research pipeline.
+7. **Learn**: Update the human idea model and prompt refinements from completed runs.
 
-### Autonomous research pipeline
-- 6-stage pipeline: Literature → Feasibility → Data → Analysis → Drafting → Review
-- Claude Code computer-use for browsing papers and downloading datasets
-- AI-powered feasibility assessment, code generation, paper writing
-- Adversarial peer review loop with auto-revision
+<p align="center">
+  <img src="docs/assets/readme-research-pipeline.svg" alt="Research pipeline chart">
+</p>
 
-### Self-improving
-- Prompt Evolution Engine proposes and shadow-tests incremental prompt improvements
-- Human Idea Model tracks your obsessions, blind spots, and productive crossings
-- Domain Knowledge Expander enriches the RAG base from successful runs
-- Meta-Learning Scheduler prevents over-fitting with conservative update rules
+## Multi-Provider Backends
 
-### Desktop integration
-- System tray icon (right-click for quick actions)
-- Web dashboard at `localhost:9830`
-- Background service daemon with configurable intervals
-- Platform autostart (launch on login)
+Digital Unconscious has one backend interface, but you can route different agents to different providers.
+
+<p align="center">
+  <img src="docs/assets/readme-provider-routing.svg" alt="Provider routing chart">
+</p>
+
+Default mode is `auto`:
+
+1. Anthropic API if `ANTHROPIC_API_KEY` exists
+2. OpenAI API if `OPENAI_API_KEY` exists
+3. Kimi/Moonshot if `MOONSHOT_API_KEY` or `KIMI_API_KEY` exists
+4. local Claude Code otherwise
+
+For deliberate routing, use `mode = "multi"`:
+
+```toml
+[ai]
+mode = "multi"
+creative_model = "openai:gpt-5.5"
+judge_model = "anthropic:claude-sonnet-4-6"
+compressor_model = "kimi:kimi-k2.6"
+briefing_model = "claude_code:opus"
+```
+
+More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACKENDS.md).
+
+## Core Features
+
+### Passive Observation
+
+- screenpipe integration for local screen-text capture
+- JSONL and plain-text fallback logs
+- configurable app blacklist
+- local storage for raw observation files
+
+### Idea Generation And Judging
+
+- creative idea generation from compressed workday summaries
+- focus-field filtering so ideas land in your actual domains
+- RAG context from ChromaDB or the file fallback store
+- conservative judge thresholds to keep briefings short
+
+### Research Pipeline
+
+- literature search across open scholarly sources
+- AI feasibility assessment with risks and recommended methods
+- open dataset discovery
+- analysis artifact generation
+- Markdown and PDF manuscript drafting
+- peer-review and revision loop
+- supervised computer-use task packs for browser-heavy work
+
+### Learning Loop
+
+- human idea model built from daily ideas and completed research runs
+- prompt evolution with shadow-tested edits
+- domain knowledge expansion from successful runs
+- conservative scheduler to avoid overfitting to one noisy day
+
+### Desktop Workflow
+
+- tray icon for quick actions
+- dashboard for briefings, backlog, learning, and service status
+- background service daemon
+- optional autostart on login
 
 ## Commands
 
-| Command | What it does |
-|---------|-------------|
-| `du tray` | System tray icon with quick actions |
-| `du dashboard` | Web UI for briefings, ideas, learning |
-| `du start` | Foreground observation service |
+| Command | Use it for |
+| --- | --- |
+| `du` | Launch the desktop experience |
+| `du setup` | Re-run the setup wizard |
+| `du dashboard` | Open the local web dashboard |
 | `du daily` | Run one daily cycle now |
-| `du research --idea "..."` | Research a specific idea |
-| `du research --auto` | Auto-pick and research the best backlog idea |
-| `du learn` | Run the learning engine |
+| `du daily --log-file path/to/log.txt` | Run from a manual activity log |
+| `du research --idea "..."` | Run the research pipeline for one idea |
+| `du research --auto` | Pick the strongest backlog idea |
+| `du learn` | Update the learning model |
 | `du config --focus "field1,field2"` | Set focus fields for idea filtering |
-| `du service start/stop/status` | Background daemon management |
+| `du service start` | Start the background daemon |
+| `du service status` | Check daemon state |
 | `du credential add/list` | Manage encrypted credentials |
-
-## Multi-provider AI backend
-
-| | Claude Code | Anthropic API | OpenAI / Codex | Kimi API |
-|---|---|---|---|---|
-| Setup | `claude /login` | `ANTHROPIC_API_KEY` | `OPENAI_API_KEY` | `MOONSHOT_API_KEY` or `KIMI_API_KEY` |
-| Best for | Local computer-use tasks | Claude model calls | GPT/Codex model calls | Long-context multimodal calls |
-| Browser/computer use | Native Claude Code tools | Not available | Via external tools | Via external tools |
-
-The system auto-detects which mode to use. Set `mode = "multi"` in `config/pipeline.toml` to route individual agents with provider prefixes such as `openai:gpt-5.5`, `kimi:kimi-k2.6`, or `claude_code:opus`.
-
-See `docs/MULTI_PROVIDER_BACKENDS.md` for examples and setup details.
+| `du export-computer-task --run-id ID` | Create a supervised browser task pack |
 
 ## Configuration
 
-All settings live in `config/pipeline.toml`:
+Most settings live in [config/pipeline.toml](config/pipeline.toml).
 
 ```toml
 [idea]
 primary_domains = ["AI tools", "product design"]
 secondary_domains = ["cognitive science", "business models"]
-focus_fields = ["economics research", "management"]  # ideas must land here
+focus_fields = ["economics research", "management"]
 include_threshold = 75
 max_ideas_per_cycle = 8
 
@@ -178,43 +193,73 @@ screenpipe_url = "http://localhost:3030"
 blacklist_apps = ["game", "video_player"]
 
 [automation]
-auto_execute = true
-checkpoint_policy = "best_effort"  # autonomous, no human gates
+auto_execute = false
+checkpoint_policy = "best_effort"
 ```
 
-## Architecture
+Use environment variables for model keys:
 
+```bash
+export ANTHROPIC_API_KEY="..."
+export OPENAI_API_KEY="..."
+export MOONSHOT_API_KEY="..."
 ```
+
+On Windows PowerShell:
+
+```powershell
+$env:ANTHROPIC_API_KEY = "..."
+$env:OPENAI_API_KEY = "..."
+$env:MOONSHOT_API_KEY = "..."
+```
+
+## Privacy And Safety
+
+- Raw screenshots stay local. The pipeline works from text summaries.
+- Only compressed summaries and selected task prompts are sent to model APIs.
+- No telemetry and no cross-user learning.
+- App and domain blacklists are configurable.
+- Credentials are stored in an encrypted local vault.
+- Browser automation uses explicit task packs and manual checkpoints for CAPTCHA, MFA, consent, and payment walls.
+- Final submission workflows require approval.
+
+## Project Map
+
+```text
 src/du_research/
-  agents/           AI agents (compressor, idea generator, judge, briefing, writer, reviewer)
-  stages/           Research pipeline stages (literature, feasibility, data, analysis, drafting, review)
-  ai_backend.py     Dual-mode abstraction (Claude Code CLI / Anthropic SDK)
-  circuit_breaker.py Three-state resilience with exponential backoff
-  engine.py         Main orchestrator (daily cycle, learning, observation service)
-  pipeline.py       6-stage research pipeline
-  rag.py            ChromaDB vector store for RAG knowledge base
-  dashboard.py      Web UI server
-  tray.py           System tray application
-  observation.py    Screenpipe integration + file fallback
+  agents/             model-backed agents
+  stages/             literature, feasibility, data, analysis, drafting, review
+  ai_backend.py       Claude Code, Anthropic, OpenAI, and Kimi routing
+  automation.py       browser task-pack runners
+  credential_broker.py encrypted credential vault
+  dashboard.py        local web UI
+  engine.py           daily cycle and learning orchestration
+  observation.py      screenpipe and file observation
+  pipeline.py         six-stage research pipeline
+  rag.py              ChromaDB or file-backed knowledge store
 ```
-
-## Privacy
-
-- All data stays on your device. Screenshots never leave.
-- Only compressed text summaries go to Claude (Code or API).
-- Configurable app and domain blacklists.
-- No telemetry, no cross-user learning, no phone-home.
 
 ## Testing
 
+The test suite uses `unittest`:
+
 ```bash
-PYTHONPATH=src python -m pytest tests/ -v  # 57 tests
+python -m unittest discover -s tests -v
 ```
+
+For a lightweight import check:
+
+```bash
+python -c "from du_research.ai_backend import create_backend; print(type(create_backend('claude_code')).__name__)"
+```
+
+## Notes For Contributors
+
+- Read [AGENTS.md](AGENTS.md) before making agent-assisted changes.
+- Keep optional integrations lazy at import time.
+- Do not commit runtime data from `workspace/`.
+- Keep browser automation supervised and allowlisted.
 
 ## License
 
-MIT
-
----
-
-<p align="center"><em>"The system that learns from you becomes, over time, more you than any tool you have ever used."</em></p>
+MIT. See [LICENSE](LICENSE).

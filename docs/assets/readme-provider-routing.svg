@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">Multi-provider model routing</title>
+  <desc id="desc">A chart showing how role aliases route to Claude Code, Anthropic API, OpenAI, and Kimi.</desc>
+  <rect width="960" height="360" rx="18" fill="#fbfcff"/>
+  <text x="48" y="54" fill="#111827" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="28" font-weight="700">Use the model that fits the job</text>
+  <text x="48" y="84" fill="#5b6475" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15">One backend interface. Provider prefixes only when you want to steer a specific agent.</text>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <g transform="translate(52 124)">
+      <rect width="180" height="154" rx="14" fill="#eef6ff" stroke="#b7dcff"/>
+      <text x="22" y="34" fill="#0f4c81" font-size="18" font-weight="700">Claude Code</text>
+      <text x="22" y="62" fill="#42526b" font-size="13">Browser tasks</text>
+      <text x="22" y="84" fill="#42526b" font-size="13">Local handoffs</text>
+      <text x="22" y="106" fill="#42526b" font-size="13">Computer-use packs</text>
+      <rect x="22" y="122" width="116" height="20" rx="10" fill="#d2eaff"/>
+      <text x="80" y="137" text-anchor="middle" fill="#0f4c81" font-size="12">claude_code:opus</text>
+    </g>
+    <g transform="translate(278 124)">
+      <rect width="180" height="154" rx="14" fill="#f5f1ff" stroke="#dacbff"/>
+      <text x="22" y="34" fill="#5732a8" font-size="18" font-weight="700">Anthropic</text>
+      <text x="22" y="62" fill="#42526b" font-size="13">Careful judging</text>
+      <text x="22" y="84" fill="#42526b" font-size="13">Long drafting</text>
+      <text x="22" y="106" fill="#42526b" font-size="13">Claude model calls</text>
+      <rect x="22" y="122" width="128" height="20" rx="10" fill="#e7ddff"/>
+      <text x="86" y="137" text-anchor="middle" fill="#5732a8" font-size="12">anthropic:sonnet</text>
+    </g>
+    <g transform="translate(504 124)">
+      <rect width="180" height="154" rx="14" fill="#ecfff9" stroke="#b7efdf"/>
+      <text x="22" y="34" fill="#08745f" font-size="18" font-weight="700">OpenAI</text>
+      <text x="22" y="62" fill="#42526b" font-size="13">Codex-style calls</text>
+      <text x="22" y="84" fill="#42526b" font-size="13">Fast scans</text>
+      <text x="22" y="106" fill="#42526b" font-size="13">JSON tasks</text>
+      <rect x="22" y="122" width="112" height="20" rx="10" fill="#ccf5e9"/>
+      <text x="78" y="137" text-anchor="middle" fill="#08745f" font-size="12">openai:gpt-5.5</text>
+    </g>
+    <g transform="translate(730 124)">
+      <rect width="180" height="154" rx="14" fill="#fff7e8" stroke="#f6d69a"/>
+      <text x="22" y="34" fill="#8a5a05" font-size="18" font-weight="700">Kimi</text>
+      <text x="22" y="62" fill="#42526b" font-size="13">Large context</text>
+      <text x="22" y="84" fill="#42526b" font-size="13">Multimodal input</text>
+      <text x="22" y="106" fill="#42526b" font-size="13">OpenAI-compatible</text>
+      <rect x="22" y="122" width="112" height="20" rx="10" fill="#fde6b4"/>
+      <text x="78" y="137" text-anchor="middle" fill="#8a5a05" font-size="12">kimi:kimi-k2.6</text>
+    </g>
+  </g>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <path d="M146 300 C240 328, 720 328, 814 300" fill="none" stroke="#d4d9e5" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="480" cy="318" r="22" fill="#111827"/>
+    <text x="480" y="323" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700">AIBackend</text>
+  </g>
+</svg>

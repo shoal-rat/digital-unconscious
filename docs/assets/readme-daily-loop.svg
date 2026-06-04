@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">Digital Unconscious daily loop</title>
+  <desc id="desc">A six-step flow from screen signals to daily briefing and research backlog.</desc>
+  <rect width="960" height="360" rx="18" fill="#0f1117"/>
+  <text x="48" y="54" fill="#f4f7fb" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="28" font-weight="700">Daily idea loop</text>
+  <text x="48" y="84" fill="#aab2c5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15">Quiet capture, compressed context, then a shortlist you can actually read.</text>
+
+  <defs>
+    <linearGradient id="blue" x1="0" x2="1">
+      <stop offset="0" stop-color="#64a8ff"/>
+      <stop offset="1" stop-color="#7ee7d4"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif" filter="url(#shadow)">
+    <g transform="translate(48 126)">
+      <rect width="128" height="112" rx="12" fill="#1b2130" stroke="#2e3850"/>
+      <circle cx="64" cy="34" r="17" fill="#64a8ff"/>
+      <text x="64" y="72" text-anchor="middle" fill="#f4f7fb" font-size="15" font-weight="700">Observe</text>
+      <text x="64" y="94" text-anchor="middle" fill="#aab2c5" font-size="12">screen text</text>
+    </g>
+    <path d="M184 182 H238" stroke="url(#blue)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M238 182 l-10 -7 v14 z" fill="#7ee7d4"/>
+
+    <g transform="translate(246 126)">
+      <rect width="128" height="112" rx="12" fill="#1b2130" stroke="#2e3850"/>
+      <circle cx="64" cy="34" r="17" fill="#7ee7d4"/>
+      <text x="64" y="72" text-anchor="middle" fill="#f4f7fb" font-size="15" font-weight="700">Compress</text>
+      <text x="64" y="94" text-anchor="middle" fill="#aab2c5" font-size="12">30-min windows</text>
+    </g>
+    <path d="M382 182 H436" stroke="url(#blue)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M436 182 l-10 -7 v14 z" fill="#7ee7d4"/>
+
+    <g transform="translate(444 126)">
+      <rect width="128" height="112" rx="12" fill="#1b2130" stroke="#2e3850"/>
+      <circle cx="64" cy="34" r="17" fill="#a78bfa"/>
+      <text x="64" y="72" text-anchor="middle" fill="#f4f7fb" font-size="15" font-weight="700">Connect</text>
+      <text x="64" y="94" text-anchor="middle" fill="#aab2c5" font-size="12">new ideas</text>
+    </g>
+    <path d="M580 182 H634" stroke="url(#blue)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M634 182 l-10 -7 v14 z" fill="#7ee7d4"/>
+
+    <g transform="translate(642 126)">
+      <rect width="128" height="112" rx="12" fill="#1b2130" stroke="#2e3850"/>
+      <circle cx="64" cy="34" r="17" fill="#f6c177"/>
+      <text x="64" y="72" text-anchor="middle" fill="#f4f7fb" font-size="15" font-weight="700">Judge</text>
+      <text x="64" y="94" text-anchor="middle" fill="#aab2c5" font-size="12">score &amp; filter</text>
+    </g>
+    <path d="M778 182 H832" stroke="url(#blue)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M832 182 l-10 -7 v14 z" fill="#7ee7d4"/>
+
+    <g transform="translate(840 126)">
+      <rect width="80" height="112" rx="12" fill="#1b2130" stroke="#2e3850"/>
+      <circle cx="40" cy="34" r="17" fill="#95e06c"/>
+      <text x="40" y="72" text-anchor="middle" fill="#f4f7fb" font-size="14" font-weight="700">Brief</text>
+      <text x="40" y="94" text-anchor="middle" fill="#aab2c5" font-size="12">daily</text>
+    </g>
+  </g>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <rect x="48" y="280" width="864" height="34" rx="17" fill="#151a25" stroke="#263048"/>
+    <rect x="59" y="290" width="144" height="14" rx="7" fill="#64a8ff"/>
+    <rect x="214" y="290" width="178" height="14" rx="7" fill="#7ee7d4"/>
+    <rect x="403" y="290" width="132" height="14" rx="7" fill="#a78bfa"/>
+    <rect x="546" y="290" width="208" height="14" rx="7" fill="#f6c177"/>
+    <rect x="765" y="290" width="136" height="14" rx="7" fill="#95e06c"/>
+    <text x="48" y="338" fill="#7f8aa3" font-size="12">The system keeps raw capture local and works mostly from compressed text summaries.</text>
+  </g>
+</svg>
