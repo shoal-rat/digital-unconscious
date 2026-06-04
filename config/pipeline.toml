@@ -130,3 +130,10 @@ observation_days = 30
 daily_cycle_days = 180
 browser_artifact_days = 30
 service_log_max_mb = 50
+# Bounded long-term stores (enforced on write + by maintenance) so months of
+# daily use cannot grow these files — or the prompts that draw on them — forever.
+rag_max_documents = 2000        # cap RAG knowledge store size
+idea_backlog_max = 500          # cap idea-backlog entries
+domain_knowledge_history = 5    # shallow domain-knowledge snapshots kept
+prompt_versions_kept = 10       # prompt-evolution version files per agent
+evolution_log_max_lines = 500   # evolution_log.jsonl lines per agent

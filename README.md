@@ -167,6 +167,7 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 - optional extended-thinking budgets for idea generation and judging
 - per-cycle token and cost tracking in the briefing footer and dashboard
 - circuit breaker with retries and exponential backoff
+- bounded long-term memory: deduplicated RAG store, consolidated profiles, and retention caps so months of use never bloat prompts or disk
 
 ## Commands
 

@@ -1,5 +1,33 @@
 # Releases
 
+## v1.5.0 - Bounded Long-Term Memory
+
+Keeps months of daily use from bloating prompts or disk. The prompt context was
+already well-bounded; these changes bound the on-disk/in-memory stores it draws on.
+
+- Fixed an accelerating bug: `domain_knowledge.json` nested the entire previous
+  file under `previous_version` every learning run (unbounded JSON depth). It now
+  keeps a flat, bounded history of shallow snapshots; old nested files self-heal.
+- RAG file store upserts by document id (re-ingesting a paper no longer duplicates
+  it) and keeps only the newest `[retention].rag_max_documents`.
+- Prompt evolution retains only the newest N version files per agent, rotates
+  `evolution_log.jsonl`, and bounds the stacked "Learned refinement" blocks so an
+  agent's active prompt can't grow forever.
+- Idea backlog is capped to `[retention].idea_backlog_max`.
+- `WorkspaceMaintenance` enforces every cap as a safety net (also reclaiming files
+  that grew before the caps existed).
+- New `[retention]` knobs: `rag_max_documents`, `idea_backlog_max`,
+  `domain_knowledge_history`, `prompt_versions_kept`, `evolution_log_max_lines`.
+
+Approach informed by long-running-agent memory research (Generative Agents,
+MemGPT, recursive summarization): dedup, consolidate to a fixed size, and cap —
+rather than bolt on a heavy memory subsystem, since the prompt path was already
+bounded.
+
+Tests: 70 -> 74 passing.
+
+---
+
 ## v1.4.0 - Failover, Thinking, Usage Tracking, Import Fix
 
 Reliability and capability:

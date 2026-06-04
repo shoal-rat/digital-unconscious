@@ -361,6 +361,114 @@ class CircuitBreakerTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Bounded long-term memory tests
+# ---------------------------------------------------------------------------
+
+
+class BoundedMemoryTests(unittest.TestCase):
+    def test_domain_knowledge_does_not_nest_and_history_is_bounded(self) -> None:
+        from du_research.agents.learning_engine import DomainKnowledgeExpander
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            expander = DomainKnowledgeExpander(ws, history_limit=2)
+            signals = [{"domain": "ai"}, {"domain": "econ"}]
+            for _ in range(4):
+                expander.expand(signals)
+            data = json.loads((ws / "knowledge" / "domain_knowledge.json").read_text(encoding="utf-8"))
+            self.assertNotIn("previous_version", data)  # the recursive-nesting bomb is gone
+            self.assertIn("history", data)
+            self.assertLessEqual(len(data["history"]), 2)
+            # history entries are shallow snapshots, never nested stores
+            for entry in data["history"]:
+                self.assertNotIn("history", entry)
+                self.assertNotIn("previous_version", entry)
+
+    def test_rag_fallback_dedups_by_id_and_caps_documents(self) -> None:
+        from du_research.rag import RAGStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = RAGStore(Path(tmp), force_file_mode=True, max_documents=3)
+            # Re-ingesting the same paper (same DOI -> same id) must not duplicate.
+            store.add_paper("Same Title", "abstract", doi="10.1/x")
+            store.add_paper("Same Title", "abstract revised", doi="10.1/x")
+            self.assertEqual(store.count(), 1)
+            # Adding beyond the cap keeps only the newest max_documents.
+            for i in range(5):
+                store.add_paper(f"Title {i}", f"abstract {i}", doi=f"10.1/{i}")
+            self.assertEqual(store.count(), 3)
+
+    def test_prompt_evolution_retention_is_bounded(self) -> None:
+        from du_research.agents.learning_engine import PromptEvolutionEngine
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = FakeBackend(default=json.dumps({
+                "edit": "Be more specific.",
+                "location": "end",
+                "reasoning": "clarity",
+            }))
+            engine = PromptEvolutionEngine(
+                backend=fake,
+                prompts_dir=Path(tmp),
+                min_runs=1,
+                versions_kept=3,
+                log_max_lines=5,
+                max_refinements=2,
+            )
+            run_outcomes = {"run_count": 5, "patterns": [{"failure": "too vague"}]}
+            prompt = "BASE PROMPT"
+            for _ in range(6):
+                outcome = engine.evolve("idea_generator", prompt, run_outcomes)
+                self.assertTrue(outcome.get("evolved"))
+                prompt = outcome["proposed_prompt"]  # feed back to simulate accumulation
+            agent_dir = Path(tmp) / "idea_generator"
+            # version files capped, log rotated, refinement blocks bounded
+            self.assertEqual(len(list(agent_dir.glob("v*_proposed.txt"))), 3)
+            log_lines = [l for l in (agent_dir / "evolution_log.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+            self.assertEqual(len(log_lines), 5)
+            self.assertLessEqual(prompt.count("Learned refinement:"), 2)
+
+    def test_maintenance_caps_growing_stores_and_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            cfg = AppConfig()
+            cfg.retention.rag_max_documents = 2
+            cfg.retention.idea_backlog_max = 2
+            cfg.retention.prompt_versions_kept = 1
+            cfg.retention.evolution_log_max_lines = 1
+
+            (ws / "knowledge").mkdir(parents=True)
+            (ws / "knowledge" / "rag_documents.jsonl").write_text(
+                "\n".join(json.dumps({"id": str(i), "text": "t"}) for i in range(5)) + "\n",
+                encoding="utf-8",
+            )
+            (ws / "ideas").mkdir(parents=True)
+            (ws / "ideas" / "idea_backlog.jsonl").write_text(
+                "\n".join(json.dumps({"title": f"t{i}"}) for i in range(5)) + "\n",
+                encoding="utf-8",
+            )
+            agent_dir = ws / "prompts" / "idea_generator"
+            agent_dir.mkdir(parents=True)
+            for i in range(1, 5):
+                (agent_dir / f"v{i}.0.0_proposed.txt").write_text("x", encoding="utf-8")
+            (agent_dir / "evolution_log.jsonl").write_text(
+                "\n".join(json.dumps({"v": i}) for i in range(5)) + "\n", encoding="utf-8"
+            )
+
+            result = WorkspaceMaintenance(ws, cfg).run()
+
+            def nonempty(path: Path) -> int:
+                return len([l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()])
+
+            self.assertEqual(nonempty(ws / "knowledge" / "rag_documents.jsonl"), 2)
+            self.assertEqual(nonempty(ws / "ideas" / "idea_backlog.jsonl"), 2)
+            self.assertEqual(len(list(agent_dir.glob("v*_proposed.txt"))), 1)
+            self.assertEqual(nonempty(agent_dir / "evolution_log.jsonl"), 1)
+            self.assertEqual(result["capped_stores"]["rag_documents"], 3)
+            self.assertEqual(result["pruned_prompt_versions"], 3)
+
+
+# ---------------------------------------------------------------------------
 # Observation tests
 # ---------------------------------------------------------------------------
 

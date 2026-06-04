@@ -1,6 +1,7 @@
-# Implementation Status — v1.4.0
+# Implementation Status — v1.5.0
 
-## Recent Additions (v1.3–v1.4)
+## Recent Additions (v1.3–v1.5)
+- [x] Bounded long-term memory: domain-knowledge nesting fix, RAG dedup + size cap, prompt-evolution retention, idea-backlog cap, retention knobs wired into maintenance
 - [x] Multi-provider backends: Claude Code, Anthropic API, OpenAI/Codex, Kimi/Moonshot
 - [x] Provider failover across the configured `fallback_order` (and in `auto` when a key is set)
 - [x] Extended-thinking / reasoning-effort budgets for idea generation and judging

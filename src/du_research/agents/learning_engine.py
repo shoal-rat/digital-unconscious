@@ -226,6 +226,9 @@ class PromptEvolutionEngine:
     backend: AIBackend
     prompts_dir: Path
     min_runs: int = 3
+    versions_kept: int = 10        # retained v*_proposed.txt files per agent
+    log_max_lines: int = 500       # retained evolution_log.jsonl lines per agent
+    max_refinements: int = 5       # "Learned refinement" blocks kept in a prompt
 
     def evolve(
         self,
@@ -253,7 +256,6 @@ class PromptEvolutionEngine:
         agent_dir = self.prompts_dir / agent_name
         agent_dir.mkdir(parents=True, exist_ok=True)
         evolution_log = agent_dir / "evolution_log.jsonl"
-        current_version = _count_versions(agent_dir)
 
         prompt = (
             f"You are a prompt engineer analyzing agent performance data.\n\n"
@@ -294,12 +296,14 @@ class PromptEvolutionEngine:
             else:
                 return {"evolved": False, "reason": "Could not parse edit proposal"}
 
-        new_version = current_version + 1
+        new_version = _next_version(agent_dir)
         version_name = f"v{new_version}.0.0"
 
-        # Save the proposed prompt
+        # Save the proposed prompt (bounding stacked "Learned refinement" blocks).
         prompt_file = agent_dir / f"{version_name}_proposed.txt"
-        proposed_prompt = current_prompt.rstrip() + "\n\nLearned refinement:\n" + edit_data.get("edit", "").strip() + "\n"
+        proposed_prompt = _bound_refinements(
+            current_prompt, edit_data.get("edit", ""), self.max_refinements
+        )
         prompt_file.write_text(
             f"# Edit: {edit_data.get('edit', '')}\n"
             f"# Location: {edit_data.get('location', '')}\n"
@@ -307,6 +311,7 @@ class PromptEvolutionEngine:
             f"{proposed_prompt}",
             encoding="utf-8",
         )
+        _prune_prompt_versions(agent_dir, self.versions_kept)
 
         # Log the evolution
         log_entry = {
@@ -319,6 +324,7 @@ class PromptEvolutionEngine:
         }
         with evolution_log.open("a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        _rotate_jsonl(evolution_log, self.log_max_lines)
 
         return {
             "evolved": True,
@@ -333,6 +339,60 @@ def _count_versions(agent_dir: Path) -> int:
     return sum(1 for f in agent_dir.glob("v*.txt"))
 
 
+def _version_number(path: Path) -> int:
+    try:
+        return int(path.name.split(".", 1)[0].lstrip("v"))
+    except ValueError:
+        return 0
+
+
+def _next_version(agent_dir: Path) -> int:
+    """Next version number from the max existing one (robust to pruning)."""
+    numbers = [_version_number(f) for f in agent_dir.glob("v*_proposed.txt")]
+    return (max(numbers) + 1) if numbers else 1
+
+
+def _prune_prompt_versions(agent_dir: Path, keep: int) -> None:
+    if keep <= 0:
+        return
+    files = sorted(agent_dir.glob("v*_proposed.txt"), key=_version_number)
+    for old in files[:-keep]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+
+def _rotate_jsonl(path: Path, max_lines: int) -> None:
+    if max_lines <= 0 or not path.exists():
+        return
+    lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    if len(lines) <= max_lines:
+        return
+    path.write_text("\n".join(lines[-max_lines:]) + "\n", encoding="utf-8")
+
+
+def _bound_refinements(base_prompt: str, new_edit: str, max_blocks: int) -> str:
+    """Append a learned-refinement block, keeping at most *max_blocks* of them.
+
+    Prevents an agent's active prompt from growing one stacked refinement block
+    per evolution forever.
+    """
+    marker = "Learned refinement:\n"
+    sep = "\n\n" + marker
+    head, *prior = base_prompt.split(sep)
+    refinements = [block.strip() for block in prior if block.strip()]
+    new_edit = (new_edit or "").strip()
+    if new_edit:
+        refinements.append(new_edit)
+    if max_blocks and max_blocks > 0:
+        refinements = refinements[-max_blocks:]
+    rebuilt = head.rstrip()
+    for block in refinements:
+        rebuilt += sep + block + "\n"
+    return rebuilt
+
+
 # ---------------------------------------------------------------------------
 # 4. Domain Knowledge Expander
 # ---------------------------------------------------------------------------
@@ -341,6 +401,7 @@ def _count_versions(agent_dir: Path) -> int:
 @dataclass
 class DomainKnowledgeExpander:
     workspace_dir: Path
+    history_limit: int = 5
 
     def expand(self, signals: list[dict[str, Any]]) -> dict[str, Any]:
         knowledge_dir = self.workspace_dir / "knowledge"
@@ -368,11 +429,23 @@ class DomainKnowledgeExpander:
                 if key:
                     paper_counter[key] += 1
 
+        # Keep a flat, bounded history of prior snapshots rather than nesting the
+        # entire previous file under "previous_version" (which grew without bound,
+        # one nesting level per run). Old nested files self-heal on the next write.
+        history = existing.get("history", []) if isinstance(existing, dict) else []
+        if isinstance(existing, dict) and existing.get("updated_at"):
+            history = [{
+                "updated_at": existing.get("updated_at"),
+                "domain_count": len(existing.get("domains", [])),
+                "paper_count": len(existing.get("papers", [])),
+            }] + history
+        history = history[: max(0, self.history_limit)]
+
         knowledge = {
             "updated_at": iso_now(),
             "domains": [{"domain": domain, "count": count} for domain, count in domain_counter.most_common(10)],
             "papers": [{"paper": paper, "count": count} for paper, count in paper_counter.most_common(25)],
-            "previous_version": existing,
+            "history": history,
         }
         base_path.write_text(json.dumps(knowledge, indent=2, ensure_ascii=False), encoding="utf-8")
         return {"knowledge_path": str(base_path), "domain_count": len(knowledge["domains"])}
@@ -562,6 +635,7 @@ def run_full_learning_cycle(
     backend: AIBackend,
     current_prompts: dict[str, str],
     min_runs_before_evolution: int = 3,
+    retention: Any = None,
 ) -> dict[str, Any]:
     signals = load_signals(workspace_dir)
     if not signals:
@@ -578,7 +652,13 @@ def run_full_learning_cycle(
     prompt_results: list[dict[str, Any]] = []
     active_prompts = load_active_prompts(workspace_dir)
     if scheduler_result.get("allow_prompt_evolution"):
-        engine = PromptEvolutionEngine(backend=backend, prompts_dir=workspace_dir / "prompts", min_runs=min_runs_before_evolution)
+        engine = PromptEvolutionEngine(
+            backend=backend,
+            prompts_dir=workspace_dir / "prompts",
+            min_runs=min_runs_before_evolution,
+            versions_kept=getattr(retention, "prompt_versions_kept", 10),
+            log_max_lines=getattr(retention, "evolution_log_max_lines", 500),
+        )
         for agent_name, prompt in current_prompts.items():
             outcome = engine.evolve(agent_name, prompt, run_outcomes)
             prompt_results.append({"agent": agent_name, "status": "evolved" if outcome.get("evolved") else "skipped", **outcome})
