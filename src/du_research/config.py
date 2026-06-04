@@ -171,6 +171,13 @@ class RetentionSection:
     daily_cycle_days: int = 180
     browser_artifact_days: int = 30
     service_log_max_mb: int = 50
+    # Bounded long-term stores (enforced on write and by maintenance) so months
+    # of daily use cannot grow these files without limit.
+    rag_max_documents: int = 2000        # cap RAG knowledge store size
+    idea_backlog_max: int = 500          # cap idea-backlog entries
+    domain_knowledge_history: int = 5    # shallow domain-knowledge snapshots kept
+    prompt_versions_kept: int = 10       # prompt-evolution version files per agent
+    evolution_log_max_lines: int = 500   # evolution_log.jsonl lines per agent
 
 
 @dataclass

@@ -9,6 +9,13 @@ from du_research.config import AppConfig
 from du_research.utils import iso_now
 
 
+def _safe_version(path: Path) -> int:
+    try:
+        return int(path.name.split(".", 1)[0].lstrip("v"))
+    except ValueError:
+        return 0
+
+
 class WorkspaceMaintenance:
     def __init__(self, workspace_dir: Path, config: AppConfig):
         self.workspace_dir = workspace_dir
@@ -19,12 +26,16 @@ class WorkspaceMaintenance:
         removed_daily = self._prune_daily_cycles()
         removed_browser = self._prune_browser_artifacts()
         trimmed_service_log = self._trim_service_log()
+        capped_stores = self._cap_growing_stores()
+        pruned_prompt_versions = self._prune_prompt_history()
         return {
             "timestamp": iso_now(),
             "removed_observation_files": removed_observation,
             "removed_daily_cycles": removed_daily,
             "removed_browser_artifacts": removed_browser,
             "trimmed_service_log": trimmed_service_log,
+            "capped_stores": capped_stores,
+            "pruned_prompt_versions": pruned_prompt_versions,
         }
 
     def _prune_observation(self) -> int:
@@ -71,6 +82,57 @@ class WorkspaceMaintenance:
             data = data[newline_index + 1 :]
         log_path.write_bytes(data)
         return True
+
+    def _cap_growing_stores(self) -> dict[str, int]:
+        """Trim the append-only knowledge/backlog stores to their retention caps.
+
+        A safety net that also reclaims files which grew before per-write caps
+        existed (e.g. an already-long-running install).
+        """
+        retention = self.config.retention
+        return {
+            "rag_documents": self._cap_jsonl(
+                self.workspace_dir / "knowledge" / "rag_documents.jsonl",
+                retention.rag_max_documents,
+            ),
+            "idea_backlog": self._cap_jsonl(
+                self.workspace_dir / "ideas" / "idea_backlog.jsonl",
+                retention.idea_backlog_max,
+            ),
+        }
+
+    def _cap_jsonl(self, path: Path, max_lines: int) -> int:
+        """Keep only the newest ``max_lines`` non-empty lines; return removed count."""
+        if max_lines <= 0 or not path.exists():
+            return 0
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        if len(lines) <= max_lines:
+            return 0
+        removed = len(lines) - max_lines
+        path.write_text("\n".join(lines[-max_lines:]) + "\n", encoding="utf-8")
+        return removed
+
+    def _prune_prompt_history(self) -> int:
+        """Keep newest N prompt versions per agent and rotate evolution logs."""
+        retention = self.config.retention
+        prompts_dir = self.workspace_dir / "prompts"
+        if not prompts_dir.exists():
+            return 0
+        keep = max(0, retention.prompt_versions_kept)
+        removed = 0
+        for agent_dir in prompts_dir.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            versions = sorted(agent_dir.glob("v*_proposed.txt"), key=_safe_version)
+            stale = versions[:-keep] if keep else versions
+            for old in stale:
+                try:
+                    old.unlink()
+                    removed += 1
+                except OSError:
+                    continue
+            self._cap_jsonl(agent_dir / "evolution_log.jsonl", retention.evolution_log_max_lines)
+        return removed
 
     def _prune_files_older_than(self, directory: Path, cutoff: datetime) -> int:
         removed = 0

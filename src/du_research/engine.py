@@ -138,7 +138,11 @@ class DigitalUnconsciousEngine:
         # Use file-based RAG in temp directories (avoids ChromaDB locking issues)
         import tempfile as _tf
         _in_temp = str(self.workspace).startswith(_tf.gettempdir())
-        self.rag = RAGStore(self.workspace, force_file_mode=_in_temp)
+        self.rag = RAGStore(
+            self.workspace,
+            force_file_mode=_in_temp,
+            max_documents=config.retention.rag_max_documents,
+        )
         self.task_queue = TaskQueue(self.workspace)
 
     # ------------------------------------------------------------------
@@ -634,6 +638,7 @@ class DigitalUnconsciousEngine:
             backend=self.backend,
             current_prompts=current_prompts,
             min_runs_before_evolution=self.config.learning.min_runs_before_evolution,
+            retention=self.config.retention,
         )
 
     # ------------------------------------------------------------------
@@ -742,7 +747,18 @@ class DigitalUnconsciousEngine:
                 handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 existing.append(entry)
                 appended += 1
+        if appended:
+            self._cap_backlog(backlog_path, self.config.retention.idea_backlog_max)
         return appended
+
+    def _cap_backlog(self, path: Path, max_entries: int) -> None:
+        """Keep only the newest ``max_entries`` backlog lines."""
+        if not max_entries or max_entries <= 0:
+            return
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        if len(lines) <= max_entries:
+            return
+        path.write_text("\n".join(lines[-max_entries:]) + "\n", encoding="utf-8")
 
     def _idea_exists(self, existing: list[dict[str, Any]], title: str, *, idea_id: str | None = None) -> bool:
         normalized = self._idea_key(title)

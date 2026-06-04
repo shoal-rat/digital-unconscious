@@ -46,9 +46,10 @@ class RAGStore:
     """
 
     def __init__(self, workspace_dir: Path, collection_name: str = "knowledge",
-                 force_file_mode: bool = False):
+                 force_file_mode: bool = False, max_documents: int = 2000):
         self.workspace_dir = workspace_dir
         self.collection_name = collection_name
+        self.max_documents = max_documents
         self._collection = None
         self._client = None
         self._fallback_docs: list[dict[str, Any]] | None = None
@@ -317,11 +318,22 @@ class RAGStore:
     def _fallback_add(self, doc_id: str, text: str, meta: dict[str, Any]) -> None:
         path = self._fallback_path()
         path.parent.mkdir(parents=True, exist_ok=True)
+        docs = list(self._load_fallback_docs())
         entry = {"id": doc_id, "text": text, "metadata": meta}
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        # Invalidate cache
-        self._fallback_docs = None
+        # Upsert by id (re-ingesting the same paper must not duplicate it) and keep
+        # only the newest ``max_documents`` so the store stays bounded over months.
+        for index, existing in enumerate(docs):
+            if existing.get("id") == doc_id:
+                docs[index] = entry
+                break
+        else:
+            docs.append(entry)
+        if self.max_documents and len(docs) > self.max_documents:
+            docs = docs[-self.max_documents:]
+        with path.open("w", encoding="utf-8") as f:
+            for doc in docs:
+                f.write(json.dumps(doc, ensure_ascii=False) + "\n")
+        self._fallback_docs = docs
 
     def _fallback_query(
         self,

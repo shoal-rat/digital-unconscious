@@ -260,6 +260,7 @@ class ResearchPipeline:
                             "analysis_coder": self.analysis_coder.system_prompt if self.analysis_coder else "",
                         },
                         min_runs_before_evolution=self.config.learning.min_runs_before_evolution,
+                        retention=self.config.retention,
                     )
                 else:
                     aggregate_result = learning.update_learning_model(
