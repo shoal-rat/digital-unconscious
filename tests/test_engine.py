@@ -21,8 +21,12 @@ from du_research.ai_backend import (
     ClaudeCodeBackend,
     AnthropicAPIBackend,
     KimiAPIBackend,
+    OpenAIAPIBackend,
     MultiProviderBackend,
     create_backend,
+    _claude_code_think_keyword,
+    _reasoning_effort,
+    _thinking_budget,
 )
 from du_research.circuit_breaker import CircuitBreaker, CircuitState
 from du_research.observation import (
@@ -133,6 +137,156 @@ class AIBackendTests(unittest.TestCase):
         self.assertNotIn("temperature", completions.kwargs)
         self.assertEqual(completions.kwargs["extra_body"]["thinking"], {"type": "disabled"})
 
+    # -- Provider fallback ---------------------------------------------------
+
+    def test_multi_provider_fails_over_to_next_available_provider(self) -> None:
+        failing = FakeBackend(default="")        # empty response == failure
+        working = FakeBackend(default="ok")
+        router = MultiProviderBackend(
+            api_key="anthropic-key",
+            openai_api_key="openai-key",
+            _providers={"anthropic": failing, "openai": working},
+        )
+        response = router.call("hello")
+        self.assertTrue(response.ok)
+        self.assertEqual(response.text, "ok")
+        self.assertEqual(response.raw["router_provider"], "openai")
+        self.assertEqual(response.raw["router_fallback_from"], "anthropic")
+        self.assertEqual(len(failing.calls), 1)
+        self.assertEqual(len(working.calls), 1)
+        # A fallback provider is not handed the primary's model name.
+        self.assertIsNone(working.calls[0]["model"])
+
+    def test_multi_provider_no_failover_when_disabled(self) -> None:
+        failing = FakeBackend(default="")
+        working = FakeBackend(default="ok")
+        router = MultiProviderBackend(
+            api_key="anthropic-key",
+            openai_api_key="openai-key",
+            enable_fallback=False,
+            _providers={"anthropic": failing, "openai": working},
+        )
+        response = router.call("hello")
+        self.assertFalse(response.ok)
+        self.assertEqual(len(working.calls), 0)
+
+    def test_explicit_prefix_still_falls_back(self) -> None:
+        failing = FakeBackend(default="")
+        working = FakeBackend(default="ok")
+        router = MultiProviderBackend(
+            api_key="anthropic-key",
+            openai_api_key="openai-key",
+            fallback_order=["anthropic", "openai"],
+            _providers={"anthropic": failing, "openai": working},
+        )
+        response = router.call("hello", model="anthropic:opus")
+        self.assertTrue(response.ok)
+        self.assertEqual(response.raw["router_provider"], "openai")
+
+    def test_create_backend_auto_uses_router_when_key_present(self) -> None:
+        old = os.environ.get("ANTHROPIC_API_KEY")
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        try:
+            backend = create_backend("auto")
+            self.assertIsInstance(backend, MultiProviderBackend)
+        finally:
+            if old is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = old
+
+    # -- Extended thinking / reasoning --------------------------------------
+
+    def test_anthropic_extended_thinking_sets_budget_and_drops_temperature(self) -> None:
+        class FakeMessages:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                block = type("Block", (), {"text": "answer"})()
+                usage = type("Usage", (), {"input_tokens": 5, "output_tokens": 7})()
+                return type("Resp", (), {"content": [block], "usage": usage, "stop_reason": "end_turn"})()
+
+        messages = FakeMessages()
+        client = type("Client", (), {"messages": messages})()
+        backend = AnthropicAPIBackend(_client=client)
+        response = backend.call("hi", think=8192, max_tokens=2048)
+        self.assertTrue(response.ok)
+        assert messages.kwargs is not None
+        self.assertEqual(messages.kwargs["thinking"], {"type": "enabled", "budget_tokens": 8192})
+        self.assertNotIn("temperature", messages.kwargs)
+        # max_tokens must leave headroom beyond the thinking budget.
+        self.assertEqual(messages.kwargs["max_tokens"], 8192 + 2048)
+
+    def test_anthropic_without_thinking_keeps_temperature(self) -> None:
+        class FakeMessages:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                block = type("Block", (), {"text": "answer"})()
+                return type("Resp", (), {"content": [block], "usage": None, "stop_reason": "end_turn"})()
+
+        messages = FakeMessages()
+        client = type("Client", (), {"messages": messages})()
+        backend = AnthropicAPIBackend(_client=client)
+        backend.call("hi", mode="strict")
+        assert messages.kwargs is not None
+        self.assertIn("temperature", messages.kwargs)
+        self.assertNotIn("thinking", messages.kwargs)
+
+    def test_openai_reasoning_effort_from_think(self) -> None:
+        class FakeCompletions:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                message = type("Message", (), {"content": "ok"})()
+                choice = type("Choice", (), {"message": message, "finish_reason": "stop"})()
+                return type("Response", (), {"choices": [choice], "usage": None})()
+
+        completions = FakeCompletions()
+        client = type("Client", (), {"chat": type("Chat", (), {"completions": completions})()})()
+        backend = OpenAIAPIBackend(_client=client)
+        backend.call("hi", think="high")
+        assert completions.kwargs is not None
+        self.assertEqual(completions.kwargs["reasoning_effort"], "high")
+        self.assertNotIn("temperature", completions.kwargs)
+
+    def test_kimi_thinking_can_be_forced_on_via_think(self) -> None:
+        class FakeCompletions:
+            def __init__(self) -> None:
+                self.kwargs: dict[str, Any] | None = None
+
+            def create(self, **kwargs: Any):
+                self.kwargs = kwargs
+                message = type("Message", (), {"content": "{}"})()
+                choice = type("Choice", (), {"message": message, "finish_reason": "stop"})()
+                return type("Response", (), {"choices": [choice], "usage": None})()
+
+        completions = FakeCompletions()
+        client = type("Client", (), {"chat": type("Chat", (), {"completions": completions})()})()
+        backend = KimiAPIBackend(_client=client)
+        # A json_schema would normally disable Kimi thinking; think= forces it on.
+        backend.call("hi", think=4096, json_schema={"type": "object"})
+        assert completions.kwargs is not None
+        self.assertEqual(completions.kwargs["extra_body"]["thinking"], {"type": "enabled"})
+
+    def test_thinking_helpers_normalise_budget_and_effort(self) -> None:
+        self.assertEqual(_thinking_budget(None), 0)
+        self.assertEqual(_thinking_budget(False), 0)
+        self.assertEqual(_thinking_budget("high"), 16384)
+        self.assertEqual(_thinking_budget(4096), 4096)
+        self.assertIsNone(_reasoning_effort(None))
+        self.assertEqual(_reasoning_effort(2048), "low")
+        self.assertEqual(_reasoning_effort("medium"), "medium")
+        self.assertIsNone(_claude_code_think_keyword(None))
+        self.assertEqual(_claude_code_think_keyword(20000), "ultrathink")
+        self.assertEqual(_claude_code_think_keyword(2048), "think hard")
+
 
 # ---------------------------------------------------------------------------
 # Circuit Breaker tests
@@ -180,6 +334,30 @@ class CircuitBreakerTests(unittest.TestCase):
         stats = cb.stats
         self.assertEqual(stats["total_calls"], 1)
         self.assertEqual(stats["total_failures"], 0)
+
+    def test_usage_tracking_accumulates_and_resets(self) -> None:
+        class TokenBackend:
+            def call(self, prompt: str, **kwargs: Any) -> AIResponse:
+                return AIResponse(
+                    text="ok",
+                    model="claude-sonnet-4-6",
+                    input_tokens=10,
+                    output_tokens=5,
+                    cost_usd=0.002,
+                )
+
+        cb = CircuitBreaker(backend=TokenBackend(), max_retries=1)
+        cb.call("a")
+        cb.call("b")
+        usage = cb.usage
+        self.assertEqual(usage["calls"], 2)
+        self.assertEqual(usage["total_tokens"], 30)
+        self.assertAlmostEqual(usage["cost_usd"], 0.004, places=6)
+        self.assertEqual(usage["by_model"]["claude-sonnet-4-6"]["calls"], 2)
+        cb.reset_usage()
+        self.assertEqual(cb.usage["calls"], 0)
+        self.assertEqual(cb.usage["total_tokens"], 0)
+        self.assertEqual(cb.usage["by_model"], {})
 
 
 # ---------------------------------------------------------------------------

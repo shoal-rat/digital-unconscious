@@ -83,6 +83,8 @@ class DigitalUnconsciousEngine:
         backend_kwargs["default_model"] = config.ai.default_model
         backend_kwargs["openai_default_model"] = config.ai.openai_default_model
         backend_kwargs["kimi_default_model"] = config.ai.kimi_default_model
+        backend_kwargs["enable_fallback"] = config.ai.fallback
+        backend_kwargs["fallback_order"] = config.ai.fallback_order
         raw_backend: AIBackend = create_backend(config.ai.mode, **backend_kwargs)
 
         # Wrap in circuit breaker
@@ -109,11 +111,13 @@ class DigitalUnconsciousEngine:
             primary_domains=config.idea.primary_domains,
             secondary_domains=config.idea.secondary_domains,
             focus_fields=config.idea.focus_fields,
+            think=config.ai.think_idea_budget,
         )
         self.judge = JudgeAgent(
             backend=self.backend,
             model=config.ai.judge_model,
             system_prompt=prompt_overrides.get("judge"),
+            think=config.ai.think_judge_budget,
         )
         self.briefing_agent = BriefingAgent(
             backend=self.backend,
@@ -160,6 +164,10 @@ class DigitalUnconsciousEngine:
         """
         date_str = date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
         logger.info("Starting daily cycle for %s", date_str)
+
+        # Reset usage counters so usage.json reflects only this cycle.
+        if hasattr(self.backend, "reset_usage"):
+            self.backend.reset_usage()
 
         # 1. Observe
         frames = frames_override if frames_override is not None else self._observe(log_file)
@@ -365,6 +373,23 @@ class DigitalUnconsciousEngine:
         if user_knowledge_dir.exists():
             self.rag.add_knowledge_files(user_knowledge_dir)
 
+        # Record per-cycle model usage (every backend call flows through the breaker).
+        usage = self.backend.usage if hasattr(self.backend, "usage") else {}
+        (output_dir / "usage.json").write_text(
+            json.dumps(usage, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        if usage.get("total_tokens") or usage.get("cost_usd"):
+            try:
+                cost = usage.get("cost_usd", 0.0)
+                cost_text = f" · ${cost:.4f}" if cost else ""
+                with briefing_path.open("a", encoding="utf-8") as handle:
+                    handle.write(
+                        f"\n\n---\n\n_Model usage today: {usage.get('calls', 0)} calls, "
+                        f"{usage.get('total_tokens', 0):,} tokens{cost_text}._\n"
+                    )
+            except OSError:
+                logger.debug("Could not append usage footer to briefing")
+
         logger.info(
             "Daily cycle complete: %d included, %d held, briefing at %s",
             len(included), len(held), briefing_path,
@@ -383,6 +408,7 @@ class DigitalUnconsciousEngine:
             "output_dir": str(output_dir),
             "research_runs": research_runs,
             "circuit_breaker_stats": self.backend.stats,
+            "usage": usage,
         }
 
     def ingest_observation_snapshot(

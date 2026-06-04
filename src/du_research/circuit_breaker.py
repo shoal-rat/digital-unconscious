@@ -60,6 +60,13 @@ class CircuitBreaker:
     _total_failures: int = field(default=0, repr=False)
     _total_retries: int = field(default=0, repr=False)
 
+    # Usage accounting (every backend response flows through here) -------------
+    _usage_calls: int = field(default=0, repr=False)
+    _usage_input_tokens: int = field(default=0, repr=False)
+    _usage_output_tokens: int = field(default=0, repr=False)
+    _usage_cost_usd: float = field(default=0.0, repr=False)
+    _usage_by_model: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+
     # Public API --------------------------------------------------------------
 
     def call(self, prompt: str, **kwargs: Any) -> AIResponse:
@@ -91,6 +98,7 @@ class CircuitBreaker:
             # Check for success
             if response.ok:
                 self._on_success()
+                self._record_usage(response)
                 return response
 
             # Check for explicit rate-limit signal
@@ -143,7 +151,47 @@ class CircuitBreaker:
             "consecutive_failures": self._consecutive_failures,
         }
 
+    @property
+    def usage(self) -> dict[str, Any]:
+        """Aggregated token/cost usage of every successful call so far."""
+        return {
+            "calls": self._usage_calls,
+            "input_tokens": self._usage_input_tokens,
+            "output_tokens": self._usage_output_tokens,
+            "total_tokens": self._usage_input_tokens + self._usage_output_tokens,
+            "cost_usd": round(self._usage_cost_usd, 6),
+            "by_model": {
+                model: {**bucket, "cost_usd": round(bucket["cost_usd"], 6)}
+                for model, bucket in self._usage_by_model.items()
+            },
+        }
+
+    def reset_usage(self) -> None:
+        """Zero the usage counters (call at the start of a fresh cycle)."""
+        self._usage_calls = 0
+        self._usage_input_tokens = 0
+        self._usage_output_tokens = 0
+        self._usage_cost_usd = 0.0
+        self._usage_by_model = {}
+
     # Internal ----------------------------------------------------------------
+
+    def _record_usage(self, response: AIResponse) -> None:
+        if not (response.input_tokens or response.output_tokens or response.cost_usd):
+            return
+        self._usage_calls += 1
+        self._usage_input_tokens += response.input_tokens
+        self._usage_output_tokens += response.output_tokens
+        self._usage_cost_usd += response.cost_usd
+        raw = response.raw if isinstance(response.raw, dict) else {}
+        label = response.model or raw.get("router_provider") or raw.get("provider") or "unknown"
+        bucket = self._usage_by_model.setdefault(
+            label, {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+        )
+        bucket["calls"] += 1
+        bucket["input_tokens"] += response.input_tokens
+        bucket["output_tokens"] += response.output_tokens
+        bucket["cost_usd"] += response.cost_usd
 
     def _on_success(self) -> None:
         if self._state == CircuitState.HALF_OPEN:

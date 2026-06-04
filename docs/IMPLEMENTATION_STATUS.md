@@ -1,4 +1,11 @@
-# Implementation Status — v0.3.0
+# Implementation Status — v1.4.0
+
+## Recent Additions (v1.3–v1.4)
+- [x] Multi-provider backends: Claude Code, Anthropic API, OpenAI/Codex, Kimi/Moonshot
+- [x] Provider failover across the configured `fallback_order` (and in `auto` when a key is set)
+- [x] Extended-thinking / reasoning-effort budgets for idea generation and judging
+- [x] Per-cycle token and cost usage tracking (usage.json, briefing footer, dashboard tile)
+- [x] Lazy figure backends (Pillow/reportlab) with SVG-only fallback; `figures` extra
 
 ## Fully Implemented
 

@@ -26,8 +26,8 @@ Set `[ai].mode` in `config/pipeline.toml`:
 
 | Mode | Behavior |
 | --- | --- |
-| `auto` | Uses `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`, then `MOONSHOT_API_KEY`/`KIMI_API_KEY`, then local Claude Code. |
-| `multi` | Routes each call by provider prefix, or falls back in the same order as `auto`. |
+| `auto` | Picks `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`, then `MOONSHOT_API_KEY`/`KIMI_API_KEY`, then local Claude Code. When a hosted key is set and `fallback` is on, auto uses the router so a failing provider fails over automatically. |
+| `multi` | Routes each call by provider prefix (or the first available provider), and fails over to the next provider in `fallback_order` when a call fails. |
 | `claude_code` | Uses local `claude -p`. |
 | `api` / `anthropic` | Uses the Anthropic Python SDK. |
 | `openai` / `codex` | Uses the OpenAI Python SDK. |
@@ -55,6 +55,46 @@ Unprefixed role aliases still work:
 - `kimi`
 
 Each backend resolves those aliases to provider-appropriate defaults.
+
+## Failover
+
+When a provider call fails (an error response or empty output), the router
+advances to the next provider in `fallback_order` instead of giving up. The
+primary provider is tried first (named by a model prefix, or the first provider
+with credentials); a fallback provider uses its own default model.
+
+```toml
+[ai]
+mode = "multi"
+fallback = true
+fallback_order = ["anthropic", "openai", "kimi", "claude_code"]
+```
+
+`auto` turns on the same router whenever a hosted key is present, so the common
+case — one API key plus the local Claude Code CLI — already fails over to local
+generation if the API is down. Set `fallback = false` to pin a single provider.
+Responses record `router_provider` and, on failover, `router_fallback_from`.
+
+## Thinking And Reasoning Effort
+
+The two reasoning-heavy steps can spend an extended-thinking budget. The budget
+is a token count (0 disables) translated to each provider's native control:
+
+| Provider | Control |
+| --- | --- |
+| Anthropic | extended thinking with `budget_tokens` |
+| OpenAI | `reasoning_effort` (low/medium/high) |
+| Kimi | the thinking toggle |
+| Claude Code | a `think` / `think harder` / `ultrathink` keyword |
+
+```toml
+[ai]
+think_idea_budget = 8192    # deeper cross-domain idea generation
+think_judge_budget = 4096   # more careful scoring
+```
+
+The `think` argument on `AIBackend.call(...)` also accepts `"low"`, `"medium"`,
+`"high"`, or a bool for callers that prefer effort labels to token budgets.
 
 ## Keys
 

@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 from pathlib import Path
 import shutil
 from statistics import mean
 import tempfile
 from typing import Any
-from PIL import Image, ImageDraw
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
 from du_research.agents.analysis_coder import AnalysisCoderAgent, execute_script
 from du_research.models import DatasetCandidate, StageResult
+
+logger = logging.getLogger(__name__)
+
+# Pillow (PNG) and reportlab (PDF) are optional figure backends. The SVG chart is
+# always produced with the standard library, so the pipeline stays importable on a
+# bare install; raster and PDF formats degrade gracefully when those packages are
+# absent. Install the ``figures`` extra to enable them.
 
 
 def _try_float(value: str | None) -> float | None:
@@ -106,7 +111,12 @@ def _render_svg_bar_chart(title: str, values: dict[str, float]) -> str:
     return "\n".join(lines)
 
 
-def _render_png_bar_chart(title: str, values: dict[str, float], output_path: Path, dpi: int) -> None:
+def _render_png_bar_chart(title: str, values: dict[str, float], output_path: Path, dpi: int) -> bool:
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        logger.debug("Pillow not installed; skipping PNG figure. Install digital-unconscious[figures].")
+        return False
     width, height = 1800, 1200
     image = Image.new("RGB", (width, height), "#fffaf2")
     draw = ImageDraw.Draw(image)
@@ -123,9 +133,16 @@ def _render_png_bar_chart(title: str, values: dict[str, float], output_path: Pat
         draw.rounded_rectangle((bar_left, y, bar_left + bar_width, y + bar_height), radius=10, fill="#d97706")
         draw.text((bar_left + bar_width + 20, y + 25), f"{value:.2f}", fill="#111827")
     image.save(output_path, dpi=(dpi, dpi))
+    return True
 
 
-def _render_pdf_bar_chart(title: str, values: dict[str, float], output_path: Path) -> None:
+def _render_pdf_bar_chart(title: str, values: dict[str, float], output_path: Path) -> bool:
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        logger.debug("reportlab not installed; skipping PDF figure. Install digital-unconscious[figures].")
+        return False
     c = canvas.Canvas(str(output_path), pagesize=letter)
     c.setTitle(title)
     c.setFont("Helvetica-Bold", 16)
@@ -142,6 +159,7 @@ def _render_pdf_bar_chart(title: str, values: dict[str, float], output_path: Pat
         c.drawString(550, y + 6, f"{value:.2f}")
         y -= 32
     c.save()
+    return True
 
 
 def reproduce_analysis_to_directory(
@@ -168,16 +186,18 @@ def reproduce_analysis_to_directory(
     figure_path = figures_dir / "summary_figure.svg"
     png_path = figures_dir / "summary_figure.png"
     pdf_path = figures_dir / "summary_figure.pdf"
+    png_ok = False
+    pdf_ok = False
     if chart_values:
         figure_path.write_text(_render_svg_bar_chart("Descriptive Summary", chart_values), encoding="utf-8")
-        _render_png_bar_chart("Descriptive Summary", chart_values, png_path, figure_dpi)
-        _render_pdf_bar_chart("Descriptive Summary", chart_values, pdf_path)
+        png_ok = _render_png_bar_chart("Descriptive Summary", chart_values, png_path, figure_dpi)
+        pdf_ok = _render_pdf_bar_chart("Descriptive Summary", chart_values, pdf_path)
     results = {
         "data_file": str(data_file),
         "analysis_executed": True,
         "figure_path": str(figure_path) if chart_values else None,
-        "figure_png_path": str(png_path) if chart_values else None,
-        "figure_pdf_path": str(pdf_path) if chart_values else None,
+        "figure_png_path": str(png_path) if (chart_values and png_ok) else None,
+        "figure_pdf_path": str(pdf_path) if (chart_values and pdf_ok) else None,
         **profile,
     }
     (output_dir / "results.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")

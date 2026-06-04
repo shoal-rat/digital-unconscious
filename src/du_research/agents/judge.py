@@ -84,6 +84,7 @@ class JudgeAgent:
     backend: AIBackend
     model: str = "sonnet"
     system_prompt: str | None = None
+    think: int = 0  # extended-thinking token budget (0 disables)
 
     def evaluate(
         self,
@@ -142,6 +143,7 @@ class JudgeAgent:
             system=self.system_prompt or JUDGE_SYSTEM_PROMPT,
             model=self.model,
             max_tokens=2000,
+            think=self.think or None,
         )
 
         if not response.ok:
