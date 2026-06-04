@@ -142,7 +142,14 @@ def _parse_structured_text(text: str, json_schema: dict | None) -> dict | None:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        return None
+        # The model may wrap JSON in prose (e.g. when web search adds citations).
+        start, end = text.find("{"), text.rfind("}") + 1
+        if start < 0 or end <= start:
+            return None
+        try:
+            parsed = json.loads(text[start:end])
+        except json.JSONDecodeError:
+            return None
     return parsed if isinstance(parsed, dict) else {"result": parsed}
 
 
@@ -909,3 +916,83 @@ def create_backend(mode: str = "auto", **kwargs: Any) -> AIBackend:
         timeout_seconds=kwargs.get("timeout_seconds", 300),
         model_override=kwargs.get("model_override"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Routing inspection (shared by the CLI and dashboard)
+# ---------------------------------------------------------------------------
+
+
+def resolve_routing(config: Any) -> dict[str, Any]:
+    """Resolve how each agent's model alias maps to a provider, given config.
+
+    Drives ``du models`` and the dashboard routing panel. Provider selection for a
+    prefix-less alias follows the same first-available order the router uses
+    (``fallback_order``), so the displayed provider matches runtime behaviour.
+    """
+    ai = config.ai
+    available = {
+        "anthropic": bool(getattr(ai, "api_key", "") or os.environ.get("ANTHROPIC_API_KEY")),
+        "openai": bool(getattr(ai, "openai_api_key", "") or os.environ.get("OPENAI_API_KEY")),
+        "kimi": bool(
+            getattr(ai, "kimi_api_key", "")
+            or os.environ.get("MOONSHOT_API_KEY")
+            or os.environ.get("KIMI_API_KEY")
+        ),
+        "claude_code": True,
+    }
+    order = list(getattr(ai, "fallback_order", ["anthropic", "openai", "kimi", "claude_code"]))
+    alias_tables = {
+        "anthropic": ANTHROPIC_MODEL_ALIASES,
+        "openai": OPENAI_MODEL_ALIASES,
+        "kimi": KIMI_MODEL_ALIASES,
+        "claude_code": ANTHROPIC_MODEL_ALIASES,
+    }
+
+    def first_available() -> str:
+        for provider in order:
+            if provider != "claude_code" and available.get(provider):
+                return provider
+        return "claude_code"
+
+    def resolve(alias: str) -> tuple[str, str]:
+        prefix, bare = _split_provider_model(alias)
+        if prefix in {"openai", "codex"}:
+            provider = "openai"
+        elif prefix in {"kimi", "moonshot"}:
+            provider = "kimi"
+        elif prefix == "claude_code":
+            provider = "claude_code"
+        elif prefix in {"anthropic", "claude"}:
+            provider = "anthropic"
+        else:
+            provider = first_available()
+        return provider, alias_tables[provider].get(bare or "", bare or "")
+
+    agents = [
+        ("compressor", ai.compressor_model),
+        ("idea_generator", ai.creative_model),
+        ("judge", ai.judge_model),
+        ("briefing", ai.briefing_model),
+        ("writer", ai.writer_model),
+        ("reviewer", ai.reviewer_model),
+        ("revision", ai.revision_model),
+        ("analysis", ai.analysis_model),
+    ]
+    routing = []
+    for name, alias in agents:
+        provider, model = resolve(alias)
+        routing.append({
+            "agent": name,
+            "configured": alias,
+            "provider": provider,
+            "model": model,
+            "available": available.get(provider, False),
+        })
+    return {
+        "mode": ai.mode,
+        "fallback": ai.fallback,
+        "fallback_order": order,
+        "available_providers": [p for p, ok in available.items() if ok],
+        "routing": routing,
+    }

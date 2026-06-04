@@ -28,7 +28,13 @@ Trimmed:
 
 New extra: `digital-unconscious[vision]` (mss + Pillow).
 
-Tests: 70 -> 78 passing.
+Refined after a PM + coder subagent audit: the setup wizard now reliably opens
+on first launch (it keyed off the wrong marker), vision warns instead of silently
+dead-ending without a key, usage and model routing are visible in the dashboard
+with a Settings page, `du models`/dashboard share one routing resolver, and
+structured-output parsing tolerates web-search prose.
+
+Tests: 70 -> 80 passing.
 
 ---
 

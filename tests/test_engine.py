@@ -554,6 +554,25 @@ class VisionAndToolsTests(unittest.TestCase):
         # the screenshot was passed to the backend as an image
         self.assertEqual(len(fake.calls[0]["images"]), 1)
 
+    def test_parse_structured_text_extracts_json_from_prose(self) -> None:
+        from du_research.ai_backend import _parse_structured_text
+        self.assertEqual(_parse_structured_text('Sure: {"a": 1} done', {"type": "object"}), {"a": 1})
+        self.assertIsNone(_parse_structured_text("no json here", {"type": "object"}))
+        self.assertIsNone(_parse_structured_text("{}", None))  # no schema -> no parse
+
+    def test_resolve_routing_uses_fallback_order_and_prefixes(self) -> None:
+        from du_research.ai_backend import resolve_routing
+        cfg = AppConfig()
+        cfg.ai.openai_api_key = "x"
+        cfg.ai.fallback_order = ["openai", "anthropic", "kimi", "claude_code"]
+        cfg.ai.judge_model = "anthropic:opus"   # explicit prefix wins
+        cfg.ai.creative_model = "opus"          # prefixless -> first available per order
+        info = resolve_routing(cfg)
+        by_agent = {r["agent"]: r for r in info["routing"]}
+        self.assertEqual(by_agent["judge"]["provider"], "anthropic")
+        self.assertEqual(by_agent["idea_generator"]["provider"], "openai")
+        self.assertIn("openai", info["available_providers"])
+
 
 # ---------------------------------------------------------------------------
 # Observation tests

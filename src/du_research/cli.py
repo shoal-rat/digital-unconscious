@@ -120,83 +120,23 @@ def _cmd_usage(config, as_json: bool = False) -> int:
 
 def _cmd_models(config, as_json: bool = False) -> int:
     """Show how each agent routes to a provider/model under the current config."""
-    import os
-    from du_research.ai_backend import (
-        ANTHROPIC_MODEL_ALIASES,
-        OPENAI_MODEL_ALIASES,
-        KIMI_MODEL_ALIASES,
-        _split_provider_model,
-    )
+    from du_research.ai_backend import resolve_routing
 
-    available = {
-        "anthropic": bool(config.ai.api_key or os.environ.get("ANTHROPIC_API_KEY")),
-        "openai": bool(config.ai.openai_api_key or os.environ.get("OPENAI_API_KEY")),
-        "kimi": bool(config.ai.kimi_api_key or os.environ.get("MOONSHOT_API_KEY") or os.environ.get("KIMI_API_KEY")),
-        "claude_code": True,
-    }
-    alias_tables = {
-        "anthropic": ANTHROPIC_MODEL_ALIASES,
-        "openai": OPENAI_MODEL_ALIASES,
-        "kimi": KIMI_MODEL_ALIASES,
-        "claude_code": ANTHROPIC_MODEL_ALIASES,
-    }
-
-    def first_available() -> str:
-        for provider in ("anthropic", "openai", "kimi"):
-            if available[provider]:
-                return provider
-        return "claude_code"
-
-    def resolve(model_alias: str) -> tuple[str, str]:
-        prefix, bare = _split_provider_model(model_alias)
-        if prefix in {"openai", "codex"}:
-            provider = "openai"
-        elif prefix in {"kimi", "moonshot"}:
-            provider = "kimi"
-        elif prefix == "claude_code":
-            provider = "claude_code"
-        elif prefix in {"anthropic", "claude"}:
-            provider = "anthropic"
-        else:
-            provider = first_available()
-        resolved = alias_tables[provider].get(bare or "", bare or "")
-        return provider, resolved
-
-    agents = [
-        ("compressor", config.ai.compressor_model),
-        ("idea_generator", config.ai.creative_model),
-        ("judge", config.ai.judge_model),
-        ("briefing", config.ai.briefing_model),
-        ("writer", config.ai.writer_model),
-        ("reviewer", config.ai.reviewer_model),
-        ("revision", config.ai.revision_model),
-        ("analysis", config.ai.analysis_model),
-    ]
-    routing = [
-        {"agent": name, "configured": alias, "provider": resolve(alias)[0], "model": resolve(alias)[1]}
-        for name, alias in agents
-    ]
-
+    info = resolve_routing(config)
     if as_json:
-        print(json.dumps({
-            "mode": config.ai.mode,
-            "fallback": config.ai.fallback,
-            "fallback_order": config.ai.fallback_order,
-            "available_providers": [p for p, ok in available.items() if ok],
-            "routing": routing,
-        }, indent=2, ensure_ascii=False))
+        print(json.dumps(info, indent=2, ensure_ascii=False))
         return 0
 
     print("\n  Model routing — Digital Unconscious\n")
-    print(f"  Mode: {config.ai.mode}   Fallback: {'on' if config.ai.fallback else 'off'}")
-    print(f"  Available providers: {', '.join(p for p, ok in available.items() if ok) or 'none (local Claude Code only)'}")
-    if config.ai.fallback:
-        print(f"  Fallback order: {' -> '.join(config.ai.fallback_order)}")
-    print(f"\n  {'Agent':<16}{'Configured':<16}{'Resolves to':<28}")
-    print(f"  {'-' * 58}")
-    for entry in routing:
-        flag = "" if available.get(entry["provider"]) else "  (no key — will fall back)"
-        print(f"  {entry['agent']:<16}{entry['configured']:<16}{entry['provider'] + ':' + entry['model']:<28}{flag}")
+    print(f"  Mode: {info['mode']}   Fallback: {'on' if info['fallback'] else 'off'}")
+    print(f"  Available providers: {', '.join(info['available_providers']) or 'none (local Claude Code only)'}")
+    if info["fallback"]:
+        print(f"  Fallback order: {' -> '.join(info['fallback_order'])}")
+    print(f"\n  {'Agent':<16}{'Configured':<16}{'Resolves to':<30}")
+    print(f"  {'-' * 60}")
+    for entry in info["routing"]:
+        flag = "" if entry["available"] else "  (no key — will fall back)"
+        print(f"  {entry['agent']:<16}{entry['configured']:<16}{entry['provider'] + ':' + entry['model']:<30}{flag}")
     print()
     return 0
 
@@ -605,7 +545,10 @@ def main(argv: list[str] | None = None) -> int:
         from du_research.launcher import create_launcher_script
 
         workspace = Path(config.pipeline.workspace_dir).resolve()
-        setup_done = (workspace / "setup" / "user_settings.json").exists()
+        # Gate on a marker written only when the user finishes the web wizard —
+        # NOT on user_settings.json, which ensure_first_run_setup writes with
+        # defaults non-interactively (which would suppress the wizard forever).
+        setup_done = (workspace / "setup" / "setup_complete.json").exists()
 
         # Create launcher scripts for future use (desktop shortcut, startup)
         try:

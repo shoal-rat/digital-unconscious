@@ -120,6 +120,7 @@ class DigitalUnconsciousEngine:
             model=config.ai.judge_model,
             system_prompt=prompt_overrides.get("judge"),
             think=config.ai.think_judge_budget,
+            web_search=config.idea.web_search,
         )
         self.briefing_agent = BriefingAgent(
             backend=self.backend,
@@ -685,6 +686,12 @@ class DigitalUnconsciousEngine:
             frames = self.vision.capture()
             if frames:
                 return frames
+
+        if source == "vision" and self.vision is None:
+            logger.warning(
+                "Observation source is 'vision' but no API key is configured — "
+                "add one in Setup. Falling back to a log file if available."
+            )
 
         fallback = log_file or self.config.observation.fallback_log_path
         if fallback:

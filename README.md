@@ -125,10 +125,10 @@ More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACK
 
 ### Passive Observation
 
-- screenpipe integration for local screen-text capture
+- vision screen reading (screenshots → a multimodal model) — the easy default, no extra software
+- screenpipe integration for local OCR capture (optional)
 - JSONL and plain-text fallback logs
-- configurable app blacklist
-- local storage for raw observation files
+- optional app blacklist
 
 ### Idea Generation And Judging
 

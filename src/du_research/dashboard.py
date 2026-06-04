@@ -269,6 +269,7 @@ def _page(title: str, content: str, active: str = "") -> str:
         ("ideas", "Idea Backlog"),
         ("learning", "Learning"),
         ("status", "Status"),
+        ("setup", "Settings"),
     ]
     nav_html = ""
     for href, label in nav_items:
@@ -304,8 +305,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         workspace = _workspace(self.config)
 
-        # Redirect to setup if first run
-        setup_done = (workspace / "setup" / "user_settings.json").exists()
+        # Redirect to setup until the user finishes the web wizard (marker is
+        # written only by _handle_setup_post, not by the non-interactive defaults).
+        setup_done = (workspace / "setup" / "setup_complete.json").exists()
         if not setup_done and path == "/":
             self._serve_setup(workspace)
             return
@@ -348,8 +350,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _spawn_cli(self, *cli_args: str) -> None:
         import subprocess as _sp
         import sys as _sys
+        cmd = [_sys.executable, "-m", "du_research.cli"]
+        config_path = getattr(self.config, "config_path", None)
+        if config_path:
+            cmd += ["--config", str(config_path)]  # use the same config the dashboard rendered
+        cmd += list(cli_args)
         _sp.Popen(
-            [_sys.executable, "-m", "du_research.cli", *cli_args],
+            cmd,
             creationflags=_sp.CREATE_NO_WINDOW if _sys.platform == "win32" else 0,
             stdout=_sp.DEVNULL,
             stderr=_sp.DEVNULL,
@@ -380,7 +387,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <div class="card">
   <h2>1. What fields do you work in?</h2>
   <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
-    Ideas will be filtered to land in these fields. Cross-domain inspiration is still welcome.
+    Topics you want ideas to stay close to. Leave blank to get ideas from everything.
   </p>
   <div class="form-group">
     <label>Focus fields (comma-separated)</label>
@@ -399,7 +406,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <div class="card">
   <h2>2. Observation source</h2>
   <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
-    How should the system observe your screen behaviour?
+    How should the system observe your screen? <b>Automatic</b> uses whatever is available.
+    <b>Vision</b> reads your whole screen with AI and needs an API key below.
   </p>
   <div class="form-group">
     <label>Source</label>
@@ -492,6 +500,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         (setup_dir / "user_settings.json").write_text(
             json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        # Mark setup complete so the wizard stops auto-opening on launch.
+        (setup_dir / "setup_complete.json").write_text(
+            json.dumps({"completed_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
         # Initialize workspace dirs
         for subdir in ["runs", "learning", "daily", "ideas", "prompts", "queue", "knowledge"]:
@@ -500,7 +513,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # Try to enable autostart
         try:
             from du_research.onboarding import enable_autostart
-            project_root = Path(__file__).resolve().parents[1]
+            project_root = Path(__file__).resolve().parents[2]  # repo root (src/du_research/dashboard.py)
             enable_autostart(
                 project_root=project_root,
                 config_path=self.config.config_path or (project_root / "config" / "pipeline.toml"),
@@ -729,6 +742,22 @@ or <code>du start</code> to begin passive observation.</p>
             color = "var(--accent2)" if error else "var(--green)" if briefing else "var(--muted)"
             runs_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">{ts}</span> &mdash; {new_frames} new frames <span style="color:{color}">{briefing}{error}</span></div>'
 
+        from du_research.ai_backend import resolve_routing
+        cycles = _list_daily_cycles(workspace)
+        total_tokens = sum(c.get("tokens", 0) for c in cycles)
+        total_cost = sum(c.get("cost_usd", 0.0) for c in cycles)
+        usage_line = (
+            f"${total_cost:.4f} &middot; {total_tokens:,} tokens across {len(cycles)} cycle(s)"
+            if cycles else "No usage yet — run a cycle from the Dashboard."
+        )
+        info = resolve_routing(self.config)
+        routing_rows = "".join(
+            f'<tr><td style="padding:4px 14px 4px 0">{e["agent"]}</td>'
+            f'<td style="padding:4px 14px 4px 0;color:var(--muted)">{e["configured"]}</td>'
+            f'<td style="padding:4px 0">{e["provider"]}:{e["model"]}{"" if e["available"] else " <span style=\'color:var(--muted)\'>(fallback)</span>"}</td></tr>'
+            for e in info["routing"]
+        )
+
         content = f"""
 <h1>System Status</h1>
 <div class="stat-grid">
@@ -737,15 +766,20 @@ or <code>du start</code> to begin passive observation.</p>
   <div class="stat"><div class="value">{completed}</div><div class="label">Cycles Done</div></div>
 </div>
 
+<h2>Usage</h2>
+<div class="card">{usage_line}</div>
+
+<h2>Model Routing</h2>
+<div class="card">
+  <p style="color:var(--muted);font-size:13px">Mode: {info['mode']} &middot; Providers: {', '.join(info['available_providers'])}</p>
+  <table style="font-size:13px;border-collapse:collapse">{routing_rows}</table>
+</div>
+
 <h2>Recent Activity</h2>
 <div class="card">{runs_html or "<p>No recent activity.</p>"}</div>
 
-<h2>Quick Actions</h2>
 <div class="card">
-  <p>Start service: <code>du start</code> or <code>du service start</code></p>
-  <p>Run daily cycle: <code>du daily</code></p>
-  <p>Run learning: <code>du learn</code></p>
-  <p>Configure domains: <code>du config --primary "AI,design" --secondary "psychology"</code></p>
+  <p>Change your focus fields, observation source, or API key on the <a href="/setup">Settings</a> page.</p>
 </div>
 """
         self._html_response(_page("Status", content, active="status"))

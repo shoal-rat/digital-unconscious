@@ -273,8 +273,7 @@ def capture_screenshot(max_dimension: int = 1568) -> bytes | None:
     except ImportError:
         pass
     except Exception as exc:
-        logger.warning("mss screenshot failed: %s", exc)
-        return None
+        logger.warning("mss screenshot failed (%s); trying Pillow", exc)
     try:
         import io
         from PIL import ImageGrab
