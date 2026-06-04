@@ -1,5 +1,25 @@
 # Releases
 
+## v1.7.0 - Product & Interaction Redesign
+
+A PM-style pass over the whole experience, verified in a browser.
+
+- **Product Interaction Diagram** (`docs/PRODUCT_INTERACTION.md`): maps every flow
+  — first-run journey, the daily loop, dashboard IA, and the background service —
+  as GitHub-rendered Mermaid diagrams, with a friction→fix table and design
+  principles.
+- **Visual identity**: a logo + wordmark (`docs/assets/logo.svg`), a brand mark in
+  the dashboard header, and a cohesive dark design system.
+- **Dashboard redesign**: sticky brand header, "Today's Focus" surfaced on the
+  home screen, gradient stat tiles, a clear button hierarchy (primary Run /
+  secondary Start / ghost Stop), a service status pill, live Run-now feedback with
+  auto-refresh, a friendly first-run empty state, and a footer.
+- Clearer onboarding copy (focus fields "leave blank for everything"; vision needs a key).
+
+UI and docs only — engine behaviour is unchanged. Tests: 80 passing.
+
+---
+
 ## v1.6.0 - Vision Screen Reading, Web Search, Easy Webpage UX
 
 LLM-native upgrades:
