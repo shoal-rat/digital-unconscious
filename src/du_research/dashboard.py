@@ -87,6 +87,23 @@ def _load_briefing(workspace: Path, date: str) -> str | None:
     return None
 
 
+def _briefing_focus(workspace: Path, date: str) -> str:
+    """Extract the first paragraph under a '## ...Focus...' heading for the Today card."""
+    md = _load_briefing(workspace, date) or ""
+    out: list[str] = []
+    capture = False
+    for line in md.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            if capture:
+                break
+            capture = "focus" in stripped.lower()
+            continue
+        if capture and stripped and not stripped.startswith("#"):
+            out.append(stripped)
+    return " ".join(out)[:320]
+
+
 def _load_idea_backlog(workspace: Path) -> list[dict[str, Any]]:
     backlog = workspace / "ideas" / "idea_backlog.jsonl"
     if not backlog.exists():
@@ -120,65 +137,112 @@ def _service_status(workspace: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 _CSS = """
-:root { --bg: #0f1117; --card: #1a1d27; --border: #2a2d37; --text: #e1e4eb;
-  --muted: #8b8fa3; --accent: #6c8aff; --accent2: #ff6c8a; --green: #4ade80; }
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont,
-  'Segoe UI', system-ui, sans-serif; line-height: 1.6; }
-.container { max-width: 900px; margin: 0 auto; padding: 20px; }
-nav { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
-nav a { color: var(--muted); text-decoration: none; padding: 8px 16px; border-radius: 8px;
-  font-size: 14px; font-weight: 500; transition: all 0.2s; }
-nav a:hover, nav a.active { color: var(--text); background: var(--card); }
-h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-h2 { font-size: 18px; font-weight: 600; margin: 24px 0 12px; color: var(--accent); }
-h3 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; }
-.subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-  padding: 20px; margin-bottom: 16px; }
-.card:hover { border-color: var(--accent); }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-  padding: 16px; text-align: center; }
-.stat .value { font-size: 28px; font-weight: 700; color: var(--accent); }
-.stat .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
-.badge-include { background: rgba(74,222,128,0.15); color: var(--green); }
-.badge-hold { background: rgba(108,138,255,0.15); color: var(--accent); }
-.badge-discard { background: rgba(255,108,138,0.15); color: var(--accent2); }
-.idea-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0;
-  border-bottom: 1px solid var(--border); }
-.idea-row:last-child { border-bottom: none; }
-.idea-title { font-weight: 500; font-size: 14px; }
-.idea-score { font-size: 14px; font-weight: 600; }
-.briefing { line-height: 1.8; font-size: 15px; }
-.briefing h1 { font-size: 22px; margin: 24px 0 8px; }
-.briefing h2 { font-size: 18px; margin: 20px 0 8px; }
-.briefing h3 { font-size: 15px; }
-.briefing ul, .briefing ol { margin-left: 24px; margin-bottom: 12px; }
-.briefing li { margin-bottom: 4px; }
-.briefing hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-.briefing strong { color: var(--accent); }
-.briefing em { color: var(--muted); }
-.briefing code { background: var(--card); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-.cycle-link { display: block; text-decoration: none; color: inherit; }
-.empty { text-align: center; padding: 60px 20px; color: var(--muted); }
-.empty p { margin-top: 12px; font-size: 14px; }
-a { color: var(--accent); }
-.tag { display: inline-block; background: rgba(108,138,255,0.1); color: var(--accent);
-  padding: 2px 8px; border-radius: 4px; font-size: 12px; margin: 2px; }
-pre { background: var(--card); padding: 16px; border-radius: 8px; overflow-x: auto;
-  font-size: 13px; line-height: 1.5; border: 1px solid var(--border); }
-input[type=text], textarea, select { background: var(--card); color: var(--text); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 14px; font-size: 14px; width: 100%; margin-bottom: 12px; }
-input[type=text]:focus, textarea:focus { border-color: var(--accent); outline: none; }
-button { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 12px 24px;
-  font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
-button:hover { opacity: 0.85; }
-label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 4px; }
-.form-group { margin-bottom: 20px; }
-.success { background: rgba(74,222,128,0.15); color: var(--green); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+:root { --bg:#0b0d13; --panel:#10131c; --card:#161a24; --card2:#1b2030; --border:#262c3a;
+  --text:#e7eaf2; --muted:#9aa1b6; --faint:#6a7188; --accent:#7c8cff; --accent2:#ff6f91;
+  --green:#43d98c; --grad:linear-gradient(135deg,#7c8cff 0%,#b07cff 100%); --radius:14px; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { color:var(--text); line-height:1.6; min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  background:
+    radial-gradient(900px 520px at 100% -10%, rgba(124,140,255,.10), transparent 60%),
+    radial-gradient(760px 520px at -10% 0%, rgba(176,124,255,.08), transparent 55%),
+    var(--bg); }
+.container { max-width:920px; margin:0 auto; padding:0 20px 32px; }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:16px 0; margin-bottom:24px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:rgba(11,13,19,.82); backdrop-filter:blur(8px); z-index:10; }
+.brand { display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--text); }
+.brand .mark { width:30px; height:30px; flex:none; }
+.brand .name { font-weight:700; font-size:16px; letter-spacing:-.01em; }
+.brand .name span { background:var(--grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+nav { display:flex; gap:4px; flex-wrap:wrap; }
+nav a { color:var(--muted); text-decoration:none; padding:7px 13px; border-radius:9px;
+  font-size:13.5px; font-weight:500; transition:all .15s; }
+nav a:hover { color:var(--text); background:var(--card); }
+nav a.active { color:var(--text); background:var(--card2); }
+.hero { margin-bottom:18px; }
+.hero h1 { font-size:26px; font-weight:700; letter-spacing:-.02em; margin-bottom:4px; }
+h1 { font-size:24px; font-weight:700; letter-spacing:-.01em; margin-bottom:8px; }
+h2 { font-size:13px; font-weight:600; margin:28px 0 12px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; }
+h3 { font-size:15px; font-weight:600; margin:0 0 8px; }
+.subtitle { color:var(--muted); font-size:14px; margin-bottom:24px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:20px; margin-bottom:16px; transition:border-color .15s, transform .15s; }
+.card:hover { border-color:#333b4d; }
+.panel { background:linear-gradient(180deg,var(--card),var(--panel)); }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+.stat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
+.stat .value { font-size:30px; font-weight:800; letter-spacing:-.02em;
+  background:var(--grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.stat .label { font-size:12px; color:var(--muted); margin-top:2px; }
+.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.btn { display:inline-flex; align-items:center; gap:8px; border:1px solid transparent; border-radius:10px;
+  padding:11px 18px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; text-decoration:none; }
+.btn-primary { background:var(--grad); color:#fff; box-shadow:0 6px 18px rgba(124,140,255,.30); }
+.btn-primary:hover { filter:brightness(1.07); transform:translateY(-1px); }
+.btn-secondary { background:var(--card2); color:var(--text); border-color:var(--border); }
+.btn-secondary:hover { border-color:var(--accent); }
+.btn-ghost { background:transparent; color:var(--muted); }
+.btn-ghost:hover { color:var(--text); background:var(--card); }
+.btn:disabled { opacity:.55; cursor:default; transform:none; }
+.pill { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600;
+  padding:5px 12px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+.pill .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+.pill.on { color:var(--green); border-color:rgba(67,217,140,.35); }
+.pill.on .dot { background:var(--green); box-shadow:0 0 8px var(--green); }
+.badge { display:inline-block; padding:2px 9px; border-radius:6px; font-size:12px; font-weight:600; }
+.badge-include { background:rgba(67,217,140,.14); color:var(--green); }
+.badge-hold { background:rgba(124,140,255,.14); color:var(--accent); }
+.badge-discard { background:rgba(255,111,145,.14); color:var(--accent2); }
+.today { background:linear-gradient(180deg,var(--card2),var(--card)); border-left:3px solid #7c8cff; }
+.today .focus { font-size:15.5px; line-height:1.75; color:var(--text); }
+.idea-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+.idea-row:last-child { border-bottom:none; }
+.idea-title { font-weight:500; font-size:14px; } .idea-score { font-size:14px; font-weight:700; }
+.briefing { line-height:1.8; font-size:15px; }
+.briefing h1 { font-size:22px; margin:8px 0 8px; }
+.briefing h2 { font-size:16px; margin:22px 0 8px; color:var(--accent); text-transform:none; letter-spacing:0; }
+.briefing h3 { font-size:15px; }
+.briefing ul, .briefing ol { margin-left:24px; margin-bottom:12px; } .briefing li { margin-bottom:4px; }
+.briefing hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
+.briefing strong { color:var(--accent); } .briefing em { color:var(--muted); }
+.briefing code { background:var(--card2); padding:2px 6px; border-radius:5px; font-size:13px; }
+.cycle-link { display:block; text-decoration:none; color:inherit; }
+.empty { text-align:center; padding:44px 24px; }
+.empty .eyebrow { color:var(--accent); font-size:13px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.empty h2 { color:var(--text); text-transform:none; letter-spacing:0; font-size:22px; margin:8px 0 6px; }
+.empty p { color:var(--muted); font-size:14px; margin-bottom:18px; }
+.steps { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:22px; }
+.step { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; width:190px; text-align:left; }
+.step .n { color:var(--accent); font-weight:700; font-size:13px; } .step .t { font-size:13px; color:var(--muted); margin-top:4px; }
+a { color:var(--accent); }
+.tag { display:inline-block; background:rgba(124,140,255,.10); color:var(--accent); padding:2px 8px; border-radius:6px; font-size:12px; margin:2px; }
+pre { background:var(--card); padding:16px; border-radius:10px; overflow-x:auto; font-size:13px; line-height:1.5; border:1px solid var(--border); }
+input[type=text], input[type=password], textarea, select { background:var(--card); color:var(--text); border:1px solid var(--border);
+  border-radius:10px; padding:11px 14px; font-size:14px; width:100%; margin-bottom:12px; }
+input:focus, textarea:focus, select:focus { border-color:var(--accent); outline:none; }
+button { background:var(--grad); color:#fff; border:none; border-radius:10px; padding:12px 22px;
+  font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; }
+button:hover { filter:brightness(1.07); }
+label { display:block; color:var(--muted); font-size:13px; margin-bottom:4px; }
+.form-group { margin-bottom:20px; }
+.success { background:rgba(67,217,140,.14); color:var(--green); padding:12px 16px; border-radius:10px; margin-bottom:16px; border:1px solid rgba(67,217,140,.25); }
+.footer { color:var(--faint); font-size:12px; text-align:center; padding-top:26px; border-top:1px solid var(--border); margin-top:36px; }
+.footer a { color:var(--muted); }
+@media (max-width:640px){ .topbar{flex-direction:column; align-items:flex-start; gap:10px;} .stat .value{font-size:26px;} }
 """
+
+_DASH_JS = """
+<script>
+function duMsg(t){var e=document.getElementById('du-msg'); if(e) e.textContent=t;}
+async function duRun(){var b=document.getElementById('run-btn'); if(b){b.disabled=true; b.textContent='Running...';}
+  duMsg('Running a cycle - this can take up to a minute. The page will refresh automatically.');
+  try{await fetch('/api/run',{method:'POST'});}catch(e){}
+  setTimeout(function(){location.reload();}, 12000);}
+async function duService(a){duMsg('Service '+a+'...');
+  try{await fetch('/api/service?action='+a,{method:'POST'});}catch(e){}
+  setTimeout(function(){location.reload();}, 1500);}
+</script>"""
 
 
 def _md_to_html(md: str) -> str:
@@ -284,8 +348,12 @@ def _page(title: str, content: str, active: str = "") -> str:
 <style>{_CSS}</style>
 </head><body>
 <div class="container">
+<div class="topbar">
+<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="duG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#b07cff"/></linearGradient></defs><circle cx="16" cy="16" r="15" fill="#11131c" stroke="url(#duG)" stroke-width="1.5"/><circle cx="16" cy="16" r="8.5" stroke="url(#duG)" stroke-width="1.5" opacity="0.85"/><circle cx="16" cy="16" r="3.2" fill="url(#duG)"/></svg><span class="name">Digital <span>Unconscious</span></span></a>
 <nav>{nav_html}</nav>
+</div>
 {content}
+<div class="footer">Digital Unconscious &middot; local-first AI research companion &middot; <a href="/status">status</a> &middot; <a href="/setup">settings</a></div>
 </div></body></html>"""
 
 
@@ -554,68 +622,84 @@ class DashboardHandler(BaseHTTPRequestHandler):
         usage_value = f"${total_cost:.2f}" if total_cost else _fmt_compact(total_tokens)
         usage_label = "Est. Spend" if total_cost else "Tokens Used"
 
-        # Check for setup=done query param
         setup_banner = ""
-        parsed_url = urlparse(self.path)
-        query_params = parse_qs(parsed_url.query)
-        if "setup" in query_params:
-            setup_banner = '<div class="success">Setup complete. The background service is starting. You\'ll receive your first briefing at your configured time. From now on, everything runs automatically.</div>'
+        if "setup" in parse_qs(urlparse(self.path).query):
+            setup_banner = '<div class="success">Setup complete — the background service is starting. Run a cycle now, or wait for your daily briefing.</div>'
 
-        stats = f"""
-<h1>Digital Unconscious</h1>
-<p class="subtitle">Your AI research companion — passive observation, creative ideas, autonomous research</p>
-{setup_banner}
-<div class="stat-grid">
-  <div class="stat"><div class="value">{total_cycles}</div><div class="label">Daily Cycles</div></div>
-  <div class="stat"><div class="value">{total_ideas}</div><div class="label">Ideas Generated</div></div>
-  <div class="stat"><div class="value">v{model_version}</div><div class="label">Idea Model</div></div>
-  <div class="stat"><div class="value">{usage_value}</div><div class="label">{usage_label}</div></div>
-  <div class="stat"><div class="value">{"ON" if is_running else "OFF"}</div><div class="label">Service</div></div>
-</div>"""
-
-        stats += """
-<div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <button onclick="duRun()">Run a cycle now</button>
-  <button onclick="duService('start')">Start background service</button>
-  <button onclick="duService('stop')">Stop</button>
-  <span id="du-msg" style="color:var(--muted);font-size:13px"></span>
+        service_pill = (
+            '<span class="pill on"><span class="dot"></span>Service running</span>'
+            if is_running else
+            '<span class="pill"><span class="dot"></span>Service stopped</span>'
+        )
+        controls = f"""
+<div class="card panel" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+  <div class="row">{service_pill}</div>
+  <div class="row">
+    <button class="btn btn-primary" id="run-btn" onclick="duRun()">Run a cycle now</button>
+    <button class="btn btn-secondary" onclick="duService('start')">Start service</button>
+    <button class="btn btn-ghost" onclick="duService('stop')">Stop</button>
+  </div>
 </div>
-<script>
-function duMsg(t){document.getElementById('du-msg').textContent=t;}
-async function duRun(){duMsg('Starting...');try{const r=await fetch('/api/run',{method:'POST'});const j=await r.json();duMsg(j.message||j.status||'');}catch(e){duMsg('Error');}}
-async function duService(a){duMsg(a+'...');try{const r=await fetch('/api/service?action='+a,{method:'POST'});const j=await r.json();duMsg('Service '+a+': '+(j.status||j.error||''));}catch(e){duMsg('Error');}}
-</script>"""
+<div id="du-msg" class="subtitle" style="margin:-6px 0 10px"></div>
+{_DASH_JS}"""
 
         if not cycles:
-            content = stats + """
+            content = f"""
+<div class="hero"><h1>Welcome</h1></div>
+{setup_banner}
+{controls}
 <div class="empty">
-<h2>No briefings yet</h2>
-<p>Run <code>du daily --log-file your_log.jsonl</code> to generate your first briefing,<br>
-or <code>du start</code> to begin passive observation.</p>
-</div>"""
-        else:
-            cycle_html = ""
-            for c in cycles[:10]:
-                inc = f'<span class="badge badge-include">{c["ideas_included"]} included</span>' if c["ideas_included"] else ""
-                if c.get("cost_usd"):
-                    usage_note = f' · ${c["cost_usd"]:.4f}'
-                elif c.get("tokens"):
-                    usage_note = f' · {_fmt_compact(c["tokens"])} tokens'
-                else:
-                    usage_note = ""
-                cycle_html += f"""
-<a class="cycle-link" href="/briefing?date={c['date']}">
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <div>
-      <div style="font-weight:600">{c['date']}</div>
-      <div style="color:var(--muted);font-size:13px">{c['ideas_total']} ideas generated {inc}{usage_note}</div>
-    </div>
-    <div style="color:var(--muted);font-size:20px">&rarr;</div>
+  <div class="eyebrow">Get started</div>
+  <h2>Let's capture your first idea</h2>
+  <p>Digital Unconscious watches what you read and build, then proposes research ideas each day.</p>
+  <button class="btn btn-primary" onclick="duRun()">Run your first cycle</button>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div class="t">It reads your screen (or a log) and compresses the day.</div></div>
+    <div class="step"><div class="n">2</div><div class="t">A creative model proposes cross-domain ideas.</div></div>
+    <div class="step"><div class="n">3</div><div class="t">You get a short briefing with the strongest ones.</div></div>
   </div>
-</div></a>"""
-            content = stats + f"<h2>Recent Briefings</h2>{cycle_html}"
+</div>"""
+            self._html_response(_page("Dashboard", content, active=""))
+            return
 
+        stats = f"""
+<div class="hero"><h1>Today</h1><p class="subtitle">Latest cycle {latest_date} &middot; {total_cycles} cycles &middot; {total_ideas} ideas captured</p></div>
+{setup_banner}
+<div class="stat-grid">
+  <div class="stat"><div class="value">{total_cycles}</div><div class="label">Daily cycles</div></div>
+  <div class="stat"><div class="value">{total_ideas}</div><div class="label">Ideas generated</div></div>
+  <div class="stat"><div class="value">v{model_version}</div><div class="label">Idea model</div></div>
+  <div class="stat"><div class="value">{usage_value}</div><div class="label">{usage_label}</div></div>
+</div>
+{controls}"""
+
+        focus = _briefing_focus(workspace, latest_date)
+        today_html = ""
+        if focus:
+            today_html = f"""
+<div class="card today">
+  <h3>Today's Focus</h3>
+  <div class="focus">{focus}</div>
+  <div style="margin-top:12px"><a href="/briefing?date={latest_date}">Read the full briefing &rarr;</a></div>
+</div>"""
+
+        cycle_html = ""
+        for c in cycles[:10]:
+            inc = f'<span class="badge badge-include">{c["ideas_included"]} included</span>' if c["ideas_included"] else ""
+            if c.get("cost_usd"):
+                usage_note = f' &middot; ${c["cost_usd"]:.4f}'
+            elif c.get("tokens"):
+                usage_note = f' &middot; {_fmt_compact(c["tokens"])} tokens'
+            else:
+                usage_note = ""
+            cycle_html += f"""
+<a class="cycle-link" href="/briefing?date={c['date']}"><div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-weight:600">{c['date']}</div>
+      <div style="color:var(--muted);font-size:13px">{c['ideas_total']} ideas {inc}{usage_note}</div></div>
+    <div style="color:var(--faint);font-size:20px">&rarr;</div>
+  </div></div></a>"""
+        content = stats + today_html + "<h2>Recent briefings</h2>" + cycle_html
         self._html_response(_page("Dashboard", content, active=""))
 
     def _serve_briefing(self, workspace: Path, date: str | None):

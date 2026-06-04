@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/logo.svg" alt="Digital Unconscious" width="360"></p>
+
 # Digital Unconscious
 
 **A local-first research assistant that turns the traces of your workday into sharper research ideas.**
@@ -76,6 +78,8 @@ du dashboard
 ```
 
 ## How It Works
+
+> See the complete [**Product Interaction Diagram**](docs/PRODUCT_INTERACTION.md) — every flow from install to daily briefing.
 
 1. **Observe**: Read your screen with a vision model (screenshots → topics and intent), or via [screenpipe](https://github.com/mediar-ai/screenpipe) OCR, or a JSONL/plain-text log file.
 2. **Compress**: Turn 30-minute windows into compact behavior summaries.
