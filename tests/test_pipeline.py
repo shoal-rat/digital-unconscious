@@ -107,7 +107,8 @@ class PipelineTests(unittest.TestCase):
             submission_path = Path(tmpdir) / "submissions" / "run_test_local_csv_submission.json"
             self.assertTrue(submission_path.exists())
             submission_payload = json.loads(submission_path.read_text(encoding="utf-8"))
-            self.assertTrue(submission_payload["artifacts"]["manuscript_pdf"].endswith("06_review\\final_manuscript.pdf"))
+            manuscript_pdf = submission_payload["artifacts"]["manuscript_pdf"].replace("\\", "/")
+            self.assertTrue(manuscript_pdf.endswith("06_review/final_manuscript.pdf"))
 
     def test_dry_run_generates_plan_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

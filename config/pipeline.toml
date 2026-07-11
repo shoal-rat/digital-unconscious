@@ -1,5 +1,5 @@
 # Digital Unconscious — Pipeline Configuration
-# v1.4.0
+# v2.0.0
 
 [pipeline]
 workspace_dir = "workspace"
@@ -9,25 +9,31 @@ network_timeout_seconds = 15
 max_revisions = 3
 
 [ai]
-mode = "auto"                # "auto" | "multi" | "claude_code" | "api" | "openai" | "kimi"
-default_model = "sonnet"     # Claude Sonnet alias in Claude modes
-creative_model = "opus"      # Claude Opus / provider-equivalent alias for divergent generation
-judge_model = "sonnet"       # Conservative reviewer/judge model alias
-compressor_model = "haiku"   # Fast compression model alias
-briefing_model = "opus"      # Daily briefing writer model alias
-writer_model = "opus"
-reviewer_model = "sonnet"
-revision_model = "sonnet"
-analysis_model = "sonnet"
-# Use provider prefixes for per-agent routing, e.g. "openai:gpt-5.5" or "kimi:kimi-k2.6".
+mode = "auto"                # zero-key default: Codex, then Claude Code
+default_model = "sonnet"
+# Workload-first routing. If an optional API key is absent, the local subscription
+# CLIs take over automatically. Basic synthesis prefers economical DeepSeek V4;
+# long-horizon and adversarial work uses Codex, Claude, or GLM.
+creative_model = "codex:default"
+judge_model = "claude_code:sonnet"
+compressor_model = "deepseek:deepseek-v4-flash"
+briefing_model = "deepseek:deepseek-v4-flash"
+writer_model = "claude_code:opus"
+reviewer_model = "codex:default"
+revision_model = "claude_code:sonnet"
+analysis_model = "glm:glm-5.1"
 # api_key = ""               # prefer ANTHROPIC_API_KEY env var
 # openai_api_key = ""        # prefer OPENAI_API_KEY env var
 # kimi_api_key = ""          # prefer MOONSHOT_API_KEY or KIMI_API_KEY env var
-openai_default_model = "gpt-5.5"
+# deepseek_api_key = ""       # prefer DEEPSEEK_API_KEY env var
+# glm_api_key = ""            # prefer ZAI_API_KEY or GLM_API_KEY env var
+openai_default_model = "gpt-5.6-sol"
 kimi_default_model = "kimi-k2.6"
+deepseek_default_model = "deepseek-v4-flash"
+glm_default_model = "glm-5.1"
 # Multi-provider failover: on a failed call, try the next available provider.
 fallback = true
-fallback_order = ["anthropic", "openai", "kimi", "claude_code"]
+fallback_order = ["deepseek", "glm", "codex", "claude_code", "openai", "anthropic", "kimi"]
 # Extended-thinking token budgets (0 disables). Adds deeper reasoning to the two
 # reasoning-heavy steps; translated per provider (Anthropic thinking budget,
 # OpenAI reasoning effort, Kimi thinking toggle, Claude Code think keyword).
@@ -37,7 +43,7 @@ think_judge_budget = 0
 [observation]
 enabled = true
 source = "auto"              # "auto" | "vision" | "screenpipe" | "file"
-vision_model = "sonnet"      # vision-capable model for reading screenshots
+vision_model = "codex:default" # local Codex image input; falls back to Claude/API
 vision_max_dimension = 1568  # downscale long edge before sending to the model
 screenpipe_url = "http://localhost:3030"
 window_minutes = 30
