@@ -80,7 +80,7 @@ class FakeBackend:
 
 
 class AIBackendTests(unittest.TestCase):
-    def test_create_backend_auto_picks_claude_code_without_env(self) -> None:
+    def test_create_backend_auto_uses_local_capable_router_without_env(self) -> None:
         import os
         old = os.environ.pop("ANTHROPIC_API_KEY", None)
         old_openai = os.environ.pop("OPENAI_API_KEY", None)
@@ -88,7 +88,7 @@ class AIBackendTests(unittest.TestCase):
         old_kimi = os.environ.pop("KIMI_API_KEY", None)
         try:
             backend = create_backend("auto")
-            self.assertIsInstance(backend, ClaudeCodeBackend)
+            self.assertIsInstance(backend, MultiProviderBackend)
         finally:
             if old:
                 os.environ["ANTHROPIC_API_KEY"] = old
@@ -571,6 +571,7 @@ class VisionAndToolsTests(unittest.TestCase):
         by_agent = {r["agent"]: r for r in info["routing"]}
         self.assertEqual(by_agent["judge"]["provider"], "anthropic")
         self.assertEqual(by_agent["idea_generator"]["provider"], "openai")
+        self.assertEqual(by_agent["judge"]["fallback_provider"], "openai")
         self.assertIn("openai", info["available_providers"])
 
 
@@ -836,7 +837,9 @@ class ConfigTests(unittest.TestCase):
     def test_default_config_has_new_sections(self) -> None:
         config = AppConfig()
         self.assertEqual(config.ai.mode, "auto")
-        self.assertEqual(config.ai.creative_model, "opus")
+        self.assertEqual(config.ai.creative_model, "codex:default")
+        self.assertIn("claude_code", config.ai.fallback_order)
+        self.assertIn("deepseek", config.ai.fallback_order)
         self.assertTrue(config.observation.enabled)
         self.assertEqual(config.idea.include_threshold, 75)
         self.assertEqual(config.circuit_breaker.max_retries, 3)
@@ -844,7 +847,8 @@ class ConfigTests(unittest.TestCase):
     def test_load_config_from_file(self) -> None:
         config = load_config("config/pipeline.toml")
         self.assertEqual(config.ai.mode, "auto")
-        self.assertEqual(config.ai.compressor_model, "haiku")
+        self.assertEqual(config.ai.compressor_model, "deepseek:deepseek-v4-flash")
+        self.assertEqual(config.observation.vision_model, "codex:default")
 
 
 class SetupTests(unittest.TestCase):

@@ -17,27 +17,32 @@ class PipelineSection:
 @dataclass
 class AISection:
     """Configuration for AI backends."""
-    mode: str = "auto"  # "auto" | "multi" | "claude_code" | "api" | "openai" | "kimi"
+    mode: str = "auto"
     default_model: str = "sonnet"
-    creative_model: str = "opus"
-    judge_model: str = "sonnet"
-    compressor_model: str = "haiku"
-    briefing_model: str = "opus"
-    writer_model: str = "opus"
-    reviewer_model: str = "sonnet"
-    revision_model: str = "sonnet"
-    analysis_model: str = "sonnet"
-    api_key: str = ""  # only for API mode; prefer env var
-    openai_api_key: str = ""  # prefer OPENAI_API_KEY env var
-    kimi_api_key: str = ""  # prefer MOONSHOT_API_KEY or KIMI_API_KEY env var
-    openai_default_model: str = "gpt-5.5"
+    # Workload-first defaults. Missing optional keys fall through to the local
+    # Codex and Claude subscription CLIs, so a keyless install is fully usable.
+    creative_model: str = "codex:default"
+    judge_model: str = "claude_code:sonnet"
+    compressor_model: str = "deepseek:deepseek-v4-flash"
+    briefing_model: str = "deepseek:deepseek-v4-flash"
+    writer_model: str = "claude_code:opus"
+    reviewer_model: str = "codex:default"
+    revision_model: str = "claude_code:sonnet"
+    analysis_model: str = "glm:glm-5.1"
+    api_key: str = ""
+    openai_api_key: str = ""
+    kimi_api_key: str = ""
+    deepseek_api_key: str = ""
+    glm_api_key: str = ""
+    openai_default_model: str = "gpt-5.6-sol"
     kimi_default_model: str = "kimi-k2.6"
-    # Multi-provider failover: when a provider call fails, try the next available
-    # provider in fallback_order. Used by "multi" mode and by "auto" whenever a
-    # hosted key is configured.
+    deepseek_default_model: str = "deepseek-v4-flash"
+    glm_default_model: str = "glm-5.1"
     fallback: bool = True
     fallback_order: list[str] = field(
-        default_factory=lambda: ["anthropic", "openai", "kimi", "claude_code"]
+        default_factory=lambda: [
+            "deepseek", "glm", "codex", "claude_code", "openai", "anthropic", "kimi"
+        ]
     )
     # Extended-thinking token budgets (0 disables). Wired to the two
     # reasoning-heavy steps and translated per provider: an Anthropic budget,
@@ -51,7 +56,7 @@ class ObservationSection:
     """Screen observation layer settings."""
     enabled: bool = True
     source: str = "auto"  # "auto" | "screenpipe" | "vision" | "file"
-    vision_model: str = "sonnet"  # vision-capable model for screenshot reading
+    vision_model: str = "codex:default"  # local Codex supports image attachments
     vision_max_dimension: int = 1568  # downscale long edge before sending to the model
     screenpipe_url: str = "http://localhost:3030"
     window_minutes: int = 30
@@ -142,7 +147,7 @@ class CredentialsSection:
 class AutomationSection:
     enabled: bool = True
     auto_execute: bool = False
-    runner: str = "claude_code"  # "claude_code" | "selenium"
+    runner: str = "claude_code"  # "claude_code" | "codex" | "selenium"
     checkpoint_policy: str = "best_effort"  # "best_effort" | "strict"
     browser: str = "chrome"
     download_dir: str = "workspace/browser_downloads"

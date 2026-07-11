@@ -1,127 +1,76 @@
-# Multi-Provider AI Backends
+# Model routing
 
-Updated: 2026-06-04
+The router chooses by workload first and provider second. Local subscription CLIs are real providers—not aliases for hosted APIs.
 
-Digital Unconscious now supports Claude Code, Anthropic API, OpenAI API, and Kimi/Moonshot API through the same `AIBackend.call(...)` interface.
+## Zero-key providers
 
-## Why This Shape
+| Prefix | Command | Authentication | Isolation |
+| --- | --- | --- | --- |
+| `codex:` | `codex exec` | existing ChatGPT/Codex login | temporary workspace, read-only sandbox |
+| `claude_code:` | `claude -p` | existing Claude subscription login | temporary workspace, safe mode, tools off by default |
 
-Recent coding-agent systems are strongest when the main workflow stays focused and delegates specific work to the right model/tool surface:
+Both support structured output. Codex receives images with `--image`; Claude Code receives a temporary image and only the `Read` tool for that call. Temporary files are removed automatically.
 
-- Claude Code Opus 4.8 adds dynamic workflows for large codebase-scale tasks and stronger self-verification.
-- Codex has goal mode, richer browser context, Appshots, in-app browser annotations, and Windows computer use for longer local work.
-- Kimi K2.6 provides a 256K context window with text, image, and video input, long-horizon coding stability, and OpenAI-compatible API access.
+## Optional hosted providers
 
-The project uses those lessons conservatively:
+| Prefix | Environment variable | Default |
+| --- | --- | --- |
+| `deepseek:` | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
+| `glm:` / `zai:` | `ZAI_API_KEY` or `GLM_API_KEY` | `glm-5.1` |
+| `openai:` | `OPENAI_API_KEY` | `gpt-5.6-sol` via Responses API |
+| `anthropic:` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
+| `kimi:` | `MOONSHOT_API_KEY` or `KIMI_API_KEY` | `kimi-k2.6` |
 
-- one backend protocol for every agent
-- provider prefixes for targeted routing
-- lazy optional integrations
-- browser automation via explicit task packs and checkpoints
-- tests and local artifacts as the completion gate
+DeepSeek uses V4 Flash for inexpensive synthesis and V4 Pro when explicitly selected. GLM-5.1 is available for long-horizon agentic analysis. Hosted adapters remain optional; the core package imports and tests without their SDKs.
+
+## Defaults
+
+```toml
+[ai]
+mode = "auto"
+fallback = true
+fallback_order = ["deepseek", "glm", "codex", "claude_code", "openai", "anthropic", "kimi"]
+
+compressor_model = "deepseek:deepseek-v4-flash"
+briefing_model = "deepseek:deepseek-v4-flash"
+creative_model = "codex:default"
+judge_model = "claude_code:sonnet"
+writer_model = "claude_code:opus"
+reviewer_model = "codex:default"
+analysis_model = "glm:glm-5.1"
+```
+
+An explicit prefix expresses preference, not fragility. If that provider is unavailable and fallback is enabled, the router selects the first ready provider from `fallback_order`. A fallback uses its own default model rather than receiving an incompatible model name.
 
 ## Modes
 
-Set `[ai].mode` in `config/pipeline.toml`:
-
 | Mode | Behavior |
 | --- | --- |
-| `auto` | Picks `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`, then `MOONSHOT_API_KEY`/`KIMI_API_KEY`, then local Claude Code. When a hosted key is set and `fallback` is on, auto uses the router so a failing provider fails over automatically. |
-| `multi` | Routes each call by provider prefix (or the first available provider), and fails over to the next provider in `fallback_order` when a call fails. |
-| `claude_code` | Uses local `claude -p`. |
-| `api` / `anthropic` | Uses the Anthropic Python SDK. |
-| `openai` / `codex` | Uses the OpenAI Python SDK. |
-| `kimi` / `moonshot` | Uses Kimi/Moonshot through the OpenAI-compatible chat API. |
+| `auto` / `multi` | route by prefix and fall back across ready providers |
+| `codex` | pin the Codex subscription CLI |
+| `claude_code` | pin the Claude Code subscription CLI |
+| `deepseek`, `glm`, `openai`, `anthropic`, `kimi` | pin one optional hosted adapter |
 
-## Provider Prefixes
+`codex` now means the local Codex CLI. `openai` means the OpenAI API. This corrects the ambiguous pre-v2 behavior where “Codex” was only an alias for OpenAI Chat Completions.
 
-Agent model fields can target a provider directly:
+## Reasoning control
 
-```toml
-[ai]
-mode = "multi"
-creative_model = "openai:gpt-5.5"
-judge_model = "anthropic:claude-sonnet-4-6"
-compressor_model = "kimi:kimi-k2.6"
-briefing_model = "claude_code:opus"
-```
+Agents pass one provider-neutral `think` value. It may be an integer budget or `low`, `medium`, `high`, `xhigh`, or `max`.
 
-Unprefixed role aliases still work:
+- Codex and Claude Code receive their native effort controls where supported.
+- OpenAI receives Responses API reasoning effort.
+- Anthropic receives an extended-thinking budget.
+- DeepSeek receives thinking mode plus its supported effort mapping.
 
-- `opus`
-- `sonnet`
-- `haiku`
-- `codex`
-- `kimi`
+No chain-of-thought is persisted by Digital Unconscious. Only final response text, structured output, usage metadata, and provider trace fields enter artifacts.
 
-Each backend resolves those aliases to provider-appropriate defaults.
-
-## Failover
-
-When a provider call fails (an error response or empty output), the router
-advances to the next provider in `fallback_order` instead of giving up. The
-primary provider is tried first (named by a model prefix, or the first provider
-with credentials); a fallback provider uses its own default model.
-
-```toml
-[ai]
-mode = "multi"
-fallback = true
-fallback_order = ["anthropic", "openai", "kimi", "claude_code"]
-```
-
-`auto` turns on the same router whenever a hosted key is present, so the common
-case — one API key plus the local Claude Code CLI — already fails over to local
-generation if the API is down. Set `fallback = false` to pin a single provider.
-Responses record `router_provider` and, on failover, `router_fallback_from`.
-
-## Thinking And Reasoning Effort
-
-The two reasoning-heavy steps can spend an extended-thinking budget. The budget
-is a token count (0 disables) translated to each provider's native control:
-
-| Provider | Control |
-| --- | --- |
-| Anthropic | extended thinking with `budget_tokens` |
-| OpenAI | `reasoning_effort` (low/medium/high) |
-| Kimi | the thinking toggle |
-| Claude Code | a `think` / `think harder` / `ultrathink` keyword |
-
-```toml
-[ai]
-think_idea_budget = 8192    # deeper cross-domain idea generation
-think_judge_budget = 4096   # more careful scoring
-```
-
-The `think` argument on `AIBackend.call(...)` also accepts `"low"`, `"medium"`,
-`"high"`, or a bool for callers that prefer effort labels to token budgets.
-
-## Keys
-
-Prefer environment variables:
-
-```powershell
-$env:ANTHROPIC_API_KEY = "..."
-$env:OPENAI_API_KEY = "..."
-$env:MOONSHOT_API_KEY = "..."
-```
-
-`KIMI_API_KEY` is also accepted for Kimi. Do not commit real keys to `config/pipeline.toml`.
-
-## Optional Extras
+## Inspect and debug
 
 ```bash
-pip install "digital-unconscious[api]"
-pip install "digital-unconscious[openai]"
-pip install "digital-unconscious[kimi]"
-pip install "digital-unconscious[browser]"
-pip install "digital-unconscious[full]"
+du doctor        # installed CLIs and configured optional providers
+du models        # every agent's preferred route and fallback
+du doctor --json
+du models --json
 ```
 
-`browser` installs Selenium for the non-Claude browser runner. Claude Code browser/computer-use task packs remain available without Selenium.
-
-## References
-
-- Anthropic Claude Opus 4.8: https://www.anthropic.com/news/claude-opus-4-8
-- OpenAI ChatGPT/Codex release notes: https://help.openai.com/en/articles/6825453-chatgpt-release-notes
-- Kimi K2.6 API docs: https://platform.kimi.ai/docs/guide/kimi-k2-6-quickstart
+Provider responses include `router_provider`, `router_chain`, and—after failover—`router_fallback_from` in internal metadata.

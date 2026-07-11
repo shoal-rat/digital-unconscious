@@ -81,9 +81,15 @@ class DigitalUnconsciousEngine:
             backend_kwargs["openai_api_key"] = config.ai.openai_api_key
         if config.ai.kimi_api_key:
             backend_kwargs["kimi_api_key"] = config.ai.kimi_api_key
+        if config.ai.deepseek_api_key:
+            backend_kwargs["deepseek_api_key"] = config.ai.deepseek_api_key
+        if config.ai.glm_api_key:
+            backend_kwargs["glm_api_key"] = config.ai.glm_api_key
         backend_kwargs["default_model"] = config.ai.default_model
         backend_kwargs["openai_default_model"] = config.ai.openai_default_model
         backend_kwargs["kimi_default_model"] = config.ai.kimi_default_model
+        backend_kwargs["deepseek_default_model"] = config.ai.deepseek_default_model
+        backend_kwargs["glm_default_model"] = config.ai.glm_default_model
         backend_kwargs["enable_fallback"] = config.ai.fallback
         backend_kwargs["fallback_order"] = config.ai.fallback_order
         raw_backend: AIBackend = create_backend(config.ai.mode, **backend_kwargs)
@@ -136,22 +142,12 @@ class DigitalUnconsciousEngine:
             blacklist_apps=_blacklist,
         )
         self.file_observer = FileObserver(blacklist_apps=_blacklist)
-        # Vision observation needs a multimodal API backend (the local Claude Code
-        # CLI cannot take inline images), so only enable it when a hosted key exists.
-        import os as _os
-        _vision_capable = bool(
-            config.ai.api_key or _os.environ.get("ANTHROPIC_API_KEY")
-            or config.ai.openai_api_key or _os.environ.get("OPENAI_API_KEY")
-            or config.ai.kimi_api_key or _os.environ.get("MOONSHOT_API_KEY") or _os.environ.get("KIMI_API_KEY")
-        )
-        self.vision = (
-            VisionObserver(
-                backend=self.backend,
-                model=config.observation.vision_model,
-                max_dimension=config.observation.vision_max_dimension,
-            )
-            if _vision_capable
-            else None
+        # Codex accepts image attachments and Claude Code can inspect an isolated
+        # temporary image with its Read tool, so vision no longer requires an API key.
+        self.vision = VisionObserver(
+            backend=self.backend,
+            model=config.observation.vision_model,
+            max_dimension=config.observation.vision_max_dimension,
         )
         self.research_pipeline = ResearchPipeline(config, backend=self.backend)
         self.maintenance = WorkspaceMaintenance(self.workspace, config)
@@ -686,12 +682,6 @@ class DigitalUnconsciousEngine:
             frames = self.vision.capture()
             if frames:
                 return frames
-
-        if source == "vision" and self.vision is None:
-            logger.warning(
-                "Observation source is 'vision' but no API key is configured — "
-                "add one in Setup. Falling back to a log file if available."
-            )
 
         fallback = log_file or self.config.observation.fallback_log_path
         if fallback:

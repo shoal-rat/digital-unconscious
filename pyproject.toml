@@ -4,26 +4,44 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digital-unconscious"
-version = "1.7.0"
-description = "Passive Screen Observation × AI-Powered Idea Generation — from daily screen behaviour to validated research ideas with zero human intervention"
+version = "2.0.0"
+description = "A quiet, local-first research loop powered by your Codex or Claude subscription"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
   { name = "Digital Unconscious Contributors" }
 ]
+keywords = ["research", "local-first", "codex", "claude-code", "deepseek", "glm"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = ["cryptography>=42"]
+
+[project.urls]
+Homepage = "https://github.com/shoal-rat/digital-unconscious"
+Issues = "https://github.com/shoal-rat/digital-unconscious/issues"
+Changelog = "https://github.com/shoal-rat/digital-unconscious/releases"
 
 [project.optional-dependencies]
 api = ["anthropic>=0.40"]
 openai = ["openai>=1.0"]
 kimi = ["openai>=1.0"]
+deepseek = ["openai>=1.0"]
+glm = ["openai>=1.0"]
+providers = ["anthropic>=0.40", "openai>=1.0"]
 rag = ["chromadb>=0.5"]
 browser = ["selenium>=4.20"]
 figures = ["reportlab>=4.0", "Pillow>=10.0"]
 vision = ["mss>=9.0", "Pillow>=10.0"]
 tray = ["pystray>=0.19", "Pillow>=10.0"]
 full = ["anthropic>=0.40", "openai>=1.0", "chromadb>=0.5", "selenium>=4.20", "pystray>=0.19", "Pillow>=10.0", "reportlab>=4.0", "mss>=9.0"]
+dev = ["ruff>=0.12", "build>=1.2"]
 
 [project.scripts]
 du = "du_research.cli:main"
@@ -34,3 +52,11 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

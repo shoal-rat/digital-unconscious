@@ -1,293 +1,181 @@
-<p align="center"><img src="docs/assets/logo.svg" alt="Digital Unconscious" width="360"></p>
-
-# Digital Unconscious
-
-**A local-first research assistant that turns the traces of your workday into sharper research ideas.**
-
-Digital Unconscious watches the text signals around your screen activity, compresses them into private working notes, proposes cross-domain ideas, scores them, and saves a daily briefing. The strongest ideas can be handed into a staged research pipeline for literature review, feasibility checks, dataset search, analysis, drafting, and review.
-
-It is not a second brain with a chat box. It is closer to a quiet research notebook that notices what you keep circling back to.
-
 <p align="center">
-  <a href="https://github.com/shoal-rat/digital-unconscious/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-111827.svg" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/python-3.11%2B-2563eb.svg" alt="Python 3.11 plus">
-  <img src="https://img.shields.io/badge/local--first-private-059669.svg" alt="Local-first and private">
-  <img src="https://img.shields.io/badge/backends-Claude%20%7C%20OpenAI%20%7C%20Kimi-7c3aed.svg" alt="Claude, OpenAI, and Kimi backends">
+  <img src="docs/assets/logo.svg" alt="Digital Unconscious" width="520">
 </p>
 
+<p align="center"><strong>A quiet research loop for the ideas hidden inside your workday.</strong></p>
+
 <p align="center">
-  <img src="docs/assets/readme-daily-loop.svg" alt="Daily idea loop chart">
+  <a href="https://github.com/shoal-rat/digital-unconscious/actions"><img src="https://img.shields.io/github/actions/workflow/status/shoal-rat/digital-unconscious/ci.yml?branch=main&style=flat-square" alt="Build"></a>
+  <a href="https://github.com/shoal-rat/digital-unconscious/releases"><img src="https://img.shields.io/github/v/release/shoal-rat/digital-unconscious?style=flat-square" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6ee7b7?style=flat-square" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Python-3.11%2B-8b9cff?style=flat-square" alt="Python 3.11 plus">
+  <img src="https://img.shields.io/badge/API_key-not_required-f7c873?style=flat-square" alt="No API key required">
 </p>
 
-## What You Get
+Digital Unconscious turns the weak signals around your screen activity into a short daily briefing, a searchable idea backlog, and—when an idea deserves it—a reproducible research dossier.
 
-- A daily Markdown briefing based on what you read, search, and build.
-- Idea scoring that favors novelty, feasibility, domain fit, and timing.
-- A research backlog you can search later instead of losing half-formed ideas.
-- A six-stage research pipeline for ideas worth pursuing.
-- Multi-provider model routing across Claude Code, Anthropic API, OpenAI/Codex, and Kimi/Moonshot.
-- A small local dashboard at `localhost:9830`.
+It is deliberately small. There is no cloud account, team workspace, social feed, or chat shell. Your signed-in **Codex** or **Claude Code** subscription can run the complete loop, so an API key is optional.
 
-## Where It Fits
-
-Use it when useful ideas tend to appear sideways: while reading papers, comparing tools, debugging code, scanning datasets, or bouncing between fields. Digital Unconscious is designed to preserve those weak signals before they disappear.
-
-It works best for:
-
-- researchers who read across several fields
-- founders and product thinkers collecting patterns
-- analysts who want research questions from daily work
-- builders who want a private idea pipeline instead of another cloud notebook
-
-Final research submissions always wait for your review.
-
-## Quick Start
-
-### Install From GitHub
-
-Windows PowerShell:
-
-```powershell
-pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git"
-du
-```
-
-macOS or Linux:
-
-```bash
-pip install "digital-unconscious[full] @ git+https://github.com/shoal-rat/digital-unconscious.git"
-du
-```
-
-On first run, the setup page opens in your browser. Pick your focus fields, choose an observation source, and set a briefing time.
-
-### Run From Source
+## Start in two minutes
 
 ```bash
 git clone https://github.com/shoal-rat/digital-unconscious.git
 cd digital-unconscious
-pip install -e ".[full]"
-du
-```
+python -m pip install -e ".[vision]"
 
-Try a manual log before wiring up passive capture:
-
-```bash
+du doctor
 du daily --log-file tests/fixtures/daily_log.txt
 du dashboard
 ```
 
-## How It Works
+`du doctor` reports which local subscription CLIs and optional providers are ready without printing secrets. If either Codex or Claude Code is installed and signed in, the app can run without an API key.
 
-> See the complete [**Product Interaction Diagram**](docs/PRODUCT_INTERACTION.md) — every flow from install to daily briefing.
+Install the richer desktop and research extras only if you need them:
 
-1. **Observe**: Read your screen with a vision model (screenshots → topics and intent), or via [screenpipe](https://github.com/mediar-ai/screenpipe) OCR, or a JSONL/plain-text log file.
-2. **Compress**: Turn 30-minute windows into compact behavior summaries.
-3. **Generate**: Ask a creative model to find cross-domain research ideas.
-4. **Judge**: Score each idea against novelty, feasibility, relevance, and timing.
-5. **Brief**: Save a short daily briefing and append strong ideas to the backlog.
-6. **Research**: Optionally promote top ideas into the research pipeline.
-7. **Learn**: Update the human idea model and prompt refinements from completed runs.
-
-<p align="center">
-  <img src="docs/assets/readme-research-pipeline.svg" alt="Research pipeline chart">
-</p>
-
-## Multi-Provider Backends
-
-Digital Unconscious has one backend interface, but you can route different agents to different providers.
-
-<p align="center">
-  <img src="docs/assets/readme-provider-routing.svg" alt="Provider routing chart">
-</p>
-
-Default mode is `auto`:
-
-1. Anthropic API if `ANTHROPIC_API_KEY` exists
-2. OpenAI API if `OPENAI_API_KEY` exists
-3. Kimi/Moonshot if `MOONSHOT_API_KEY` or `KIMI_API_KEY` exists
-4. local Claude Code otherwise
-
-When a hosted key is set, `auto` routes through the multi-provider layer so a
-failing provider fails over to the next available one — ending at the local
-Claude Code CLI. Set `[ai].fallback = false` to pin a single provider.
-
-For deliberate routing, use `mode = "multi"`:
-
-```toml
-[ai]
-mode = "multi"
-creative_model = "openai:gpt-5.5"
-judge_model = "anthropic:claude-sonnet-4-6"
-compressor_model = "kimi:kimi-k2.6"
-briefing_model = "claude_code:opus"
+```bash
+python -m pip install -e ".[full]"
 ```
 
-More examples live in [docs/MULTI_PROVIDER_BACKENDS.md](docs/MULTI_PROVIDER_BACKENDS.md).
+## The loop
 
-## Core Features
+<p align="center">
+  <img src="docs/assets/readme-daily-loop.svg" alt="The daily research loop">
+</p>
 
-### Passive Observation
+1. **Observe** a screenshot, screenpipe stream, or plain text activity log.
+2. **Compress** noisy activity into bounded 30-minute working notes.
+3. **Connect** distant topics into concrete research questions.
+4. **Challenge** each idea for novelty, feasibility, fit, and timing.
+5. **Brief** only the strongest ideas and keep the rest in a bounded backlog.
+6. **Research** selected ideas through literature, feasibility, data, analysis, drafting, and review.
 
-- vision screen reading (screenshots → a multimodal model) — the easy default, no extra software
-- screenpipe integration for local OCR capture (optional)
-- JSONL and plain-text fallback logs
-- optional app blacklist
+Every research stage writes JSON, readable Markdown, and trace events. Runs can be inspected and resumed without replaying completed work.
 
-### Idea Generation And Judging
+## Models fit the work—not the other way around
 
-- creative idea generation from compressed workday summaries
-- focus-field filtering so ideas land in your actual domains
-- RAG context from ChromaDB or the file fallback store
-- conservative judge thresholds to keep briefings short
+<p align="center">
+  <img src="docs/assets/readme-provider-routing.svg" alt="Workload-first model routing">
+</p>
 
-### Research Pipeline
+The default policy is opinionated but replaceable:
 
-- literature search across open scholarly sources
-- AI feasibility assessment with risks and recommended methods
-- open dataset discovery
-- analysis artifact generation
-- Markdown and PDF manuscript drafting
-- peer-review and revision loop
-- supervised computer-use task packs for browser-heavy work
+| Work | Preferred route | Why |
+| --- | --- | --- |
+| Compression and briefing | DeepSeek V4 Flash, then local CLIs | Economical high-volume synthesis |
+| Idea generation and adversarial review | Codex subscription | Strong structured reasoning with no API key |
+| Judging, drafting, and revision | Claude Code subscription | Careful long-form work with no API key |
+| Long-horizon analysis | GLM-5.1, then local CLIs | Optional agentic engineering path |
 
-### Learning Loop
+Missing credentials are normal. The router skips unavailable providers and falls through to Codex, Claude Code, or another configured backend. Inspect the effective plan with:
 
-- human idea model built from daily ideas and completed research runs
-- prompt evolution with shadow-tested edits
-- domain knowledge expansion from successful runs
-- conservative scheduler to avoid overfitting to one noisy day
+```bash
+du models
+```
 
-### Desktop Workflow
+Optional hosted providers use environment variables:
 
-- tray icon for quick actions
-- dashboard for briefings, backlog, learning, and service status
-- background service daemon
-- optional autostart on login
+```bash
+export DEEPSEEK_API_KEY="..."   # DeepSeek V4 Flash / Pro
+export ZAI_API_KEY="..."        # GLM-5.1
+export OPENAI_API_KEY="..."     # GPT-5.6 family
+export ANTHROPIC_API_KEY="..."  # Claude API
+```
 
-### Reliability, Reasoning, And Cost
+See [Model routing](docs/MULTI_PROVIDER_BACKENDS.md) for modes, prefixes, and fallback behavior.
 
-- automatic provider failover across Claude, OpenAI, Kimi, and local Claude Code
-- optional extended-thinking budgets for idea generation and judging
-- per-cycle token and cost tracking in the briefing footer and dashboard
-- circuit breaker with retries and exponential backoff
-- bounded long-term memory: deduplicated RAG store, consolidated profiles, and retention caps so months of use never bloat prompts or disk
+## Research pipeline
 
-### Vision And Web Search (LLM-native)
+<p align="center">
+  <img src="docs/assets/readme-research-pipeline.svg" alt="Six-stage research pipeline">
+</p>
 
-- read your screen with a multimodal model — no OCR or extra software to install
-- agents can search the web when they hit an unfamiliar or trending topic
-- `du usage` shows token/cost; `du models` shows how each agent routes to a provider
-- run a cycle or start/stop the background service from the dashboard — no commands needed
+Promote a specific question or let the app choose the strongest backlog item:
+
+```bash
+du research --idea "How can sparse attention change long-running personal research agents?"
+du research --auto
+```
+
+The pipeline searches open scholarly sources, checks feasibility, discovers datasets, creates analysis artifacts, drafts a dossier, and runs a review/revision loop. Final submission remains a human decision.
 
 ## Commands
 
-| Command | Use it for |
+| Command | Purpose |
 | --- | --- |
-| `du` | Launch the desktop experience |
-| `du setup` | Re-run the setup wizard |
-| `du dashboard` | Open the local web dashboard |
-| `du daily` | Run one daily cycle now |
-| `du daily --log-file path/to/log.txt` | Run from a manual activity log |
-| `du research --idea "..."` | Run the research pipeline for one idea |
-| `du research --auto` | Pick the strongest backlog idea |
-| `du learn` | Update the learning model |
-| `du usage` | Token and cost report across daily cycles |
-| `du models` | Show how each agent routes to a provider/model |
-| `du config --focus "field1,field2"` | Set focus fields for idea filtering |
-| `du service start` | Start the background daemon |
-| `du service status` | Check daemon state |
-| `du credential add/list` | Manage encrypted credentials |
-| `du export-computer-task --run-id ID` | Create a supervised browser task pack |
+| `du doctor` | Check zero-key local runtimes and optional providers |
+| `du daily [--log-file PATH]` | Run one observation-to-briefing cycle |
+| `du dashboard` | Open the local dashboard |
+| `du models` | Explain per-agent routing and fallback |
+| `du usage` | Summarize recorded token and cost metadata |
+| `du research --idea "…"` | Start a six-stage research run |
+| `du research --auto` | Promote the best backlog idea |
+| `du learn` | Update the bounded personal idea model |
+| `du service start|stop|status` | Manage the background cycle |
+| `du config --focus "a,b"` | Narrow idea output to chosen fields |
 
-## Configuration
+## A small configuration surface
 
-Most settings live in [config/pipeline.toml](config/pipeline.toml).
+The checked-in defaults live in [`config/pipeline.toml`](config/pipeline.toml). The useful knobs are intentionally few:
 
 ```toml
 [ai]
-mode = "auto"            # auto-upgrades to multi-provider failover when a key is set
+mode = "auto"
 fallback = true
-think_idea_budget = 0    # set e.g. 8192 to enable extended thinking for ideas
-think_judge_budget = 0
-
-[idea]
-primary_domains = ["AI tools", "product design"]
-secondary_domains = ["cognitive science", "business models"]
-focus_fields = ["economics research", "management"]
-include_threshold = 75
-max_ideas_per_cycle = 8
+compressor_model = "deepseek:deepseek-v4-flash"
+creative_model = "codex:default"
+judge_model = "claude_code:sonnet"
 
 [observation]
-enabled = true
-screenpipe_url = "http://localhost:3030"
-blacklist_apps = ["game", "video_player"]
+source = "auto" # vision -> screenpipe -> file fallback
+blacklist_apps = ["password manager", "bank"]
 
-[automation]
-auto_execute = false
-checkpoint_policy = "best_effort"
+[idea]
+focus_fields = ["economics", "management"]
+include_threshold = 75
+max_ideas_per_cycle = 8
 ```
 
-Use environment variables for model keys:
+Provider prefixes are `codex:`, `claude_code:`, `deepseek:`, `glm:`, `openai:`, `anthropic:`, and `kimi:`.
 
-```bash
-export ANTHROPIC_API_KEY="..."
-export OPENAI_API_KEY="..."
-export MOONSHOT_API_KEY="..."
-```
+## Privacy, precisely
 
-On Windows PowerShell:
+“Local-first” here means storage, orchestration, retention, and the dashboard are local. It does **not** mean the selected language model runs on-device.
 
-```powershell
-$env:ANTHROPIC_API_KEY = "..."
-$env:OPENAI_API_KEY = "..."
-$env:MOONSHOT_API_KEY = "..."
-```
+- Activity artifacts live under `workspace/` and are ignored by Git.
+- Text summaries are sent to the selected model when a model-backed step runs.
+- Vision sends the captured image to the selected model service, including when invoked through a subscription CLI.
+- Temporary images used by Codex or Claude Code are isolated and deleted after each call.
+- The setup page never stores API keys; optional hosted keys come from environment variables.
+- An app blacklist can prevent capture from named applications.
+- Browser automation never approves payments, CAPTCHA, MFA, or terms on your behalf.
 
-## Notes
+Read the complete [security and data boundary](docs/SECURITY.md) before enabling passive vision.
 
-- Local-first: your data lives in `workspace/` on your machine; no telemetry, no cross-user learning.
-- Vision mode sends screenshots to your chosen model (Claude, OpenAI, or Kimi); text modes send summaries. An optional app blacklist skips anything you'd rather not capture.
-- Credentials are stored in an encrypted local vault.
-- Final research submissions wait for your review.
+## Architecture
 
-## Project Map
+The application keeps a stable `AIBackend.call(...)` contract while splitting implementation into four narrow pieces:
 
 ```text
-src/du_research/
-  agents/             model-backed agents
-  stages/             literature, feasibility, data, analysis, drafting, review
-  ai_backend.py       Claude Code, Anthropic, OpenAI, and Kimi routing
-  automation.py       browser task-pack runners
-  credential_broker.py encrypted credential vault
-  dashboard.py        local web UI
-  engine.py           daily cycle and learning orchestration
-  observation.py      screenpipe and file observation
-  pipeline.py         six-stage research pipeline
-  rag.py              ChromaDB or file-backed knowledge store
+backends/base.py    response contract and shared normalization
+backends/local.py   isolated Codex and Claude Code subscription runners
+backends/hosted.py  optional API adapters
+backends/router.py  availability, workload routing, and fallback
 ```
 
-## Testing
+The rest of the product remains provider-blind. See [Architecture](docs/ARCHITECTURE.md) and the [v2 reconstruction audit](docs/RECONSTRUCTION.md).
 
-The test suite uses `unittest`:
+## Test and build
 
 ```bash
 python -m unittest discover -s tests -v
+python -m compileall -q src
+python -m build
 ```
 
-For a lightweight import check:
+The core test suite does not require network access or provider credentials. Local Codex and Claude Code have separate smoke paths exposed through `du doctor` and the backend integration tests.
 
-```bash
-python -c "from du_research.ai_backend import create_backend; print(type(create_backend('claude_code')).__name__)"
-```
+## Scope
 
-## Notes For Contributors
+Digital Unconscious is for one person, on one machine, with bounded local memory. Multi-user deployment, institutional login automation, payments, and autonomous publication are intentionally outside the product.
 
-- Read [AGENTS.md](AGENTS.md) before making agent-assisted changes.
-- Keep optional integrations lazy at import time.
-- Do not commit runtime data from `workspace/`.
-- Keep browser automation supervised and allowlisted.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+MIT licensed. Contributions should preserve the small surface, honest privacy language, lazy optional dependencies, and human approval boundary described in [`AGENTS.md`](AGENTS.md).

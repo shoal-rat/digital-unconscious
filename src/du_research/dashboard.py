@@ -344,12 +344,12 @@ def _page(title: str, content: str, active: str = "") -> str:
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} — Digital Unconscious</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='28' fill='%231a1d27'/><circle cx='32' cy='32' r='10' fill='%236c8aff'/><circle cx='32' cy='32' r='5' fill='%23b4c8ff'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='4' width='56' height='56' rx='18' fill='%230d1220'/><path d='M13 27c8-8 14 8 22 0s12-6 16 0' fill='none' stroke='%2372e6c1' stroke-width='4' stroke-linecap='round'/><path d='m17 40 14 9 16-13M31 49l5-17' fill='none' stroke='%238b9cff' stroke-width='2'/></svg>">
 <style>{_CSS}</style>
 </head><body>
 <div class="container">
 <div class="topbar">
-<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="duG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#b07cff"/></linearGradient></defs><circle cx="16" cy="16" r="15" fill="#11131c" stroke="url(#duG)" stroke-width="1.5"/><circle cx="16" cy="16" r="8.5" stroke="url(#duG)" stroke-width="1.5" opacity="0.85"/><circle cx="16" cy="16" r="3.2" fill="url(#duG)"/></svg><span class="name">Digital <span>Unconscious</span></span></a>
+<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="duG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#72e6c1"/><stop offset=".55" stop-color="#8b9cff"/><stop offset="1" stop-color="#d28cff"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="10" fill="#11131c" stroke="#293149"/><path d="M6 13c5-5 8 5 13 0s6-3 8 0" stroke="url(#duG)" stroke-width="2.2" stroke-linecap="round"/><path d="m8 20 7 5 9-7m-9 7 3-10" stroke="url(#duG)" stroke-width="1.2" opacity=".8"/><circle cx="8" cy="20" r="1.5" fill="#72e6c1"/><circle cx="15" cy="25" r="1.5" fill="#8b9cff"/><circle cx="24" cy="18" r="1.5" fill="#d28cff"/></svg><span class="name">Digital <span>Unconscious</span></span></a>
 <nav>{nav_html}</nav>
 </div>
 {content}
@@ -475,21 +475,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <h2>2. Observation source</h2>
   <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
     How should the system observe your screen? <b>Automatic</b> uses whatever is available.
-    <b>Vision</b> reads your whole screen with AI and needs an API key below.
+    <b>Vision</b> uses your signed-in Codex or Claude Code subscription.
   </p>
   <div class="form-group">
     <label>Source</label>
     <select name="observation_mode">
       <option value="auto">Automatic — use the best available (recommended)</option>
-      <option value="vision">Vision — read my screen with AI (needs a key below)</option>
+      <option value="vision">Vision — local subscription model</option>
       <option value="screenpipe">Screenpipe (if installed)</option>
       <option value="logfile">Manual log file (JSONL or text)</option>
     </select>
   </div>
-  <div class="form-group">
-    <label>AI API key (optional — enables vision and the strongest models)</label>
-    <input type="password" name="api_key" placeholder="sk-ant-… / sk-… / Kimi key — blank uses local Claude Code" value="">
-  </div>
+  <p style="color:var(--muted);font-size:13px">
+    No API key is needed. Run <code>du doctor</code> to check Codex and Claude Code.
+    Optional hosted providers are configured with environment variables, never stored by this form.
+  </p>
 </div>
 
 <div class="card">
@@ -503,8 +503,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <div style="text-align:center;margin-top:24px">
   <button type="submit">Start Digital Unconscious</button>
   <p style="color:var(--muted);font-size:12px;margin-top:12px">
-    This will enable autostart so the system runs silently in the background.
-    You'll receive daily briefings automatically.
+    On supported desktops, setup also enables the background schedule.
+    You can always manage it later from the Status page.
   </p>
 </div>
 </form>
@@ -522,7 +522,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
         secondary = params.get("secondary_domains", [""])[0]
         briefing_time = params.get("briefing_time", ["22:00"])[0]
         source = params.get("observation_mode", ["auto"])[0].strip().lower()
-        api_key = params.get("api_key", [""])[0].strip()
 
         # Update config
         if focus:
@@ -536,18 +535,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
         source = {"logfile": "file"}.get(source, source)
         if source in {"auto", "vision", "screenpipe", "file"}:
             self.config.observation.source = source
-
-        ai_settings: dict[str, str] = {}
-        if api_key:
-            if api_key.startswith("sk-ant"):
-                self.config.ai.api_key = api_key
-                ai_settings["api_key"] = api_key
-            elif api_key.startswith("sk-"):
-                self.config.ai.openai_api_key = api_key
-                ai_settings["openai_api_key"] = api_key
-            else:
-                self.config.ai.kimi_api_key = api_key
-                ai_settings["kimi_api_key"] = api_key
 
         # Save settings as a nested dict so apply_user_settings reloads them on
         # every future start (a flat dict would be silently ignored).
@@ -563,8 +550,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "daily": {"briefing_time": self.config.daily.briefing_time},
             "observation": {"enabled": True, "source": self.config.observation.source},
         }
-        if ai_settings:
-            settings["ai"] = ai_settings
         (setup_dir / "user_settings.json").write_text(
             json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8"
         )
@@ -835,12 +820,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if cycles else "No usage yet — run a cycle from the Dashboard."
         )
         info = resolve_routing(self.config)
-        routing_rows = "".join(
-            f'<tr><td style="padding:4px 14px 4px 0">{e["agent"]}</td>'
-            f'<td style="padding:4px 14px 4px 0;color:var(--muted)">{e["configured"]}</td>'
-            f'<td style="padding:4px 0">{e["provider"]}:{e["model"]}{"" if e["available"] else " <span style=\'color:var(--muted)\'>(fallback)</span>"}</td></tr>'
-            for e in info["routing"]
-        )
+        routing_rows = ""
+        for entry in info["routing"]:
+            target = f'{entry["provider"]}:{entry["model"]}'
+            if not entry["available"]:
+                fallback = entry.get("fallback_provider") or "unavailable"
+                fallback_model = entry.get("fallback_model")
+                if fallback_model:
+                    fallback += f":{fallback_model}"
+                target += f' <span style="color:var(--muted)">→ {fallback}</span>'
+            routing_rows += (
+                f'<tr><td style="padding:4px 14px 4px 0">{entry["agent"]}</td>'
+                f'<td style="padding:4px 14px 4px 0;color:var(--muted)">{entry["configured"]}</td>'
+                f'<td style="padding:4px 0">{target}</td></tr>'
+            )
 
         content = f"""
 <h1>System Status</h1>
@@ -863,7 +856,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 <div class="card">{runs_html or "<p>No recent activity.</p>"}</div>
 
 <div class="card">
-  <p>Change your focus fields, observation source, or API key on the <a href="/setup">Settings</a> page.</p>
+  <p>Change your focus fields or observation source on the <a href="/setup">Settings</a> page.</p>
 </div>
 """
         self._html_response(_page("Status", content, active="status"))

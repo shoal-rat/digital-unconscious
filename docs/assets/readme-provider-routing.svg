@@ -1,52 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
-  <title id="title">Multi-provider model routing</title>
-  <desc id="desc">A chart showing how role aliases route to Claude Code, Anthropic API, OpenAI, and Kimi.</desc>
-  <rect width="960" height="360" rx="18" fill="#fbfcff"/>
-  <text x="48" y="54" fill="#111827" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="28" font-weight="700">Use the model that fits the job</text>
-  <text x="48" y="84" fill="#5b6475" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15">One backend interface. Provider prefixes only when you want to steer a specific agent.</text>
-
-  <g font-family="Inter,Segoe UI,Arial,sans-serif">
-    <g transform="translate(52 124)">
-      <rect width="180" height="154" rx="14" fill="#eef6ff" stroke="#b7dcff"/>
-      <text x="22" y="34" fill="#0f4c81" font-size="18" font-weight="700">Claude Code</text>
-      <text x="22" y="62" fill="#42526b" font-size="13">Browser tasks</text>
-      <text x="22" y="84" fill="#42526b" font-size="13">Local handoffs</text>
-      <text x="22" y="106" fill="#42526b" font-size="13">Computer-use packs</text>
-      <rect x="22" y="122" width="116" height="20" rx="10" fill="#d2eaff"/>
-      <text x="80" y="137" text-anchor="middle" fill="#0f4c81" font-size="12">claude_code:opus</text>
-    </g>
-    <g transform="translate(278 124)">
-      <rect width="180" height="154" rx="14" fill="#f5f1ff" stroke="#dacbff"/>
-      <text x="22" y="34" fill="#5732a8" font-size="18" font-weight="700">Anthropic</text>
-      <text x="22" y="62" fill="#42526b" font-size="13">Careful judging</text>
-      <text x="22" y="84" fill="#42526b" font-size="13">Long drafting</text>
-      <text x="22" y="106" fill="#42526b" font-size="13">Claude model calls</text>
-      <rect x="22" y="122" width="128" height="20" rx="10" fill="#e7ddff"/>
-      <text x="86" y="137" text-anchor="middle" fill="#5732a8" font-size="12">anthropic:sonnet</text>
-    </g>
-    <g transform="translate(504 124)">
-      <rect width="180" height="154" rx="14" fill="#ecfff9" stroke="#b7efdf"/>
-      <text x="22" y="34" fill="#08745f" font-size="18" font-weight="700">OpenAI</text>
-      <text x="22" y="62" fill="#42526b" font-size="13">Codex-style calls</text>
-      <text x="22" y="84" fill="#42526b" font-size="13">Fast scans</text>
-      <text x="22" y="106" fill="#42526b" font-size="13">JSON tasks</text>
-      <rect x="22" y="122" width="112" height="20" rx="10" fill="#ccf5e9"/>
-      <text x="78" y="137" text-anchor="middle" fill="#08745f" font-size="12">openai:gpt-5.5</text>
-    </g>
-    <g transform="translate(730 124)">
-      <rect width="180" height="154" rx="14" fill="#fff7e8" stroke="#f6d69a"/>
-      <text x="22" y="34" fill="#8a5a05" font-size="18" font-weight="700">Kimi</text>
-      <text x="22" y="62" fill="#42526b" font-size="13">Large context</text>
-      <text x="22" y="84" fill="#42526b" font-size="13">Multimodal input</text>
-      <text x="22" y="106" fill="#42526b" font-size="13">OpenAI-compatible</text>
-      <rect x="22" y="122" width="112" height="20" rx="10" fill="#fde6b4"/>
-      <text x="78" y="137" text-anchor="middle" fill="#8a5a05" font-size="12">kimi:kimi-k2.6</text>
-    </g>
-  </g>
-
-  <g font-family="Inter,Segoe UI,Arial,sans-serif">
-    <path d="M146 300 C240 328, 720 328, 814 300" fill="none" stroke="#d4d9e5" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="480" cy="318" r="22" fill="#111827"/>
-    <text x="480" y="323" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700">AIBackend</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460" role="img" aria-labelledby="title desc">
+  <title id="title">Workload-first model routing</title>
+  <desc id="desc">Routine synthesis prefers economical DeepSeek; long-horizon analysis can use GLM; local Codex and Claude subscriptions provide the zero-key core.</desc>
+  <defs><linearGradient id="bg2"><stop stop-color="#0b0f18"/><stop offset="1" stop-color="#11182a"/></linearGradient><linearGradient id="router" x1="0" x2="1"><stop stop-color="#72e6c1"/><stop offset=".52" stop-color="#8b9cff"/><stop offset="1" stop-color="#d28cff"/></linearGradient></defs>
+  <rect width="1200" height="460" rx="28" fill="url(#bg2)"/>
+  <text x="54" y="58" fill="#eef2fb" font-family="Inter,Segoe UI,sans-serif" font-size="29" font-weight="750">Spend intelligence where it changes the answer</text>
+  <text x="54" y="87" fill="#929db8" font-family="Inter,Segoe UI,sans-serif" font-size="15">Every preferred route has a transparent fallback. No key is a supported configuration.</text>
+  <g font-family="Inter,Segoe UI,sans-serif">
+    <g transform="translate(56 132)"><rect width="236" height="116" rx="18" fill="#12251f" stroke="#2b6956"/><text x="22" y="34" fill="#72e6c1" font-size="12" font-weight="750" letter-spacing="1.5">ECONOMICAL</text><text x="22" y="65" fill="#eef2fb" font-size="20" font-weight="750">DeepSeek V4 Flash</text><text x="22" y="91" fill="#94aa9f" font-size="13">compress · summarize · brief</text></g>
+    <g transform="translate(56 282)"><rect width="236" height="116" rx="18" fill="#192039" stroke="#45569a"/><text x="22" y="34" fill="#8b9cff" font-size="12" font-weight="750" letter-spacing="1.5">LONG HORIZON</text><text x="22" y="65" fill="#eef2fb" font-size="20" font-weight="750">GLM-5.1</text><text x="22" y="91" fill="#9aa4c8" font-size="13">analysis · engineering · planning</text></g>
+    <path d="M310 190 H452 M310 340 H452" stroke="#42506f" stroke-width="3" stroke-linecap="round"/><path d="M452 190 l-10 -7 v14z M452 340 l-10 -7 v14z" fill="#667695"/>
+    <g transform="translate(452 155)"><rect width="296" height="220" rx="28" fill="#131a28" stroke="url(#router)" stroke-width="2"/><circle cx="148" cy="70" r="38" fill="url(#router)" opacity=".95"/><path d="M130 70 h36 M148 52 v36" stroke="#101521" stroke-width="5" stroke-linecap="round"/><text x="148" y="132" text-anchor="middle" fill="#eef2fb" font-size="22" font-weight="780">Workload router</text><text x="148" y="160" text-anchor="middle" fill="#9aa5bf" font-size="13">availability · effort · fallback</text><rect x="66" y="181" width="164" height="24" rx="12" fill="#1f293d"/><text x="148" y="198" text-anchor="middle" fill="#b6c0d7" font-size="12">one AIBackend contract</text></g>
+    <path d="M748 215 H890 M748 315 H890" stroke="#42506f" stroke-width="3" stroke-linecap="round"/><path d="M890 215 l-10 -7 v14z M890 315 l-10 -7 v14z" fill="#667695"/>
+    <g transform="translate(890 132)"><rect width="254" height="116" rx="18" fill="#1e1b31" stroke="#6b55a0"/><text x="22" y="34" fill="#c29bf4" font-size="12" font-weight="750" letter-spacing="1.5">ZERO-KEY CORE</text><text x="22" y="65" fill="#eef2fb" font-size="20" font-weight="750">Claude Code</text><text x="22" y="91" fill="#aaa1c2" font-size="13">judge · write · revise</text></g>
+    <g transform="translate(890 282)"><rect width="254" height="116" rx="18" fill="#251a2b" stroke="#8c4b82"/><text x="22" y="34" fill="#e58fd7" font-size="12" font-weight="750" letter-spacing="1.5">ZERO-KEY CORE</text><text x="22" y="65" fill="#eef2fb" font-size="20" font-weight="750">Codex</text><text x="22" y="91" fill="#baa2b7" font-size="13">connect · review · vision</text></g>
   </g>
 </svg>

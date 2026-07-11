@@ -51,9 +51,17 @@ def _build_backend(config):
         backend_kwargs["openai_api_key"] = config.ai.openai_api_key
     if config.ai.kimi_api_key:
         backend_kwargs["kimi_api_key"] = config.ai.kimi_api_key
+    if config.ai.deepseek_api_key:
+        backend_kwargs["deepseek_api_key"] = config.ai.deepseek_api_key
+    if config.ai.glm_api_key:
+        backend_kwargs["glm_api_key"] = config.ai.glm_api_key
     backend_kwargs["default_model"] = config.ai.default_model
     backend_kwargs["openai_default_model"] = config.ai.openai_default_model
     backend_kwargs["kimi_default_model"] = config.ai.kimi_default_model
+    backend_kwargs["deepseek_default_model"] = config.ai.deepseek_default_model
+    backend_kwargs["glm_default_model"] = config.ai.glm_default_model
+    backend_kwargs["enable_fallback"] = config.ai.fallback
+    backend_kwargs["fallback_order"] = config.ai.fallback_order
     raw_backend = create_backend(config.ai.mode, **backend_kwargs)
     return CircuitBreaker(
         backend=raw_backend,
@@ -135,8 +143,26 @@ def _cmd_models(config, as_json: bool = False) -> int:
     print(f"\n  {'Agent':<16}{'Configured':<16}{'Resolves to':<30}")
     print(f"  {'-' * 60}")
     for entry in info["routing"]:
-        flag = "" if entry["available"] else "  (no key — will fall back)"
+        flag = "" if entry["available"] else f"  (falls back to {entry['fallback_provider'] or 'none'})"
         print(f"  {entry['agent']:<16}{entry['configured']:<16}{entry['provider'] + ':' + entry['model']:<30}{flag}")
+    print()
+    return 0
+
+
+def _cmd_doctor(as_json: bool = False) -> int:
+    """Explain provider readiness without exposing credentials."""
+    from du_research.backends.router import diagnose_providers
+
+    rows = diagnose_providers()
+    if as_json:
+        print(json.dumps({"providers": rows}, indent=2, ensure_ascii=False))
+        return 0
+    print("\n  Runtime doctor — Digital Unconscious\n")
+    for row in rows:
+        marker = "ready" if row["ready"] else "optional"
+        print(f"  {row['provider']:<14} {marker:<10} {row['kind']:<18} {row['detail']}")
+    local_ready = any(row["ready"] for row in rows if row["kind"] == "subscription CLI")
+    print("\n  " + ("No API key is required: a local subscription CLI is ready." if local_ready else "Install and sign in to Codex or Claude Code for zero-key execution."))
     print()
     return 0
 
@@ -201,7 +227,12 @@ def _build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--input", required=True, help="Path to a text or JSONL daily activity file")
 
     init_cmd = subparsers.add_parser("init", help="Initialise the workspace and configuration")
-    init_cmd.add_argument("--mode", choices=["auto", "claude_code", "api"], default="auto", help="AI backend mode")
+    init_cmd.add_argument(
+        "--mode",
+        choices=["auto", "codex", "claude_code", "deepseek", "glm", "openai", "anthropic"],
+        default="auto",
+        help="AI backend mode",
+    )
     init_cmd.add_argument("--force", action="store_true", help="Re-run first-launch setup even if already initialized")
 
     setup_cmd = subparsers.add_parser("setup", help="Run the one-time setup wizard")
@@ -254,6 +285,9 @@ def _build_parser() -> argparse.ArgumentParser:
     models_cmd = subparsers.add_parser("models", help="Show how each agent routes to a provider/model")
     models_cmd.add_argument("--json", action="store_true", help="Machine-readable JSON output")
 
+    doctor_cmd = subparsers.add_parser("doctor", help="Check local CLIs and optional model providers")
+    doctor_cmd.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+
     return parser
 
 
@@ -293,15 +327,11 @@ def main(argv: list[str] | None = None) -> int:
     project_root = Path(__file__).resolve().parents[2]
     apply_user_settings(config)
 
-    # Auto-install research skills on first run or after update
-    from du_research.skill_installer import ensure_skills_installed
-    ensure_skills_installed(project_root)
-
     if getattr(args, "workspace_dir", None):
         config.pipeline.workspace_dir = args.workspace_dir
         apply_user_settings(config)
 
-    if args.command not in {"setup", "init", "autostart", "config"}:
+    if args.command not in {"setup", "init", "autostart", "config", "doctor", "models", "usage"}:
         ensure_first_run_setup(config, project_root=project_root, interactive=None)
 
     service_manager = ServiceManager(config=config, project_root=project_root)
@@ -630,6 +660,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "models":
         return _cmd_models(config, as_json=args.json)
+
+    if args.command == "doctor":
+        return _cmd_doctor(as_json=args.json)
 
     parser.error(f"Unknown command: {args.command}")
     return 2
