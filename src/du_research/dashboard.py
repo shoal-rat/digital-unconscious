@@ -10,15 +10,15 @@ Usage:
 from __future__ import annotations
 
 import json
-import sys
 import webbrowser
-from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import UTC, datetime
+from html import escape
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from du_research.config import AppConfig, load_config
+from du_research.config import AppConfig
 
 
 def _workspace(config: AppConfig) -> Path:
@@ -118,6 +118,48 @@ def _load_idea_backlog(workspace: Path) -> list[dict[str, Any]]:
     return ideas
 
 
+def _list_ideation_sessions(workspace: Path) -> list[dict[str, Any]]:
+    root = workspace / "ideation"
+    if not root.exists():
+        return []
+    sessions = []
+    for directory in sorted(root.glob("session_*"), reverse=True):
+        if not directory.is_dir():
+            continue
+        summary = _load_json(directory / "session.json") or {}
+        manifest = _load_json(directory / "source_manifest.json") or {}
+        sessions.append(
+            {
+                "session_id": directory.name,
+                "created_at": manifest.get("created_at", ""),
+                "source_count": summary.get("source_count", len(manifest.get("sources", []))),
+                "evidence_count": summary.get("evidence_count", 0),
+                "opportunity_count": summary.get("opportunity_count", 0),
+                "idea_count": summary.get("idea_count", 0),
+                "ideas": _load_json(directory / "ideas.json") or [],
+                "report": (directory / "report.md").read_text(encoding="utf-8") if (directory / "report.md").exists() else "",
+            }
+        )
+    return sessions[:30]
+
+
+def _esc(value: Any) -> str:
+    return escape(str(value or ""), quote=True)
+
+
+def _same_local_origin(origin_or_referer: str | None, request_host: str | None) -> bool:
+    """Accept state-changing requests only from this exact local dashboard."""
+    if not origin_or_referer or not request_host:
+        return False
+    parsed = urlparse(origin_or_referer)
+    host = request_host.strip().casefold()
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        and parsed.netloc.casefold() == host
+    )
+
+
 def _load_learning_status(workspace: Path) -> dict[str, Any]:
     model = _load_json(workspace / "learning" / "human_idea_model.json") or {}
     outcomes = _load_json(workspace / "learning" / "run_outcomes.json") or {}
@@ -194,6 +236,9 @@ h3 { font-size:15px; font-weight:600; margin:0 0 8px; }
 .badge-include { background:rgba(67,217,140,.14); color:var(--green); }
 .badge-hold { background:rgba(124,140,255,.14); color:var(--accent); }
 .badge-discard { background:rgba(255,111,145,.14); color:var(--accent2); }
+.badge-ready { background:rgba(67,217,140,.14); color:var(--green); }
+.badge-develop { background:rgba(124,140,255,.14); color:var(--accent); }
+.badge-fragile { background:rgba(255,111,145,.14); color:var(--accent2); }
 .today { background:linear-gradient(180deg,var(--card2),var(--card)); border-left:3px solid #7c8cff; }
 .today .focus { font-size:15.5px; line-height:1.75; color:var(--text); }
 .idea-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
@@ -265,7 +310,7 @@ def _md_to_html(md: str) -> str:
                 in_code = True
             continue
         if in_code:
-            html_lines.append(line)
+            html_lines.append(escape(line))
             continue
 
         if stripped.startswith("---"):
@@ -320,6 +365,7 @@ def _md_to_html(md: str) -> str:
 
 def _inline_md(text: str) -> str:
     import re
+    text = escape(text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
     text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
     text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
@@ -331,6 +377,7 @@ def _page(title: str, content: str, active: str = "") -> str:
         ("", "Dashboard"),
         ("briefing", "Briefings"),
         ("ideas", "Idea Backlog"),
+        ("lab", "Idea Lab"),
         ("learning", "Learning"),
         ("status", "Status"),
         ("setup", "Settings"),
@@ -343,7 +390,7 @@ def _page(title: str, content: str, active: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{title} — Digital Unconscious</title>
+<title>{_esc(title)} — Digital Unconscious</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='4' width='56' height='56' rx='18' fill='%230d1220'/><path d='M13 27c8-8 14 8 22 0s12-6 16 0' fill='none' stroke='%2372e6c1' stroke-width='4' stroke-linecap='round'/><path d='m17 40 14 9 16-13M31 49l5-17' fill='none' stroke='%238b9cff' stroke-width='2'/></svg>">
 <style>{_CSS}</style>
 </head><body>
@@ -390,6 +437,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._serve_briefing(workspace, date)
         elif path == "/ideas":
             self._serve_ideas(workspace)
+        elif path == "/lab":
+            self._serve_lab(workspace, parse_qs(parsed.query))
         elif path == "/learning":
             self._serve_learning(workspace)
         elif path == "/status":
@@ -398,6 +447,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._json_response(_list_daily_cycles(workspace))
         elif path == "/api/ideas":
             self._json_response(_load_idea_backlog(workspace))
+        elif path == "/api/ideation":
+            self._json_response(_list_ideation_sessions(workspace))
         elif path == "/api/status":
             self._json_response(_service_status(workspace))
         else:
@@ -406,8 +457,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
+        source_origin = self.headers.get("Origin") or self.headers.get("Referer")
+        if not _same_local_origin(source_origin, self.headers.get("Host")):
+            self._respond(403, "Cross-origin request rejected")
+            return
         if path == "/setup":
             self._handle_setup_post()
+        elif path == "/lab":
+            self._handle_lab_post()
         elif path == "/api/run":
             self._handle_run_now()
         elif path == "/api/service":
@@ -446,7 +503,126 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._json_response({"status": "error", "error": str(exc)}, status=500)
 
+    def _handle_lab_post(self):
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length <= 0 or content_length > 100_000:
+            self._respond(400, "Invalid form size")
+            return
+        body = self.rfile.read(content_length).decode("utf-8")
+        params = parse_qs(body)
+        papers = [line.strip() for line in params.get("papers", [""])[0].splitlines() if line.strip()]
+        datasets = [line.strip() for line in params.get("datasets", [""])[0].splitlines() if line.strip()]
+        context = params.get("context", [""])[0].strip()
+        if not papers and not datasets:
+            self._html_response(
+                _page(
+                    "Idea Lab",
+                    '<div class="empty"><h2>Add at least one paper or dataset path</h2><p><a href="/lab">Return to Idea Lab</a></p></div>',
+                    active="lab",
+                ),
+                status=400,
+            )
+            return
+        session_id = "session_" + datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
+        args = ["ideate", "--session-id", session_id]
+        for path in papers:
+            args += ["--paper", path]
+        for path in datasets:
+            args += ["--data", path]
+        if context:
+            args += ["--context", context]
+        max_ideas = params.get("max_ideas", [""])[0].strip()
+        if max_ideas.isdigit():
+            args += ["--max-ideas", str(max(1, min(int(max_ideas), 12)))]
+        if "add_to_backlog" not in params:
+            args.append("--no-backlog")
+        try:
+            self._spawn_cli(*args)
+        except Exception as exc:
+            self._respond(500, f"Could not start ideation: {exc}")
+            return
+        self.send_response(303)
+        self.send_header("Location", f"/lab?started={session_id}")
+        self.end_headers()
+
+    def _serve_lab(self, workspace: Path, params: dict[str, list[str]] | None = None):
+        sessions = _list_ideation_sessions(workspace)
+        started = (params or {}).get("started", [""])[0]
+        banner = (
+            f'<div class="success">Idea Lab started <code>{_esc(started)}</code>. '
+            'It will appear below when evidence extraction and review finish. Refresh this page to check.</div>'
+            if started
+            else ""
+        )
+        form = f"""
+<div class="hero"><h1>Research Idea Lab</h1><p class="subtitle">Turn papers and dataset structure into cited opportunities and falsifiable study cards.</p></div>
+{banner}
+<div class="card panel">
+  <form method="POST" action="/lab">
+    <div class="form-group">
+      <label>Paper paths — one per line</label>
+      <textarea name="papers" rows="4" placeholder="/path/to/paper.pdf&#10;/path/to/papers.json"></textarea>
+      <p style="color:var(--faint);font-size:12px">PDF, text, Markdown, JSON, and JSONL are supported. PDFs use the optional <code>papers</code> extra.</p>
+    </div>
+    <div class="form-group">
+      <label>Dataset paths — one per line</label>
+      <textarea name="datasets" rows="3" placeholder="/path/to/data.csv"></textarea>
+      <p style="color:var(--faint);font-size:12px">Only schema and aggregate profile statistics go to the model; raw rows stay local.</p>
+    </div>
+    <div class="form-group">
+      <label>Your research context or constraints</label>
+      <textarea name="context" rows="3" placeholder="Field, population, methods you can use, budget, or the question you care about"></textarea>
+    </div>
+    <div class="row">
+      <div style="width:150px"><label>Maximum ideas</label><input type="text" name="max_ideas" value="{self.config.ideation.max_ideas}"></div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" name="add_to_backlog" checked> Add viable cards to backlog</label>
+    </div>
+    <button type="submit">Build evidence map</button>
+  </form>
+</div>
+"""
+        if not sessions:
+            content = form + '<div class="empty"><h2>No Idea Lab sessions yet</h2><p>Add a paper, a dataset, or both. Each result keeps exact source anchors and explicit novelty uncertainty.</p></div>'
+            self._html_response(_page("Idea Lab", content, active="lab"))
+            return
+
+        session_rows = []
+        for session in sessions[:10]:
+            idea_rows = []
+            for idea in session.get("ideas", [])[:4]:
+                evidence = ", ".join(_esc(item) for item in idea.get("evidence_ids", [])[:4])
+                try:
+                    idea_score = float(idea.get("total_score", 0))
+                except (TypeError, ValueError):
+                    idea_score = 0.0
+                idea_rows.append(
+                    f'<div style="padding:12px 0;border-top:1px solid var(--border)">'
+                    f'<div style="display:flex;justify-content:space-between;gap:12px"><strong>{_esc(idea.get("title"))}</strong>'
+                    f'<span class="badge badge-hold">{_esc(idea.get("verdict", "develop"))} · {idea_score:.1f}</span></div>'
+                    f'<p style="color:var(--muted);font-size:13px;margin-top:5px">{_esc(idea.get("research_question"))}</p>'
+                    f'<p style="color:var(--faint);font-size:12px">Evidence: {evidence or "pending"}</p></div>'
+                )
+            session_rows.append(
+                f'<div class="card"><div style="display:flex;justify-content:space-between;gap:12px">'
+                f'<div><strong>{_esc(session["session_id"])}</strong><div style="color:var(--muted);font-size:12px">{_esc(session.get("created_at"))}</div></div>'
+                f'<div style="color:var(--muted);font-size:12px">{session.get("source_count", 0)} sources · {session.get("evidence_count", 0)} evidence cards · {session.get("idea_count", 0)} ideas</div></div>'
+                + "".join(idea_rows)
+                + "</div>"
+            )
+        content = form + "<h2>Recent evidence maps</h2>" + "".join(session_rows)
+        self._html_response(_page("Idea Lab", content, active="lab"))
+
     def _serve_setup(self, workspace: Path):
+        source_labels = {
+            "auto": "Automatic — use the best available (recommended)",
+            "vision": "Vision — local subscription model",
+            "screenpipe": "Screenpipe (if installed)",
+            "file": "Manual log file (JSONL or text)",
+        }
+        source_options = "".join(
+            f'<option value="{value}"{" selected" if self.config.observation.source == value else ""}>{label}</option>'
+            for value, label in source_labels.items()
+        )
         content = f"""
 <h1>Welcome to Digital Unconscious</h1>
 <p class="subtitle">Let's set up your personal AI research companion. This takes 30 seconds.</p>
@@ -459,15 +635,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
   </p>
   <div class="form-group">
     <label>Focus fields (comma-separated)</label>
-    <input type="text" name="focus_fields" placeholder="e.g. economics research, management, behavioral finance" value="{', '.join(self.config.idea.focus_fields)}">
+    <input type="text" name="focus_fields" placeholder="e.g. economics research, management, behavioral finance" value="{_esc(', '.join(self.config.idea.focus_fields))}">
   </div>
   <div class="form-group">
     <label>Primary domains (your core expertise)</label>
-    <input type="text" name="primary_domains" placeholder="e.g. AI tools, product design" value="{', '.join(self.config.idea.primary_domains)}">
+    <input type="text" name="primary_domains" placeholder="e.g. AI tools, product design" value="{_esc(', '.join(self.config.idea.primary_domains))}">
   </div>
   <div class="form-group">
     <label>Secondary domains (adjacent interests)</label>
-    <input type="text" name="secondary_domains" placeholder="e.g. cognitive science, business models" value="{', '.join(self.config.idea.secondary_domains)}">
+    <input type="text" name="secondary_domains" placeholder="e.g. cognitive science, business models" value="{_esc(', '.join(self.config.idea.secondary_domains))}">
   </div>
 </div>
 
@@ -480,10 +656,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <div class="form-group">
     <label>Source</label>
     <select name="observation_mode">
-      <option value="auto">Automatic — use the best available (recommended)</option>
-      <option value="vision">Vision — local subscription model</option>
-      <option value="screenpipe">Screenpipe (if installed)</option>
-      <option value="logfile">Manual log file (JSONL or text)</option>
+      {source_options}
     </select>
   </div>
   <p style="color:var(--muted);font-size:13px">
@@ -496,15 +669,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
   <h2>3. Briefing schedule</h2>
   <div class="form-group">
     <label>Daily briefing time</label>
-    <input type="text" name="briefing_time" placeholder="22:00" value="{self.config.daily.briefing_time}">
+    <input type="text" name="briefing_time" placeholder="22:00" value="{_esc(self.config.daily.briefing_time)}">
   </div>
 </div>
 
 <div style="text-align:center;margin-top:24px">
   <button type="submit">Start Digital Unconscious</button>
   <p style="color:var(--muted);font-size:12px;margin-top:12px">
-    On supported desktops, setup also enables the background schedule.
-    You can always manage it later from the Status page.
+    Setup saves preferences only. Start the background service explicitly from the Dashboard or Status page.
   </p>
 </div>
 </form>
@@ -512,7 +684,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._html_response(_page("Setup", content, active=""))
 
     def _handle_setup_post(self):
-        import subprocess as _subprocess
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length).decode("utf-8")
         params = parse_qs(body)
@@ -524,12 +695,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         source = params.get("observation_mode", ["auto"])[0].strip().lower()
 
         # Update config
-        if focus:
-            self.config.idea.focus_fields = [f.strip() for f in focus.split(",") if f.strip()]
-        if primary:
-            self.config.idea.primary_domains = [d.strip() for d in primary.split(",") if d.strip()]
-        if secondary:
-            self.config.idea.secondary_domains = [d.strip() for d in secondary.split(",") if d.strip()]
+        self.config.idea.focus_fields = [f.strip() for f in focus.split(",") if f.strip()]
+        self.config.idea.primary_domains = [d.strip() for d in primary.split(",") if d.strip()]
+        self.config.idea.secondary_domains = [d.strip() for d in secondary.split(",") if d.strip()]
         self.config.daily.briefing_time = briefing_time.strip() or "22:00"
 
         source = {"logfile": "file"}.get(source, source)
@@ -555,36 +723,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         )
         # Mark setup complete so the wizard stops auto-opening on launch.
         (setup_dir / "setup_complete.json").write_text(
-            json.dumps({"completed_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False),
+            json.dumps({"completed_at": datetime.now(UTC).isoformat()}, ensure_ascii=False),
             encoding="utf-8",
         )
 
         # Initialize workspace dirs
-        for subdir in ["runs", "learning", "daily", "ideas", "prompts", "queue", "knowledge"]:
+        for subdir in ["runs", "learning", "daily", "ideation", "ideas", "prompts", "queue", "knowledge"]:
             (workspace / subdir).mkdir(parents=True, exist_ok=True)
-
-        # Try to enable autostart
-        try:
-            from du_research.onboarding import enable_autostart
-            project_root = Path(__file__).resolve().parents[2]  # repo root (src/du_research/dashboard.py)
-            enable_autostart(
-                project_root=project_root,
-                config_path=self.config.config_path or (project_root / "config" / "pipeline.toml"),
-                workspace_dir=workspace,
-            )
-        except Exception:
-            pass
-
-        # Start background service
-        try:
-            python = sys.executable
-            _subprocess.Popen(
-                [python, "-m", "du_research.cli", "service", "start"],
-                cwd=str(Path(__file__).resolve().parents[2]),
-                creationflags=_subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-            )
-        except Exception:
-            pass
 
         # Redirect to dashboard
         self.send_response(302)
@@ -664,7 +809,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             today_html = f"""
 <div class="card today">
   <h3>Today's Focus</h3>
-  <div class="focus">{focus}</div>
+  <div class="focus">{_esc(focus)}</div>
   <div style="margin-top:12px"><a href="/briefing?date={latest_date}">Read the full briefing &rarr;</a></div>
 </div>"""
 
@@ -722,31 +867,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
         rows = ""
         for idea in ideas[:50]:
             title = idea.get("title", idea.get("idea_text", "Untitled"))
-            score = idea.get("total_score", 0)
+            try:
+                score = float(idea.get("total_score", 0))
+            except (TypeError, ValueError):
+                score = 0.0
             verdict = idea.get("verdict", "hold")
-            badge_cls = f"badge-{verdict}" if verdict in ("include", "hold", "discard") else "badge-hold"
+            badge_cls = f"badge-{verdict}" if verdict in ("include", "hold", "discard", "ready", "develop", "fragile") else "badge-hold"
             domains = idea.get("domains", [])
-            domain_tags = "".join(f'<span class="tag">{d}</span>' for d in domains[:3])
-            date = idea.get("date", "")
+            domain_tags = "".join(f'<span class="tag">{_esc(d)}</span>' for d in domains[:3])
+            date = _esc(idea.get("date", ""))
+            origin = _esc(idea.get("origin", "daily_scan"))
+            evidence_count = len(idea.get("evidence_ids", []))
             rows += f"""
 <div class="card">
   <div style="display:flex;justify-content:space-between;align-items:start">
     <div>
-      <div class="idea-title">{title}</div>
+      <div class="idea-title">{_esc(title)}</div>
       <div style="margin-top:4px">{domain_tags}</div>
-      <div style="color:var(--muted);font-size:12px;margin-top:4px">{date}</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:4px">{date} · {origin}{f' · {evidence_count} evidence cards' if evidence_count else ''}</div>
     </div>
     <div style="text-align:right">
       <div class="idea-score" style="color:var(--accent)">{score:.0f}</div>
-      <span class="badge {badge_cls}">{verdict}</span>
+      <span class="badge {badge_cls}">{_esc(verdict)}</span>
     </div>
   </div>
-  <p style="color:var(--muted);font-size:13px;margin-top:8px">{idea.get("description", "")[:200]}</p>
+  <p style="color:var(--muted);font-size:13px;margin-top:8px">{_esc(idea.get("research_question") or idea.get("description", ""))[:300]}</p>
 </div>"""
 
         content = f"""
 <h1>Idea Backlog</h1>
-<p class="subtitle">{len(ideas)} ideas across all daily cycles</p>
+<p class="subtitle">{len(ideas)} ideas from daily signals and evidence-backed Idea Lab sessions</p>
 {rows}"""
         self._html_response(_page("Idea Backlog", content, active="ideas"))
 
@@ -761,21 +911,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         obsessions = ""
         for obs in model.get("core_obsessions", []):
-            obsessions += f'<div class="card"><strong>{obs.get("theme", "")}</strong> — strength {obs.get("strength", 0)}, trend: {obs.get("trend", "stable")}</div>'
+            obsessions += f'<div class="card"><strong>{_esc(obs.get("theme", ""))}</strong> — strength {_esc(obs.get("strength", 0))}, trend: {_esc(obs.get("trend", "stable"))}</div>'
 
         blind_spots = ""
         for spot in model.get("recurring_blind_spots", []):
-            blind_spots += f"<li>{spot}</li>"
+            blind_spots += f"<li>{_esc(spot)}</li>"
 
         patterns = ""
         for p in outcomes.get("patterns", []):
-            patterns += f'<div class="card"><strong>{p.get("type", "")}</strong><br><span style="color:var(--muted)">{p.get("insight", "")}</span><br>Action: {p.get("action", "")}</div>'
+            patterns += f'<div class="card"><strong>{_esc(p.get("type", ""))}</strong><br><span style="color:var(--muted)">{_esc(p.get("insight", ""))}</span><br>Action: {_esc(p.get("action", ""))}</div>'
 
         changes_html = _md_to_html(data["changes"]) if data["changes"] else "<p>No changes recorded yet.</p>"
 
         content = f"""
 <h1>Learning Engine</h1>
-<p class="subtitle">Model version {model.get("model_version", 0)} &mdash; last updated {model.get("last_updated", "never")}</p>
+<p class="subtitle">Model version {_esc(model.get("model_version", 0))} &mdash; last updated {_esc(model.get("last_updated", "never"))}</p>
 
 <h2>Core Obsessions</h2>
 {obsessions or "<p>None detected yet.</p>"}
@@ -794,13 +944,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _serve_status(self, workspace: Path):
         service = _service_status(workspace)
         status = service["status"]
-        state = service["state"]
 
         is_running = status.get("running", False)
         interval = status.get("interval_minutes", "—")
         completed = status.get("completed_cycles", 0)
-        last_gc = state.get("last_gc_at", "—")
-
         recent = status.get("recent_runs", [])
         runs_html = ""
         for run in recent[-10:]:
@@ -809,7 +956,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             briefing = "Briefing generated" if run.get("briefing_generated") else ""
             error = run.get("error", "")
             color = "var(--accent2)" if error else "var(--green)" if briefing else "var(--muted)"
-            runs_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">{ts}</span> &mdash; {new_frames} new frames <span style="color:{color}">{briefing}{error}</span></div>'
+            runs_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">{_esc(ts)}</span> &mdash; {_esc(new_frames)} new frames <span style="color:{color}">{_esc(briefing)}{_esc(error)}</span></div>'
 
         from du_research.ai_backend import resolve_routing
         cycles = _list_daily_cycles(workspace)
@@ -822,16 +969,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         info = resolve_routing(self.config)
         routing_rows = ""
         for entry in info["routing"]:
-            target = f'{entry["provider"]}:{entry["model"]}'
+            target = f'{_esc(entry["provider"])}:{_esc(entry["model"])}'
             if not entry["available"]:
-                fallback = entry.get("fallback_provider") or "unavailable"
+                fallback = _esc(entry.get("fallback_provider") or "unavailable")
                 fallback_model = entry.get("fallback_model")
                 if fallback_model:
-                    fallback += f":{fallback_model}"
+                    fallback += f":{_esc(fallback_model)}"
                 target += f' <span style="color:var(--muted)">→ {fallback}</span>'
             routing_rows += (
-                f'<tr><td style="padding:4px 14px 4px 0">{entry["agent"]}</td>'
-                f'<td style="padding:4px 14px 4px 0;color:var(--muted)">{entry["configured"]}</td>'
+                f'<tr><td style="padding:4px 14px 4px 0">{_esc(entry["agent"])}</td>'
+                f'<td style="padding:4px 14px 4px 0;color:var(--muted)">{_esc(entry["configured"])}</td>'
                 f'<td style="padding:4px 0">{target}</td></tr>'
             )
 
@@ -848,7 +995,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 <h2>Model Routing</h2>
 <div class="card">
-  <p style="color:var(--muted);font-size:13px">Mode: {info['mode']} &middot; Providers: {', '.join(info['available_providers'])}</p>
+  <p style="color:var(--muted);font-size:13px">Mode: {_esc(info['mode'])} &middot; Providers: {_esc(', '.join(info['available_providers']))}</p>
   <table style="font-size:13px;border-collapse:collapse">{routing_rows}</table>
 </div>
 

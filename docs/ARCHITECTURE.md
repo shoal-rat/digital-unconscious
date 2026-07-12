@@ -1,9 +1,10 @@
 # Architecture
 
-Digital Unconscious is a local orchestrator around two bounded loops:
+Digital Unconscious is a local orchestrator around three bounded loops:
 
 ```text
 daily:    observe -> compress -> connect -> judge -> brief -> promote
+ideation: sources -> evidence -> opportunities -> study cards -> backlog
 research: literature -> feasibility -> data -> analysis -> draft -> review
 ```
 
@@ -29,6 +30,12 @@ DigitalUnconsciousEngine -------- ResearchPipeline
         +-- daily agents                 +-- review/revision loop
         +-- task queue                    +-- approval record
         +-- bounded memory
+        |
+ResearchIdeationLab
+        |-- paper/record readers
+        |-- private dataset profiler
+        |-- exact-anchor validator
+        `-- deterministic ranking
         |
         v
 CircuitBreaker -> ModelRouter -> provider adapter
@@ -64,6 +71,7 @@ Typical workspace:
 ```text
 workspace/
   daily/cycle_YYYY-MM-DD/
+  ideation/session_<timestamp>/
   ideas/idea_backlog.jsonl
   knowledge/
   learning/
@@ -80,6 +88,11 @@ workspace/
 - Model-dependent work that still cannot complete is persisted to the task queue.
 - Optional dependency failure degrades the relevant edge, not import of the whole package.
 - Research stage completion is recorded only after its artifact is written.
+- Resume reloads completed stage artifacts; attaching new data invalidates analysis and downstream stages only.
+
+## Evidence graph
+
+Idea Lab keeps JSON authoritative. `source_id -> evidence_id -> opportunity_id -> idea_id` is already a graph, so the app does not add a graph database or workflow framework. Exact anchors are accepted only when normalized source text contains them. Dataset profiles expose aggregate structure, never example rows. See [Research Idea Lab](IDEA_LAB.md).
 
 ## Data boundary
 

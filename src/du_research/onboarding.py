@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from du_research.config import AppConfig
 from du_research.utils import iso_now
@@ -132,7 +133,7 @@ def default_user_settings(config: AppConfig) -> dict[str, Any]:
             "briefing_time": config.daily.briefing_time,
         },
         "idea": {
-            "auto_research_enabled": True,
+            "auto_research_enabled": False,
             "auto_research_top_k": config.idea.auto_research_top_k,
             "auto_research_dedupe_enabled": True,
             "auto_research_similarity_threshold": config.idea.auto_research_similarity_threshold,
@@ -141,12 +142,12 @@ def default_user_settings(config: AppConfig) -> dict[str, Any]:
         "automation": {
             "enabled": True,
             "runner": "claude_code",
-            "auto_execute": True,
+            "auto_execute": False,
             "headless": config.automation.headless,
             "timeout_seconds": config.automation.timeout_seconds,
         },
         "setup": {
-            "autostart_enabled": True,
+            "autostart_enabled": False,
         },
     }
 

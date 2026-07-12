@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from du_research.config import AppConfig
@@ -24,6 +23,7 @@ class WorkspaceMaintenance:
     def run(self) -> dict[str, object]:
         removed_observation = self._prune_observation()
         removed_daily = self._prune_daily_cycles()
+        removed_ideation = self._cap_ideation_sessions()
         removed_browser = self._prune_browser_artifacts()
         trimmed_service_log = self._trim_service_log()
         capped_stores = self._cap_growing_stores()
@@ -32,6 +32,7 @@ class WorkspaceMaintenance:
             "timestamp": iso_now(),
             "removed_observation_files": removed_observation,
             "removed_daily_cycles": removed_daily,
+            "removed_ideation_sessions": removed_ideation,
             "removed_browser_artifacts": removed_browser,
             "trimmed_service_log": trimmed_service_log,
             "capped_stores": capped_stores,
@@ -39,12 +40,12 @@ class WorkspaceMaintenance:
         }
 
     def _prune_observation(self) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max(0, self.config.retention.observation_days))
+        cutoff = datetime.now(UTC) - timedelta(days=max(0, self.config.retention.observation_days))
         observation_dir = self.workspace_dir / "observation"
         return self._prune_files_older_than(observation_dir, cutoff)
 
     def _prune_daily_cycles(self) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max(0, self.config.retention.daily_cycle_days))
+        cutoff = datetime.now(UTC) - timedelta(days=max(0, self.config.retention.daily_cycle_days))
         daily_dir = self.workspace_dir / "daily"
         removed = 0
         if not daily_dir.exists():
@@ -58,12 +59,26 @@ class WorkspaceMaintenance:
         return removed
 
     def _prune_browser_artifacts(self) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max(0, self.config.retention.browser_artifact_days))
+        cutoff = datetime.now(UTC) - timedelta(days=max(0, self.config.retention.browser_artifact_days))
         removed = 0
         for raw in [self.config.automation.download_dir, self.config.automation.screenshot_dir]:
             path = self._workspace_path(raw)
             removed += self._prune_files_older_than(path, cutoff)
         return removed
+
+    def _cap_ideation_sessions(self) -> int:
+        root = self.workspace_dir / "ideation"
+        keep = max(0, self.config.retention.ideation_sessions_max)
+        if not root.exists():
+            return 0
+        sessions = sorted(
+            (path for path in root.glob("session_*") if path.is_dir()),
+            key=lambda path: path.stat().st_mtime,
+        )
+        stale = sessions[:-keep] if keep else sessions
+        for path in stale:
+            shutil.rmtree(path, ignore_errors=True)
+        return len(stale)
 
     def _trim_service_log(self) -> bool:
         log_path = self._workspace_path(self.config.service.log_path)
@@ -159,4 +174,4 @@ class WorkspaceMaintenance:
         return self.workspace_dir.joinpath(*parts)
 
     def _mtime_utc(self, path: Path) -> datetime:
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)

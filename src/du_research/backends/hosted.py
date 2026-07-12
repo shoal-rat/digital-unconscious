@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 ANTHROPIC_MODEL_ALIASES = {
     "opus": "claude-opus-4-8",
-    "sonnet": "claude-sonnet-4-6",
+    "sonnet": "claude-sonnet-5",
     "haiku": "claude-haiku-4-5-20251001",
 }
 OPENAI_MODEL_ALIASES = {
@@ -63,7 +63,7 @@ def _resolve(model: str | None, default: str, aliases: dict[str, str]) -> str:
 @dataclass
 class AnthropicAPIBackend:
     api_key: str | None = None
-    default_model: str = "claude-sonnet-4-6"
+    default_model: str = "claude-sonnet-5"
     _client: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:

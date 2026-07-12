@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 from xml.etree import ElementTree as ET
@@ -327,10 +328,19 @@ def _download_open_pdfs(
             continue
         try:
             data = fetch_bytes(pdf_url, timeout=timeout, headers={"Accept": "application/pdf,*/*"})
+            if not data.startswith(b"%PDF-"):
+                raise ValueError("response is not a PDF (access page or HTML was returned)")
             filename = f"{index + 1:02d}_{slugify(paper.title, max_length=40)}.pdf"
             target = pdf_dir / filename
             target.write_bytes(data)
-            downloads.append({"title": paper.title, "pdf_url": pdf_url, "path": str(target)})
+            downloads.append({
+                "title": paper.title,
+                "pdf_url": pdf_url,
+                "path": str(target),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "bytes": len(data),
+                "verified_pdf": True,
+            })
         except Exception as exc:
             errors.append(f"{paper.title}: {exc}")
     return downloads, errors
@@ -348,7 +358,6 @@ def _browse_and_download_papers(
     to visit each paper URL, read the abstract, and download the PDF — exactly
     like a human researcher would.
     """
-    import json as _json
     downloads: list[dict[str, str]] = []
     errors: list[str] = []
     pdf_dir = output_dir / "pdfs"
@@ -360,39 +369,28 @@ def _browse_and_download_papers(
             continue
 
         prompt = (
-            f"Browse to this academic paper and download the PDF.\n\n"
+            f"Look for a lawful open-access copy of this academic paper.\n\n"
             f"Title: {paper.title}\n"
             f"URL: {url}\n"
             f"DOI: {paper.doi or 'N/A'}\n\n"
             f"Instructions:\n"
             f"1. Open the URL in Chrome\n"
-            f"2. If it's a PDF, download it to: {pdf_dir}\n"
-            f"3. If it's a landing page, find and click the PDF download link\n"
-            f"4. If there's a 'Download PDF' or 'View PDF' button, click it\n"
-            f"5. For arXiv, append .pdf to the abstract URL\n"
-            f"6. Save the file as: {slugify(paper.title, max_length=40)}.pdf\n"
-            f"7. If the PDF is behind a paywall, try Unpaywall or Sci-Hub alternatives\n\n"
-            f"Proceed without stopping. Do not ask for permission."
+            f"2. Use only publisher-open files, arXiv, PubMed Central, an author manuscript, or Unpaywall\n"
+            f"3. Never bypass a paywall, login, CAPTCHA, MFA, license, or terms prompt\n"
+            f"4. Stop and report 'access unavailable' if no lawful public copy exists\n"
+            f"5. A response is not proof of download; only a locally verified %PDF file counts\n"
         )
         try:
             response = backend.call(
                 prompt,
                 mode="strict",
                 model="sonnet",
-                allowed_tools=["WebSearch", "WebFetch", "Bash", "Read", "Write"],
+                allowed_tools=["WebSearch", "WebFetch"],
                 use_chrome=True,
                 max_tokens=3000,
                 max_turns=10,
             )
-            if response.ok:
-                downloads.append({
-                    "title": paper.title,
-                    "url": url,
-                    "method": "claude_code_chrome",
-                    "session_id": response.session_id,
-                    "response": response.text[:500],
-                })
-            else:
+            if not response.ok:
                 errors.append(f"Chrome browse failed for {paper.title}: {response.raw.get('error', 'unknown')}")
         except Exception as exc:
             errors.append(f"Chrome browse error for {paper.title}: {exc}")
@@ -601,15 +599,8 @@ def run_stage(
     if download_pdfs and not dry_run:
         # First try direct HTTP downloads for open-access papers
         downloads, download_errors = _download_open_pdfs(ranked, output_dir, timeout, max_pdf_downloads)
-        # Then use Claude Code computer-use to browse and download remaining papers
-        if backend is not None:
-            remaining = [p for p in ranked if not any(d["title"] == p.title for d in downloads)]
-            browser_downloads, browser_errors = _browse_and_download_papers(
-                remaining, output_dir, backend, max_papers=max_pdf_downloads,
-            )
-            download_errors.extend(browser_errors)
-            # Extract structured content from downloaded PDFs
-            extracted_content = _extract_paper_content(ranked, output_dir, backend, max_papers=3)
+        # Interactive browser acquisition is intentionally not automatic. It
+        # cannot establish a verified download and may encounter access gates.
     payload = {
         "query": idea_text,
         "paper_count": len(ranked),

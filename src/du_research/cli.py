@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import threading
 from pathlib import Path
-import sys
 
 from du_research.ai_backend import create_backend
+from du_research.backlog import IdeaBacklog
 from du_research.circuit_breaker import CircuitBreaker
 from du_research.config import load_config
 from du_research.onboarding import (
@@ -22,25 +23,9 @@ from du_research.service_manager import ServiceManager
 
 def _pick_top_backlog_idea(config) -> str | None:
     """Pick the highest-scoring unresearched idea from the backlog."""
-    backlog_path = Path(config.pipeline.workspace_dir).resolve() / "ideas" / "idea_backlog.jsonl"
-    if not backlog_path.exists():
-        return None
-    best_title = None
-    best_score = -1.0
-    for line in backlog_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        title = obj.get("title", obj.get("idea_text", ""))
-        score = float(obj.get("total_score", 0))
-        if title and score > best_score:
-            best_score = score
-            best_title = title
-    return best_title
+    backlog = IdeaBacklog(config.pipeline.workspace_dir, config.retention.idea_backlog_max)
+    idea = backlog.top(exclude_researched=True)
+    return backlog.title_of(idea) if idea else None
 
 
 def _build_backend(config):
@@ -185,6 +170,20 @@ def _build_parser() -> argparse.ArgumentParser:
     research.add_argument("--auto", action="store_true", help="Auto-select the top idea from the backlog instead of requiring --idea")
     research.add_argument("--resume", action="store_true", help="Resume an existing run (requires --run-id)")
 
+    ideate = subparsers.add_parser(
+        "ideate",
+        aliases=["explore"],
+        help="Turn local papers and dataset structure into evidence-backed study cards",
+    )
+    ideate.add_argument("--paper", action="append", default=[], help="Paper PDF/text/Markdown/JSON path; repeatable")
+    ideate.add_argument("--data", action="append", default=[], help="CSV/TSV/JSON dataset path; repeatable")
+    ideate.add_argument("--context", default="", help="Your domain, question, or constraints")
+    ideate.add_argument("--context-file", help="Read longer context from a UTF-8 text file")
+    ideate.add_argument("--max-ideas", type=int, help="Maximum study cards (default from config)")
+    ideate.add_argument("--session-id", help="Stable session id override")
+    ideate.add_argument("--no-backlog", action="store_true", help="Do not append viable cards to the idea backlog")
+    ideate.add_argument("--dry-run", action="store_true", help="Ingest/profile locally without calling a model")
+
     learn_cmd = subparsers.add_parser("learn", help="Aggregate learning signals across runs")
     learn_cmd.add_argument("--workspace-dir", help="Override workspace directory")
 
@@ -260,7 +259,7 @@ def _build_parser() -> argparse.ArgumentParser:
     service_start = service_sub.add_parser("start", help="Start the background daemon")
     service_start.add_argument("--log-file", help="Optional fallback log file when screenpipe is unavailable")
     service_start.add_argument("--interval-minutes", type=int, help="Override service interval in minutes")
-    service_stop = service_sub.add_parser("stop", help="Stop the background daemon")
+    service_sub.add_parser("stop", help="Stop the background daemon")
     service_restart = service_sub.add_parser("restart", help="Restart the background daemon")
     service_restart.add_argument("--log-file", help="Optional fallback log file when screenpipe is unavailable")
     service_restart.add_argument("--interval-minutes", type=int, help="Override service interval in minutes")
@@ -346,18 +345,22 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--resume requires --run-id")
             result = pipeline.run(
                 idea_text=args.idea or "",
+                data_file=args.data_file,
                 run_id=args.run_id,
                 dry_run=args.dry_run,
                 resume=True,
             )
         # --auto: pick the top idea from the backlog automatically
         elif args.auto:
-            idea_text = _pick_top_backlog_idea(config)
-            if not idea_text:
+            backlog = IdeaBacklog(config.pipeline.workspace_dir, config.retention.idea_backlog_max)
+            selected = backlog.top(exclude_researched=True)
+            if not selected:
                 print('{"error": "No ideas in backlog. Run `du daily` first."}', file=sys.stderr)
                 return 1
             result = pipeline.run(
-                idea_text=idea_text,
+                idea_text=backlog.title_of(selected),
+                idea_id=backlog.id_of(selected) or None,
+                research_seed=selected,
                 data_file=args.data_file,
                 run_id=args.run_id,
                 dry_run=args.dry_run,
@@ -382,6 +385,26 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         return 0
 
+    if args.command in {"ideate", "explore"}:
+        from du_research.ideation import ResearchIdeationLab
+
+        context = args.context
+        if args.context_file:
+            context_path = Path(args.context_file).expanduser().resolve()
+            context = "\n\n".join(part for part in [context, context_path.read_text(encoding="utf-8")] if part)
+        lab = ResearchIdeationLab(config, None if args.dry_run else _build_backend(config))
+        result = lab.run(
+            paper_paths=args.paper,
+            data_paths=args.data,
+            context=context,
+            max_ideas=args.max_ideas,
+            add_to_backlog=not args.no_backlog,
+            dry_run=args.dry_run,
+            session_id=args.session_id,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+
     # --- daily (new: full AI-powered daily cycle) ---------------------------
     if args.command == "daily":
         from du_research.engine import DigitalUnconsciousEngine
@@ -399,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
         if result.get("research_runs_started"):
             print(f"  Auto-research started for {result['research_runs_started']} idea(s)")
         print(f"\n  Briefing: {result['briefing_path']}")
-        print(f"  Dashboard: du dashboard\n")
+        print("  Dashboard: du dashboard\n")
         return 0
 
     # --- daily-capture (legacy heuristic extraction) ------------------------
@@ -463,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
     # --- init ---------------------------------------------------------------
     if args.command == "init":
         workspace = Path(config.pipeline.workspace_dir).resolve()
-        for subdir in ["runs", "learning", "daily", "ideas", "prompts"]:
+        for subdir in ["runs", "learning", "daily", "ideation", "ideas", "prompts"]:
             (workspace / subdir).mkdir(parents=True, exist_ok=True)
         state = ensure_first_run_setup(config, project_root=project_root, force=args.force, interactive=None)
         print(json.dumps({
@@ -534,9 +557,9 @@ def main(argv: list[str] | None = None) -> int:
         from du_research.engine import DigitalUnconsciousEngine
         engine = DigitalUnconsciousEngine(config)
         interval = args.interval_minutes or config.observation.service_interval_minutes
-        print(f"\n  Digital Unconscious — observation service started")
+        print("\n  Digital Unconscious — observation service started")
         print(f"  Mode: {config.ai.mode}  |  Interval: {interval}min  |  Briefing at: {config.daily.briefing_time}")
-        print(f"  Dashboard: du dashboard  |  Stop: Ctrl+C\n")
+        print("  Dashboard: du dashboard  |  Stop: Ctrl+C\n")
         result = engine.run_observation_service(
             log_file=args.log_file,
             interval_minutes=args.interval_minutes,
@@ -571,8 +594,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- tray (system tray icon — the default "du" experience) ----------------
     if args.command == "tray":
-        from du_research.tray import run_tray
         from du_research.launcher import create_launcher_script
+        from du_research.tray import run_tray
 
         workspace = Path(config.pipeline.workspace_dir).resolve()
         # Gate on a marker written only when the user finishes the web wizard —

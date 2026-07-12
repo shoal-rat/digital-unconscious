@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">Evidence-first Research Idea Lab</title>
+  <desc id="desc">Local papers and privacy-preserving dataset profiles become exact evidence anchors, research opportunities, and falsifiable study cards.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1"><stop stop-color="#0a0e17"/><stop offset="1" stop-color="#12182a"/></linearGradient>
+    <linearGradient id="flow" x1="0" x2="1"><stop stop-color="#72e6c1"/><stop offset=".52" stop-color="#8b9cff"/><stop offset="1" stop-color="#d28cff"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9Z" fill="#66779e"/></marker>
+  </defs>
+  <rect width="1200" height="440" rx="28" fill="url(#bg)"/>
+  <text x="52" y="54" fill="#eef2fb" font-family="Inter,Segoe UI,sans-serif" font-size="29" font-weight="750">From reading material to the smallest useful test</text>
+  <text x="52" y="83" fill="#929db8" font-family="Inter,Segoe UI,sans-serif" font-size="15">The graph is linked JSON: portable, inspectable, and strict about what the sources actually support.</text>
+
+  <g font-family="Inter,Segoe UI,sans-serif">
+    <rect x="52" y="124" width="205" height="196" rx="18" fill="#121d25" stroke="#2d514c"/>
+    <text x="74" y="154" fill="#72e6c1" font-size="12" font-weight="800" letter-spacing="1.2">LOCAL INPUTS</text>
+    <rect x="74" y="174" width="161" height="48" rx="12" fill="#182a2d"/><text x="94" y="204" fill="#dcebe8" font-size="14" font-weight="650">Paper · PDF · JSON</text>
+    <rect x="74" y="234" width="161" height="48" rx="12" fill="#182a2d"/><text x="94" y="264" fill="#dcebe8" font-size="14" font-weight="650">CSV · TSV · JSON</text>
+    <text x="74" y="301" fill="#81938f" font-size="11">Raw dataset rows stay local</text>
+
+    <path d="M267 222H328" stroke="#66779e" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="338" y="124" width="216" height="196" rx="18" fill="#151b2c" stroke="#354464"/>
+    <text x="360" y="154" fill="#8b9cff" font-size="12" font-weight="800" letter-spacing="1.2">EVIDENCE LEDGER</text>
+    <g fill="#202943" stroke="#3a4b70"><rect x="360" y="174" width="172" height="38" rx="10"/><rect x="360" y="221" width="172" height="38" rx="10"/><rect x="360" y="268" width="172" height="38" rx="10"/></g>
+    <text x="376" y="198" fill="#dce3f5" font-size="12">finding · exact anchor</text>
+    <text x="376" y="245" fill="#dce3f5" font-size="12">limitation · locator</text>
+    <text x="376" y="292" fill="#dce3f5" font-size="12">data field · missingness</text>
+
+    <path d="M564 222H625" stroke="#66779e" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="635" y="124" width="216" height="196" rx="18" fill="#1d1930" stroke="#4c3f70"/>
+    <text x="657" y="154" fill="#b18cf1" font-size="12" font-weight="800" letter-spacing="1.2">OPPORTUNITIES</text>
+    <g fill="#28203f"><rect x="657" y="174" width="84" height="31" rx="15"/><rect x="749" y="174" width="80" height="31" rx="15"/><rect x="657" y="214" width="115" height="31" rx="15"/><rect x="780" y="214" width="49" height="31" rx="15"/><rect x="657" y="254" width="94" height="31" rx="15"/><rect x="759" y="254" width="70" height="31" rx="15"/></g>
+    <g fill="#cbbdf0" font-size="11" text-anchor="middle"><text x="699" y="194">contradiction</text><text x="789" y="194">limitation</text><text x="714" y="234">boundary extension</text><text x="805" y="234">reuse</text><text x="704" y="274">measurement</text><text x="794" y="274">replicate</text></g>
+    <text x="657" y="303" fill="#8f83aa" font-size="11">No global novelty claims</text>
+
+    <path d="M861 222H922" stroke="#66779e" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="932" y="124" width="216" height="196" rx="18" fill="#241a30" stroke="#67416b"/>
+    <text x="954" y="154" fill="#d28cff" font-size="12" font-weight="800" letter-spacing="1.2">STUDY CARD</text>
+    <circle cx="1109" cy="153" r="6" fill="#72e6c1" filter="url(#glow)"/>
+    <text x="954" y="190" fill="#f0e5f3" font-size="14" font-weight="700">Hypothesis + null</text>
+    <text x="954" y="218" fill="#c7b6ce" font-size="12">population · exposure · outcome</text>
+    <text x="954" y="242" fill="#c7b6ce" font-size="12">design · variables · confounders</text>
+    <text x="954" y="266" fill="#c7b6ce" font-size="12">smallest test · falsifier</text>
+    <text x="954" y="290" fill="#c7b6ce" font-size="12">citations · risks · next action</text>
+  </g>
+
+  <rect x="196" y="356" width="808" height="48" rx="24" fill="#111a2a" stroke="#303e5b"/>
+  <text x="600" y="385" text-anchor="middle" fill="#a6b0c6" font-family="Inter,Segoe UI,sans-serif" font-size="13">DeepSeek extracts structure · Codex synthesizes · Claude challenges · deterministic code verifies and ranks</text>
+</svg>

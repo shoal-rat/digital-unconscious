@@ -9,40 +9,33 @@ for high-scoring ideas.
 from __future__ import annotations
 
 import gc
-import json
 import hashlib
+import json
 import logging
-from datetime import datetime, time as dt_time, timezone
-from pathlib import Path
 import time
+from datetime import UTC, datetime
+from datetime import time as dt_time
+from pathlib import Path
 from typing import Any
 
-from du_research.ai_backend import AIBackend, create_backend
-from du_research.agents.briefing import BriefingAgent, save_briefing
-from du_research.agents.briefing import BRIEFING_SYSTEM_PROMPT
-from du_research.agents.compressor import CompressionAgent
-from du_research.agents.compressor import COMPRESSOR_SYSTEM_PROMPT
 from du_research.agents.analysis_coder import ANALYSIS_CODER_SYSTEM_PROMPT
-from du_research.agents.idea_generator import IdeaGeneratorAgent
-from du_research.agents.idea_generator import IDEA_GENERATOR_SYSTEM_PROMPT
-from du_research.agents.judge import JudgeAgent
-from du_research.agents.judge import JUDGE_SYSTEM_PROMPT
+from du_research.agents.briefing import BRIEFING_SYSTEM_PROMPT, BriefingAgent, save_briefing
+from du_research.agents.compressor import COMPRESSOR_SYSTEM_PROMPT, CompressionAgent
+from du_research.agents.idea_generator import IDEA_GENERATOR_SYSTEM_PROMPT, IdeaGeneratorAgent
+from du_research.agents.judge import JUDGE_SYSTEM_PROMPT, JudgeAgent
 from du_research.agents.learning_engine import (
-    analyze_run_outcomes,
-    build_human_idea_model,
     load_active_prompts,
     load_human_idea_model,
-    load_signals,
     run_full_learning_cycle,
-    save_learning_artifacts,
 )
 from du_research.agents.reviewer import REVIEWER_SYSTEM_PROMPT
 from du_research.agents.revision import REVISION_SYSTEM_PROMPT
 from du_research.agents.writer import WRITER_SYSTEM_PROMPT
+from du_research.ai_backend import AIBackend, create_backend
+from du_research.backlog import IdeaBacklog
 from du_research.circuit_breaker import CircuitBreaker
 from du_research.config import AppConfig
 from du_research.maintenance import WorkspaceMaintenance
-from du_research.pipeline import ResearchPipeline
 from du_research.observation import (
     BehaviorFrame,
     FileObserver,
@@ -51,11 +44,56 @@ from du_research.observation import (
     deduplicate_frames,
     group_into_windows,
 )
+from du_research.pipeline import ResearchPipeline
 from du_research.rag import RAGStore
 from du_research.task_queue import TaskQueue
 from du_research.utils import iso_now
 
 logger = logging.getLogger(__name__)
+
+
+def _reconcile_evaluation_ids(
+    ideas: list[dict[str, Any]],
+    evaluations: list[dict[str, Any]],
+) -> None:
+    """Map non-stable judge IDs to stable idea IDs without collapsing aliases.
+
+    Generators run once per observation window and commonly restart numbering at
+    ``idea_001``.  Judge prompts omit those response-local IDs, but a model may
+    still emit generic numbered IDs from its output template.  Resolve those by
+    global input position first and retain an ordered alias queue as a fallback.
+    """
+    stable_ids = [str(idea.get("idea_id") or idea.get("id") or "") for idea in ideas]
+    stable_set = {idea_id for idea_id in stable_ids if idea_id}
+    alias_targets: dict[str, list[str]] = {}
+    for idea, stable_id in zip(ideas, stable_ids, strict=True):
+        alias = str(idea.get("source_model_id") or "")
+        if alias and stable_id:
+            alias_targets.setdefault(alias, []).append(stable_id)
+
+    claimed: set[str] = set()
+    for evaluation in evaluations:
+        reported_id = str(evaluation.get("idea_id") or "")
+        if reported_id in stable_set:
+            claimed.add(reported_id)
+            continue
+
+        target = None
+        prefix, separator, ordinal = reported_id.rpartition("_")
+        if separator and prefix == "idea" and ordinal.isdigit():
+            index = int(ordinal) - 1
+            if 0 <= index < len(stable_ids) and stable_ids[index] not in claimed:
+                target = stable_ids[index]
+
+        if target is None:
+            target = next(
+                (candidate for candidate in alias_targets.get(reported_id, []) if candidate not in claimed),
+                None,
+            )
+        if target:
+            evaluation["source_model_id"] = reported_id
+            evaluation["idea_id"] = target
+            claimed.add(target)
 
 
 class DigitalUnconsciousEngine:
@@ -160,6 +198,7 @@ class DigitalUnconsciousEngine:
             max_documents=config.retention.rag_max_documents,
         )
         self.task_queue = TaskQueue(self.workspace)
+        self.idea_backlog = IdeaBacklog(self.workspace, config.retention.idea_backlog_max)
 
     # ------------------------------------------------------------------
     # Main cycle
@@ -182,7 +221,7 @@ class DigitalUnconsciousEngine:
         date_str :
             Override the date string for the briefing header.
         """
-        date_str = date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
         logger.info("Starting daily cycle for %s", date_str)
 
         # Reset usage counters so usage.json reflects only this cycle.
@@ -223,14 +262,29 @@ class DigitalUnconsciousEngine:
         # 4. Generate ideas from each summary (with RAG context if available)
         rag_context = self._load_rag_context(summaries)
         all_ideas: list[dict[str, Any]] = []
-        for summary in summaries:
+        seen_idea_keys: set[str] = set()
+        total_budget = max(1, self.config.idea.max_ideas_per_cycle)
+        for summary_index, summary in enumerate(summaries):
+            remaining_budget = total_budget - len(all_ideas)
+            if remaining_budget <= 0:
+                break
+            remaining_windows = max(1, len(summaries) - summary_index)
+            window_budget = max(1, (remaining_budget + remaining_windows - 1) // remaining_windows)
             ideas = self.idea_generator.generate(
                 summary,
                 rag_context=rag_context,
                 human_idea_model=human_model,
-                idea_count=self.config.idea.max_ideas_per_cycle,
+                idea_count=window_budget,
             )
-            all_ideas.extend(ideas)
+            for raw_idea in ideas:
+                idea = self.idea_backlog.normalize(raw_idea)
+                key = self.idea_backlog.key(self.idea_backlog.title_of(idea))
+                if not key or key in seen_idea_keys:
+                    continue
+                seen_idea_keys.add(key)
+                all_ideas.append(idea)
+                if len(all_ideas) >= total_budget:
+                    break
         logger.info("Generated %d raw ideas", len(all_ideas))
 
         if not all_ideas:
@@ -241,8 +295,15 @@ class DigitalUnconsciousEngine:
             })
 
         # 5. Judge all ideas (LLM-only, queue on failure)
+        # The stable IDs are the only identities exposed to the judge. Keeping
+        # repeated response-local IDs in this prompt makes ``idea_001``
+        # inherently ambiguous when several observation windows are combined.
+        judge_ideas = [
+            {key: value for key, value in idea.items() if key != "source_model_id"}
+            for idea in all_ideas
+        ]
         evaluations = self.judge.evaluate(
-            all_ideas,
+            judge_ideas,
             behaviour_summary=summaries[0] if summaries else None,
             primary_domains=self.config.idea.primary_domains,
             existing_ideas=existing_ideas,
@@ -252,14 +313,17 @@ class DigitalUnconsciousEngine:
         if evaluations is None:
             logger.warning("Judge unavailable — queuing evaluation for later")
             self.task_queue.enqueue("judging", {
-                "ideas": all_ideas,
+                "ideas": judge_ideas,
                 "date": date_str,
             }, priority=1)
             evaluations = []
         logger.info("Evaluated %d ideas", len(evaluations))
 
         # Merge evaluations back into ideas
-        eval_map = {e.get("idea_id", ""): e for e in evaluations}
+        _reconcile_evaluation_ids(all_ideas, evaluations)
+        eval_map: dict[str, dict[str, Any]] = {}
+        for evaluation in evaluations:
+            eval_map.setdefault(str(evaluation.get("idea_id") or ""), evaluation)
         scored_ideas = []
         for idea in all_ideas:
             idea_id = idea.get("id", idea.get("idea_id", ""))
@@ -353,6 +417,7 @@ class DigitalUnconsciousEngine:
                     result = self.research_pipeline.run(
                         idea_text=title,
                         idea_id=idea_id,
+                        research_seed=idea,
                         run_id=run_id,
                         dry_run=False,
                     )
@@ -722,61 +787,14 @@ class DigitalUnconsciousEngine:
 
     def _load_recent_ideas(self, max_ideas: int = 50) -> list[str]:
         """Load recent idea titles from the backlog for novelty comparison."""
-        backlog = self.workspace / "ideas" / "idea_backlog.jsonl"
-        if not backlog.exists():
-            return []
-        ideas = []
-        for line in backlog.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-                title = obj.get("title", obj.get("idea_text", ""))
-                if title:
-                    ideas.append(title)
-            except json.JSONDecodeError:
-                continue
-        return ideas[-max_ideas:]
+        return self.idea_backlog.recent_titles(max_ideas)
 
     def _load_all_daily_ideas(self) -> list[dict[str, Any]]:
         """Load all daily ideas for the human model."""
-        backlog = self.workspace / "ideas" / "idea_backlog.jsonl"
-        if not backlog.exists():
-            return []
-        ideas = []
-        for line in backlog.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                ideas.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-        return ideas
+        return self.idea_backlog.load()
 
     def _append_unique_ideas_to_backlog(self, ideas: list[dict[str, Any]], date_str: str) -> int:
-        backlog_path = self.workspace / "ideas" / "idea_backlog.jsonl"
-        backlog_path.parent.mkdir(parents=True, exist_ok=True)
-        existing = self._load_all_daily_ideas()
-        appended = 0
-        with backlog_path.open("a", encoding="utf-8") as handle:
-            for idea in ideas:
-                title = idea.get("title") or idea.get("idea_text") or ""
-                idea_id = idea.get("id") or idea.get("idea_id")
-                if self._idea_exists(existing, title, idea_id=idea_id):
-                    continue
-                entry = {
-                    "timestamp": iso_now(),
-                    "date": date_str,
-                    **idea,
-                }
-                handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-                existing.append(entry)
-                appended += 1
-        if appended:
-            self._cap_backlog(backlog_path, self.config.retention.idea_backlog_max)
-        return appended
+        return self.idea_backlog.append_unique(ideas, date=date_str, origin="daily_scan")
 
     def _cap_backlog(self, path: Path, max_entries: int) -> None:
         """Keep only the newest ``max_entries`` backlog lines."""
@@ -788,17 +806,10 @@ class DigitalUnconsciousEngine:
         path.write_text("\n".join(lines[-max_entries:]) + "\n", encoding="utf-8")
 
     def _idea_exists(self, existing: list[dict[str, Any]], title: str, *, idea_id: str | None = None) -> bool:
-        normalized = self._idea_key(title)
-        for item in existing:
-            if idea_id and idea_id == (item.get("id") or item.get("idea_id")):
-                return True
-            other_title = item.get("title") or item.get("idea_text") or ""
-            if normalized and normalized == self._idea_key(other_title):
-                return True
-        return False
+        return self.idea_backlog.contains(title, idea_id=idea_id, ideas=existing)
 
     def _idea_key(self, title: str) -> str:
-        return hashlib.sha1(title.strip().lower().encode("utf-8")).hexdigest() if title.strip() else ""
+        return self.idea_backlog.key(title)
 
     def _service_state_path(self) -> Path:
         return self.workspace / "service" / "service_state.json"
@@ -881,7 +892,7 @@ class DigitalUnconsciousEngine:
         if not isinstance(observation_days, dict):
             state["observation_days"] = {}
             return
-        cutoff = datetime.now(timezone.utc).date()
+        cutoff = datetime.now(UTC).date()
         keep_days = max(0, self.config.retention.observation_days)
         kept = {}
         for key, value in observation_days.items():

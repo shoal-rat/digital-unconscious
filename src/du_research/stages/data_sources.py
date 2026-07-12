@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -184,7 +184,6 @@ def _browse_and_download_datasets(
     max_datasets: int = 3,
 ) -> tuple[list[dict[str, str]], list[str]]:
     """Use Claude Code computer-use to browse dataset pages and download files."""
-    import json as _json
     downloads: list[dict[str, str]] = []
     errors: list[str] = []
     data_dir = output_dir / "downloaded_data"
@@ -196,38 +195,29 @@ def _browse_and_download_datasets(
             continue
 
         prompt = (
-            f"Browse to this dataset page and download the data files.\n\n"
+            f"Inspect this dataset page for lawful, public download options.\n\n"
             f"Title: {dataset.title}\n"
             f"URL: {url}\n"
             f"Access: {dataset.access}\n\n"
             f"Instructions:\n"
             f"1. Open the URL in Chrome\n"
             f"2. Look for download buttons or data file links (CSV, JSON, ZIP, etc.)\n"
-            f"3. Download the primary data file to: {data_dir}\n"
-            f"4. If the dataset has documentation/README, download that too\n"
-            f"5. If registration is required, note it but try to proceed\n"
-            f"6. For Kaggle, try the direct download API link if available\n"
-            f"7. For OSF/Zenodo, use the direct file download links\n\n"
-            f"Proceed without stopping. Do not ask for permission."
+            f"3. Use only files whose license and public access are clear\n"
+            f"4. Never bypass registration, payment, CAPTCHA, MFA, or terms\n"
+            f"5. Stop and report the access requirement when blocked\n"
+            f"6. A model response is not proof that a file was downloaded\n"
         )
         try:
             response = backend.call(
                 prompt,
                 mode="strict",
                 model="sonnet",
-                allowed_tools=["WebSearch", "WebFetch", "Bash", "Read", "Write"],
+                allowed_tools=["WebSearch", "WebFetch"],
                 use_chrome=True,
                 max_tokens=3000,
                 max_turns=10,
             )
-            if response.ok:
-                downloads.append({
-                    "title": dataset.title,
-                    "url": url,
-                    "method": "claude_code_browser",
-                    "response": response.text[:500],
-                })
-            else:
+            if not response.ok:
                 errors.append(f"Dataset download failed for {dataset.title}: {response.raw.get('error', 'unknown')}")
         except Exception as exc:
             errors.append(f"Dataset download error for {dataset.title}: {exc}")
@@ -265,12 +255,8 @@ def run_stage(
     else:
         ranked = deduped
     browser_downloads: list[dict[str, str]] = []
-    browser_errors: list[str] = []
-    if backend is not None and not dry_run and ranked:
-        browser_downloads, browser_errors = _browse_and_download_datasets(
-            ranked, output_dir, backend, max_datasets=3,
-        )
-        errors.extend(browser_errors)
+    # Dataset acquisition remains explicit. Search results describe candidates;
+    # only user-supplied local files are profiled or analyzed.
     acquisition_steps = [
         f"Inspect the top {min(3, len(ranked))} dataset landing pages for variable coverage.",
         "Verify licensing and download format before analysis.",

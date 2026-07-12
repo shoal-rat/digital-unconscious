@@ -38,9 +38,13 @@ This document records what the structural review found, what was replaced, and w
 
 The result is more capable at the model boundary while smaller in its public story: observe, connect, challenge, and preserve.
 
+## v2.1 structural follow-up
+
+The second audit found that the product was still idea-first: downloaded paper extraction was unlinked, dataset discovery could not shape ideas, model-local IDs caused cross-day data loss, the per-cycle idea cap multiplied across windows, and resume was only a parsed flag. v2.1 adds a linked source/evidence/opportunity/study-card graph, a single backlog repository, a global daily budget, complete research-seed preservation, and artifact-backed resume. It also makes exploration explicit instead of silently starting a dossier from a daily scan.
+
 ## Remaining engineering debt
 
-- `engine.py`, `dashboard.py`, and `learning_engine.py` are still large orchestration modules. They are cohesive enough for v2, but future work should extract only when a second implementation appears—not preemptively.
+- `dashboard.py` and `learning_engine.py` are still large orchestration modules. The backlog and research ideation contracts are now separate; further extraction should follow a concrete second implementation rather than a framework-first rewrite.
 - The test suite is comprehensive but concentrated in `test_engine.py`; new backend tests should continue moving toward provider-focused files.
 - Browser automation remains the highest-risk optional edge and should eventually run in an operating-system sandbox rather than only a dedicated browser profile.
 - ChromaDB remains optional because the bounded file store is adequate for a small single-user app.

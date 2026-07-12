@@ -1,10 +1,10 @@
 # Digital Unconscious — Pipeline Configuration
-# v2.0.0
+# v2.1.0
 
 [pipeline]
 workspace_dir = "workspace"
 quality_threshold = 78
-auto_learn = true
+auto_learn = false            # run `du learn` after reviewing outcomes
 network_timeout_seconds = 15
 max_revisions = 3
 
@@ -22,6 +22,9 @@ writer_model = "claude_code:opus"
 reviewer_model = "codex:default"
 revision_model = "claude_code:sonnet"
 analysis_model = "glm:glm-5.1"
+evidence_model = "deepseek:deepseek-v4-flash" # economical structured extraction
+ideation_model = "codex:default"              # cross-source research design
+ideation_review_model = "claude_code:sonnet" # adversarial methods review
 # api_key = ""               # prefer ANTHROPIC_API_KEY env var
 # openai_api_key = ""        # prefer OPENAI_API_KEY env var
 # kimi_api_key = ""          # prefer MOONSHOT_API_KEY or KIMI_API_KEY env var
@@ -62,7 +65,7 @@ max_ideas_per_cycle = 8
 include_threshold = 75       # score > 75 goes into daily briefing
 hold_threshold = 60          # score 60-75 goes to observation pool
 max_briefing_ideas = 5
-auto_research_enabled = true
+auto_research_enabled = false # exploration is always an explicit user action
 auto_research_top_k = 1
 auto_research_dedupe_enabled = true
 auto_research_similarity_threshold = 0.9
@@ -76,6 +79,11 @@ max_pdf_downloads = 3
 
 [datasets]
 max_results_per_source = 5
+
+[ideation]
+max_ideas = 5
+max_source_characters = 24000
+max_profile_rows = 5000
 
 [analysis]
 max_categorical_values = 6
@@ -144,6 +152,7 @@ service_log_max_mb = 50
 # daily use cannot grow these files — or the prompts that draw on them — forever.
 rag_max_documents = 2000        # cap RAG knowledge store size
 idea_backlog_max = 500          # cap idea-backlog entries
+ideation_sessions_max = 100     # keep newest portable Idea Lab sessions
 domain_knowledge_history = 5    # shallow domain-knowledge snapshots kept
 prompt_versions_kept = 10       # prompt-evolution version files per agent
 evolution_log_max_lines = 500   # evolution_log.jsonl lines per agent

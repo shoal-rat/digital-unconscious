@@ -10,7 +10,6 @@ Shows a small icon in the bottom-right corner. Click to:
 """
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 import threading
@@ -18,6 +17,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any
 
+from du_research.backlog import IdeaBacklog
 from du_research.config import AppConfig, load_config
 
 
@@ -39,30 +39,11 @@ def _latest_briefing_path(config: AppConfig) -> Path | None:
 
 
 def _top_idea(config: AppConfig) -> dict[str, Any] | None:
-    backlog = _workspace(config) / "ideas" / "idea_backlog.jsonl"
-    if not backlog.exists():
-        return None
-    best = None
-    best_score = -1.0
-    for line in backlog.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        score = float(obj.get("total_score", 0))
-        if score > best_score:
-            best_score = score
-            best = obj
-    return best
+    return IdeaBacklog(_workspace(config), config.retention.idea_backlog_max).top(exclude_researched=True)
 
 
 def _idea_count(config: AppConfig) -> int:
-    backlog = _workspace(config) / "ideas" / "idea_backlog.jsonl"
-    if not backlog.exists():
-        return 0
-    return sum(1 for line in backlog.read_text(encoding="utf-8").splitlines() if line.strip())
+    return len(IdeaBacklog(_workspace(config), config.retention.idea_backlog_max).load())
 
 
 def _run_command(*args: str) -> None:
@@ -82,8 +63,9 @@ def _create_icon_image():
     The icon represents the concept of "unconscious ideas becoming conscious":
     a glowing neural node with radiating connections.
     """
-    from PIL import Image, ImageDraw
     import math
+
+    from PIL import Image, ImageDraw
 
     size = 64
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -135,7 +117,7 @@ def run_tray(config: AppConfig | None = None, config_path: str | None = None):
     def open_briefing(icon, item):
         path = _latest_briefing_path(config)
         if path:
-            webbrowser.open(f"http://localhost:9830/briefing")
+            webbrowser.open("http://localhost:9830/briefing")
         else:
             _notify(icon, "No briefings yet", "Run 'du daily' to generate your first briefing.")
 

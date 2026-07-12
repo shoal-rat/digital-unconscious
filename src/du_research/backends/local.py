@@ -37,10 +37,12 @@ def _write_images(directory: Path, images: list[bytes] | None) -> list[Path]:
 
 
 def _command_error(name: str, result: subprocess.CompletedProcess[str]) -> AIResponse:
-    message = (result.stderr or result.stdout or f"{name} exited {result.returncode}").strip()
-    logger.warning("%s failed: %s", name, message[:500])
+    streams = [part.strip() for part in (result.stderr, result.stdout) if part and part.strip()]
+    message = "\n".join(streams) or f"{name} exited {result.returncode}"
+    detail = message[-4000:]
+    logger.warning("%s failed: %s", name, detail[-500:])
     return AIResponse(
-        text="", raw={"error": message[:2000], "provider": name, "exit_code": result.returncode}
+        text="", raw={"error": detail, "provider": name, "exit_code": result.returncode}
     )
 
 

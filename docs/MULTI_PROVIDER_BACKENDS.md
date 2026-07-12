@@ -18,7 +18,7 @@ Both support structured output. Codex receives images with `--image`; Claude Cod
 | `deepseek:` | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 | `glm:` / `zai:` | `ZAI_API_KEY` or `GLM_API_KEY` | `glm-5.1` |
 | `openai:` | `OPENAI_API_KEY` | `gpt-5.6-sol` via Responses API |
-| `anthropic:` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
+| `anthropic:` | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
 | `kimi:` | `MOONSHOT_API_KEY` or `KIMI_API_KEY` | `kimi-k2.6` |
 
 DeepSeek uses V4 Flash for inexpensive synthesis and V4 Pro when explicitly selected. GLM-5.1 is available for long-horizon agentic analysis. Hosted adapters remain optional; the core package imports and tests without their SDKs.
@@ -38,7 +38,12 @@ judge_model = "claude_code:sonnet"
 writer_model = "claude_code:opus"
 reviewer_model = "codex:default"
 analysis_model = "glm:glm-5.1"
+evidence_model = "deepseek:deepseek-v4-flash"
+ideation_model = "codex:default"
+ideation_review_model = "claude_code:sonnet"
 ```
+
+Idea Lab uses a deliberate cascade: economical evidence extraction, strong cross-source synthesis, then an independent methods challenge. The final evidence-ID validation and weighted score are deterministic Python, so a model cannot override provenance gates or silently change the rubric.
 
 An explicit prefix expresses preference, not fragility. If that provider is unavailable and fallback is enabled, the router selects the first ready provider from `fallback_order`. A fallback uses its own default model rather than receiving an incompatible model name.
 

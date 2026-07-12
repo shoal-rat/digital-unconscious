@@ -65,7 +65,9 @@ class RunManifest:
     completed_at: str | None = None
     status: str = "running"
     data_file: str | None = None
+    data_fingerprint: str | None = None
     final_quality_score: float | None = None
+    research_seed: dict[str, Any] | None = None
     stages: list[StageResult] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,6 +80,8 @@ class RunManifest:
             "completed_at": self.completed_at,
             "status": self.status,
             "data_file": self.data_file,
+            "data_fingerprint": self.data_fingerprint,
             "final_quality_score": self.final_quality_score,
+            "research_seed": self.research_seed,
             "stages": [stage.to_dict() for stage in self.stages],
         }

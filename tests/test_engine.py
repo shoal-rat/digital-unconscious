@@ -170,6 +170,22 @@ class AIBackendTests(unittest.TestCase):
         self.assertFalse(response.ok)
         self.assertEqual(len(working.calls), 0)
 
+    def test_runtime_provider_cache_does_not_override_later_workload_prefix(self) -> None:
+        codex = FakeBackend(default="codex")
+        claude = FakeBackend(default="claude")
+        providers = {"codex": codex, "claude_code": claude}
+        router = MultiProviderBackend(fallback_order=["codex", "claude_code"])
+        router._get_provider = lambda provider: providers[provider]  # type: ignore[method-assign]
+        availability = {name: name in providers for name in ["deepseek", "glm", "codex", "claude_code", "openai", "anthropic", "kimi"]}
+        with mock.patch("du_research.backends.router.provider_availability", return_value=availability):
+            first = router.call("extract", model="codex:default")
+            second = router.call("review", model="claude_code:sonnet")
+
+        self.assertEqual(first.text, "codex")
+        self.assertEqual(second.text, "claude")
+        self.assertEqual(len(codex.calls), 1)
+        self.assertEqual(len(claude.calls), 1)
+
     def test_explicit_prefix_still_falls_back(self) -> None:
         failing = FakeBackend(default="")
         working = FakeBackend(default="ok")
@@ -875,8 +891,9 @@ class SetupTests(unittest.TestCase):
             config_reloaded.pipeline.workspace_dir = tmpdir
             settings = apply_user_settings(config_reloaded)
             self.assertTrue(settings)
-            self.assertTrue(config_reloaded.automation.auto_execute)
-            self.assertTrue(config_reloaded.idea.auto_research_enabled)
+            self.assertFalse(config_reloaded.automation.auto_execute)
+            self.assertFalse(config_reloaded.idea.auto_research_enabled)
+            self.assertFalse(state["autostart_requested"])
 
 
 class ServiceAndMaintenanceTests(unittest.TestCase):
@@ -943,6 +960,37 @@ class ServiceAndMaintenanceTests(unittest.TestCase):
 
 
 class EngineIntegrationTests(unittest.TestCase):
+    def test_repeated_window_local_ids_map_to_distinct_stable_ideas(self) -> None:
+        from du_research.engine import _reconcile_evaluation_ids
+
+        ideas = [
+            {
+                "id": "idea_a1b2c3d4e5f6",
+                "idea_id": "idea_a1b2c3d4e5f6",
+                "source_model_id": "idea_001",
+                "title": "First window idea",
+            },
+            {
+                "id": "idea_f6e5d4c3b2a1",
+                "idea_id": "idea_f6e5d4c3b2a1",
+                "source_model_id": "idea_001",
+                "title": "Second window idea",
+            },
+        ]
+        # Both generation calls restarted numbering at idea_001. The fallback
+        # must consume each matching stable target once instead of overwriting a
+        # dictionary entry and assigning both evaluations to the second idea.
+        evaluations = [
+            {"idea_id": "idea_001", "total_score": 90},
+            {"idea_id": "idea_001", "total_score": 80},
+        ]
+
+        _reconcile_evaluation_ids(ideas, evaluations)
+
+        self.assertEqual(evaluations[0]["idea_id"], "idea_a1b2c3d4e5f6")
+        self.assertEqual(evaluations[1]["idea_id"], "idea_f6e5d4c3b2a1")
+        self.assertEqual({row["idea_id"] for row in evaluations}, {idea["idea_id"] for idea in ideas})
+
     def test_daily_cycle_with_file_fallback(self) -> None:
         """Run the full daily cycle using a log file and fake AI backend."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1096,7 +1144,8 @@ class EngineIntegrationTests(unittest.TestCase):
                 }
 
             engine.run_service_once = fake_service_once  # type: ignore[assignment]
-            result = engine.run_observation_service(interval_minutes=1, iterations=2, log_file="fallback.txt")
+            with mock.patch("du_research.engine.time.sleep"):
+                result = engine.run_observation_service(interval_minutes=1, iterations=2, log_file="fallback.txt")
             self.assertEqual(result["completed_cycles"], 2)
             self.assertEqual(len(calls), 2)
 
