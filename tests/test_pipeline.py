@@ -3,17 +3,18 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from du_research.config import AppConfig
-from du_research.models import DatasetCandidate, PaperCandidate
-from du_research.pipeline import ResearchPipeline
+from du_research.ai_backend import AIResponse  # noqa: E402
+from du_research.config import AppConfig  # noqa: E402
+from du_research.models import DatasetCandidate, PaperCandidate  # noqa: E402
+from du_research.pipeline import ResearchPipeline  # noqa: E402
 
 
 class FakeLiteratureProvider:
@@ -75,6 +76,24 @@ class FakeAutomationRunner:
         }
 
 
+class FakeFeasibilityBackend:
+    def call(self, prompt: str, **kwargs) -> AIResponse:
+        return AIResponse(
+            text=json.dumps(
+                {
+                    "decision": "proceed",
+                    "confidence": 70,
+                    "novel_angle": "A bounded content-fingerprint test",
+                    "recommended_methods": ["descriptive-statistics"],
+                    "required_data": ["group", "value"],
+                    "estimated_effort": "low",
+                    "key_risks": [],
+                    "reasoning": "The local data supports the proposed smoke test.",
+                }
+            )
+        )
+
+
 class PipelineTests(unittest.TestCase):
     def test_pipeline_runs_end_to_end_with_local_csv(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -126,6 +145,115 @@ class PipelineTests(unittest.TestCase):
             self.assertFalse(result["analysis"]["analysis_executed"])
             self.assertEqual(result["datasets"]["dataset_count"], 0)
             self.assertTrue((Path(tmpdir) / "runs" / "run_test_dry" / "01_literature" / "papers.json").exists())
+
+    def test_resume_completed_run_returns_without_replaying_stages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = AppConfig()
+            config.pipeline.workspace_dir = tmpdir
+            config.pipeline.auto_learn = False
+            pipeline = ResearchPipeline(config=config)
+            pipeline.run(idea_text="A bounded resume test", run_id="run_resume_complete", dry_run=True)
+            trace = Path(tmpdir) / "runs" / "run_resume_complete" / "execution_trace.jsonl"
+            before = trace.read_text(encoding="utf-8")
+
+            result = pipeline.run(run_id="run_resume_complete", resume=True)
+
+            self.assertTrue(result["reused_completed_run"])
+            self.assertEqual(result["manifest"]["status"], "completed")
+            self.assertEqual(trace.read_text(encoding="utf-8"), before)
+
+    def test_resume_with_new_data_reuses_upstream_and_invalidates_downstream(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = AppConfig()
+            config.pipeline.workspace_dir = tmpdir
+            config.pipeline.auto_learn = False
+            config.submission.enabled = False
+            pipeline = ResearchPipeline(config=config)
+            pipeline.run(idea_text="Attach data after protocol", run_id="run_resume_data", dry_run=True)
+
+            result = pipeline.run(
+                run_id="run_resume_data",
+                resume=True,
+                data_file=str(ROOT / "tests" / "fixtures" / "sample_data.csv"),
+            )
+
+            self.assertTrue(result["analysis"]["analysis_executed"])
+            trace = (Path(tmpdir) / "runs" / "run_resume_data" / "execution_trace.jsonl").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('"event": "reused"', trace)
+            self.assertIn('"data_changed": true', trace)
+
+    def test_resume_with_changed_data_content_invalidates_downstream(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = AppConfig()
+            config.pipeline.workspace_dir = tmpdir
+            config.pipeline.auto_learn = False
+            config.submission.enabled = False
+            pipeline = ResearchPipeline(config=config)
+            pipeline.backend = FakeFeasibilityBackend()
+            data_path = Path(tmpdir) / "mutable.csv"
+            data_path.write_text("group,value\na,1\nb,2\n", encoding="utf-8")
+            pipeline.run(
+                idea_text="Detect an in-place dataset update",
+                run_id="run_resume_content",
+                data_file=str(data_path),
+                dry_run=True,
+            )
+            trace_path = Path(tmpdir) / "runs" / "run_resume_content" / "execution_trace.jsonl"
+            prior_events = trace_path.read_text(encoding="utf-8").splitlines()
+            prior_manifest = pipeline.status("run_resume_content")
+
+            data_path.write_text("group,value\na,9\nb,8\n", encoding="utf-8")
+            result = pipeline.run(run_id="run_resume_content", resume=True, dry_run=True)
+
+            self.assertEqual(result["analysis"]["numeric_summary"]["value"]["mean"], 8.5)
+            self.assertNotEqual(
+                result["manifest"]["data_fingerprint"],
+                prior_manifest["data_fingerprint"],
+            )
+            resumed_events = [
+                json.loads(line)
+                for line in trace_path.read_text(encoding="utf-8").splitlines()[len(prior_events):]
+            ]
+            self.assertTrue(any(event["stage"] == "literature" and event["event"] == "reused" for event in resumed_events))
+            self.assertTrue(any(event["stage"] == "feasibility" and event["event"] == "reused" for event in resumed_events))
+            self.assertTrue(any(event["stage"] == "data_sources" and event["event"] == "reused" for event in resumed_events))
+            for stage_name in ("analysis", "drafting", "review"):
+                self.assertTrue(
+                    any(event["stage"] == stage_name and event["event"] == "completed" for event in resumed_events)
+                )
+                self.assertFalse(
+                    any(event["stage"] == stage_name and event["event"] == "reused" for event in resumed_events)
+                )
+
+    def test_resume_old_manifest_uses_processed_data_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = AppConfig()
+            config.pipeline.workspace_dir = tmpdir
+            config.pipeline.auto_learn = False
+            config.submission.enabled = False
+            pipeline = ResearchPipeline(config=config)
+            data_path = Path(tmpdir) / "legacy.csv"
+            data_path.write_text("group,value\na,1\nb,2\n", encoding="utf-8")
+            pipeline.run(
+                idea_text="Resume a pre-fingerprint manifest",
+                run_id="run_resume_legacy",
+                data_file=str(data_path),
+                dry_run=True,
+            )
+            run_dir = Path(tmpdir) / "runs" / "run_resume_legacy"
+            manifest_path = run_dir / "run_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("data_fingerprint")
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            trace_path = run_dir / "execution_trace.jsonl"
+            before = trace_path.read_text(encoding="utf-8")
+
+            result = pipeline.run(run_id="run_resume_legacy", resume=True, dry_run=True)
+
+            self.assertTrue(result["reused_completed_run"])
+            self.assertEqual(trace_path.read_text(encoding="utf-8"), before)
 
     def test_daily_capture_extracts_ideas(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

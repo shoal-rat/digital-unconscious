@@ -15,6 +15,7 @@ Digital Unconscious is local-first, not local-model. This distinction is part of
 - a screenshot sent for vision interpretation
 - literature and dataset queries sent to public scholarly services
 - URLs opened by an explicitly started browser task
+- paper text and aggregate dataset profiles supplied to Idea Lab's selected models
 
 Using `codex exec` or `claude -p` avoids a separately managed API key; it does not make inference on-device. Their subscription services still receive the model input.
 
@@ -46,9 +47,19 @@ Before enabling screenshots:
 
 No content filter can reliably remove every secret from a full screenshot. The application therefore describes the boundary honestly instead of claiming that screenshots never leave the device.
 
+## Paper and dataset inputs
+
+- Local paper text is sent to the selected evidence-extraction model in bounded excerpts.
+- Dataset profiling is local. Model prompts contain field names and aggregate structure, but never local paths, filenames, raw rows, or example values.
+- Source manifests store local paths and content hashes in the local workspace.
+- PDF support is optional; image-only PDFs are rejected with an OCR instruction rather than guessed from.
+- A model-provided quote becomes evidence only when deterministic code finds the exact normalized anchor in the source.
+
 ## Browser boundary
 
 Browser task packs are supervised. They must stop at CAPTCHA, MFA, consent, terms acceptance, payments, subscription changes, or any action outside their allowlisted research task. Final publication and submission always require a human decision.
+
+Automatic browser acquisition is not part of a daily scan or Idea Lab session. Direct paper downloads accept only bytes with a PDF signature and record a SHA-256. The app never instructs a model to bypass a paywall; lawful open access, author manuscripts, and user-authorized institutional access are the boundary.
 
 ## Reporting
 

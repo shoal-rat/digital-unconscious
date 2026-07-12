@@ -1,0 +1,6 @@
+include AGENTS.md
+include LICENSE
+include README.md
+include RELEASES.md
+recursive-include config *.toml
+recursive-include docs *.md *.svg

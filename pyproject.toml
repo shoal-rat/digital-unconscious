@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digital-unconscious"
-version = "2.0.0"
+version = "2.1.0"
 description = "A quiet, local-first research loop powered by your Codex or Claude subscription"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -38,9 +38,10 @@ providers = ["anthropic>=0.40", "openai>=1.0"]
 rag = ["chromadb>=0.5"]
 browser = ["selenium>=4.20"]
 figures = ["reportlab>=4.0", "Pillow>=10.0"]
+papers = ["pypdf>=5.0"]
 vision = ["mss>=9.0", "Pillow>=10.0"]
 tray = ["pystray>=0.19", "Pillow>=10.0"]
-full = ["anthropic>=0.40", "openai>=1.0", "chromadb>=0.5", "selenium>=4.20", "pystray>=0.19", "Pillow>=10.0", "reportlab>=4.0", "mss>=9.0"]
+full = ["anthropic>=0.40", "openai>=1.0", "chromadb>=0.5", "selenium>=4.20", "pystray>=0.19", "Pillow>=10.0", "reportlab>=4.0", "mss>=9.0", "pypdf>=5.0"]
 dev = ["ruff>=0.12", "build>=1.2"]
 
 [project.scripts]

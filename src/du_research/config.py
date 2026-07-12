@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-import tomllib
 
 
 @dataclass
 class PipelineSection:
     workspace_dir: str = "workspace"
     quality_threshold: int = 78
-    auto_learn: bool = True
+    auto_learn: bool = False
     network_timeout_seconds: int = 15
     max_revisions: int = 3
 
@@ -29,6 +29,9 @@ class AISection:
     reviewer_model: str = "codex:default"
     revision_model: str = "claude_code:sonnet"
     analysis_model: str = "glm:glm-5.1"
+    evidence_model: str = "deepseek:deepseek-v4-flash"
+    ideation_model: str = "codex:default"
+    ideation_review_model: str = "claude_code:sonnet"
     api_key: str = ""
     openai_api_key: str = ""
     kimi_api_key: str = ""
@@ -78,7 +81,9 @@ class IdeaSection:
     include_threshold: int = 75
     hold_threshold: int = 60
     max_briefing_ideas: int = 5
-    auto_research_enabled: bool = True
+    # Exploration is explicit. A daily scan must never silently grow into a
+    # browser/download/drafting run.
+    auto_research_enabled: bool = False
     auto_research_top_k: int = 1
     auto_research_dedupe_enabled: bool = True
     auto_research_similarity_threshold: float = 0.9
@@ -96,6 +101,14 @@ class LiteratureSection:
 @dataclass
 class DatasetsSection:
     max_results_per_source: int = 5
+
+
+@dataclass
+class IdeationSection:
+    """Local paper/data-to-study-card workflow settings."""
+    max_ideas: int = 5
+    max_source_characters: int = 24000
+    max_profile_rows: int = 5000
 
 
 @dataclass
@@ -184,6 +197,7 @@ class RetentionSection:
     # of daily use cannot grow these files without limit.
     rag_max_documents: int = 2000        # cap RAG knowledge store size
     idea_backlog_max: int = 500          # cap idea-backlog entries
+    ideation_sessions_max: int = 100     # keep newest portable Idea Lab sessions
     domain_knowledge_history: int = 5    # shallow domain-knowledge snapshots kept
     prompt_versions_kept: int = 10       # prompt-evolution version files per agent
     evolution_log_max_lines: int = 500   # evolution_log.jsonl lines per agent
@@ -197,6 +211,7 @@ class AppConfig:
     idea: IdeaSection = field(default_factory=IdeaSection)
     literature: LiteratureSection = field(default_factory=LiteratureSection)
     datasets: DatasetsSection = field(default_factory=DatasetsSection)
+    ideation: IdeationSection = field(default_factory=IdeationSection)
     analysis: AnalysisSection = field(default_factory=AnalysisSection)
     paper: PaperSection = field(default_factory=PaperSection)
     learning: LearningSection = field(default_factory=LearningSection)
@@ -227,6 +242,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         _apply(config.idea, parsed.get("idea", {}))
         _apply(config.literature, parsed.get("literature", {}))
         _apply(config.datasets, parsed.get("datasets", {}))
+        _apply(config.ideation, parsed.get("ideation", {}))
         _apply(config.analysis, parsed.get("analysis", {}))
         _apply(config.paper, parsed.get("paper", {}))
         _apply(config.learning, parsed.get("learning", {}))

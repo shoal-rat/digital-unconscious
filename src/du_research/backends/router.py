@@ -84,7 +84,7 @@ class MultiProviderBackend:
     kimi_api_key: str | None = None
     deepseek_api_key: str | None = None
     glm_api_key: str | None = None
-    default_model: str = "claude-sonnet-4-6"
+    default_model: str = "claude-sonnet-5"
     openai_default_model: str = "gpt-5.6-sol"
     kimi_default_model: str = "kimi-k2.6"
     deepseek_default_model: str = "deepseek-v4-flash"
@@ -93,6 +93,13 @@ class MultiProviderBackend:
     enable_fallback: bool = True
     fallback_order: list[str] = field(default_factory=lambda: DEFAULT_FALLBACK_ORDER.copy())
     _providers: dict[str, AIBackend] = field(default_factory=dict, repr=False)
+    _closed_provider_graph: bool = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        # Tests and extensions may inject a deliberately closed provider graph.
+        # Providers lazily cached during normal routing must not turn that cache
+        # into a closed graph after the first call.
+        self._closed_provider_graph = bool(self._providers)
 
     def _overrides(self) -> dict[str, Any]:
         return {
@@ -110,7 +117,7 @@ class MultiProviderBackend:
         # Explicitly injected providers form a closed test/extension graph.
         # This keeps dependency injection deterministic and never leaks into an
         # installed local CLI during unit tests.
-        if self._providers:
+        if self._closed_provider_graph:
             return next(iter(self._providers)), model
         available = provider_availability(self._overrides())
         for candidate in self.fallback_order:
@@ -121,7 +128,7 @@ class MultiProviderBackend:
     def _chain(self, primary: str) -> list[str]:
         if not self.enable_fallback:
             return [primary]
-        if self._providers:
+        if self._closed_provider_graph:
             return [primary] + [name for name in self._providers if name != primary]
         available = provider_availability(self._overrides())
         return [primary] + [
@@ -186,7 +193,7 @@ def create_backend(mode: str = "auto", **kwargs: Any) -> AIBackend:
             kimi_api_key=kwargs.get("kimi_api_key") or kwargs.get("moonshot_api_key"),
             deepseek_api_key=kwargs.get("deepseek_api_key"),
             glm_api_key=kwargs.get("glm_api_key"),
-            default_model=kwargs.get("default_model") or "claude-sonnet-4-6",
+            default_model=kwargs.get("default_model") or "claude-sonnet-5",
             openai_default_model=kwargs.get("openai_default_model") or "gpt-5.6-sol",
             kimi_default_model=kwargs.get("kimi_default_model") or "kimi-k2.6",
             deepseek_default_model=kwargs.get("deepseek_default_model") or "deepseek-v4-flash",
@@ -261,6 +268,9 @@ def resolve_routing(config: Any) -> dict[str, Any]:
         ("reviewer", ai.reviewer_model),
         ("revision", ai.revision_model),
         ("analysis", ai.analysis_model),
+        ("evidence_extractor", ai.evidence_model),
+        ("research_ideation", ai.ideation_model),
+        ("ideation_reviewer", ai.ideation_review_model),
     ]
     routing = []
     for agent, configured in fields:
@@ -279,7 +289,7 @@ def resolve_routing(config: Any) -> dict[str, Any]:
                 "deepseek": getattr(ai, "deepseek_default_model", "deepseek-v4-flash"),
                 "glm": getattr(ai, "glm_default_model", "glm-5.1"),
                 "openai": getattr(ai, "openai_default_model", "gpt-5.6-sol"),
-                "anthropic": getattr(ai, "default_model", "claude-sonnet-4-6"),
+                "anthropic": getattr(ai, "default_model", "claude-sonnet-5"),
                 "kimi": getattr(ai, "kimi_default_model", "kimi-k2.6"),
             }[fallback_provider]
         routing.append(
