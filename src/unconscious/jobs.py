@@ -95,19 +95,63 @@ def due_dreams(app: App, now: datetime | None = None) -> list[str]:
     return due
 
 
-def record_attempt(app: App, day: str) -> None:
-    attempts: dict[str, int] = app.store.get("auto_dream_attempts", {}) or {}
+def record_attempt(app: App, day: str, key: str = "auto_dream_attempts", keep_days: int = 14) -> None:
+    attempts: dict[str, int] = app.store.get(key, {}) or {}
     attempts[day] = attempts.get(day, 0) + 1
-    cutoff = (date.today() - timedelta(days=14)).isoformat()
-    app.store.put("auto_dream_attempts", {d: n for d, n in attempts.items() if d >= cutoff})
+    cutoff = (date.today() - timedelta(days=keep_days)).isoformat()
+    app.store.put(key, {d: n for d, n in attempts.items() if d >= cutoff})
+
+
+def sort_job(app: App, day: str) -> Work:
+    from unconscious.mind.digest import digest_day
+
+    def work(progress: Callable[[str], None]) -> dict[str, Any]:
+        progress("digest")
+        return {"topics": len(digest_day(app, day).topics)}
+
+    return work
+
+
+def due_sorting(app: App, now: datetime | None = None) -> list[str]:
+    """Past days the watcher saw but no dive sorted into currents (the machine slept
+    through the night, say). Sorting is what writes a day into each current's history,
+    and the undercurrents are measured from that history, so a day must be sorted
+    before its raw driftlines wash away. Oldest first, one at a time, twice at most."""
+    settings = app.settings
+    if not settings.dream.auto:
+        return []
+    today = (now or datetime.now().astimezone()).date()
+    since = (today - timedelta(days=max(int(settings.sense.retention_days), 2))).isoformat()
+    yesterday = (today - timedelta(days=1)).isoformat()  # yesterday is the dream catch-up's
+    attempts: dict[str, int] = app.store.get("auto_sort_attempts", {}) or {}
+    return [day for day in app.store.undigested_days(since, yesterday) if attempts.get(day, 0) < 2][:1]
+
+
+def crew_ready(app: App, role: str = "digest") -> bool:
+    try:
+        return bool(app.router.describe()["routes"][role]["chain"])
+    except Exception:
+        return False
 
 
 def run_scheduler(app: App, jobs: Jobs, stop: threading.Event, every: float = 60.0) -> None:
+    from unconscious.housekeeping import tidy
+
     while not stop.wait(every):
+        try:
+            tidy(app)  # at most once a day; covers machines where the watcher is off
+        except Exception:
+            log.exception("housekeeping failed")
         try:
             for day in due_dreams(app):
                 record_attempt(app, day)
                 jobs.submit("dream", day, dream_job(app, day))
                 log.info("auto-dream queued for %s", day)
+            if not app.store.active_jobs():
+                for day in due_sorting(app):
+                    if crew_ready(app):
+                        record_attempt(app, day, "auto_sort_attempts", app.settings.sense.retention_days)
+                        jobs.submit("sort", day, sort_job(app, day))
+                        log.info("catch-up sorting queued for %s", day)
         except Exception:
             log.exception("scheduler tick failed")

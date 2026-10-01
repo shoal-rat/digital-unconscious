@@ -370,6 +370,9 @@ class SettingsPage(Page):
         taste = self.view.get("taste") or {}
         line = t("settings.tasteLine", k=taste.get("kept", 0), d=taste.get("dismissed", 0)) if (taste.get("kept") or taste.get("dismissed")) else t("settings.tasteNone")
         self.add(field(t("settings.taste"), label(line, "body", "ink2")))
+        size = (self.view.get("memory") or {}).get("bytes", 0)
+        amount = f"{size / 1e6:.1f} MB" if size >= 1e6 else f"{max(1, round(size / 1e3))} KB"
+        self.add(field(t("settings.size"), label(t("settings.sizeLine", size=amount), "body", "ink2")))
         home = self.view["home"]
         self.add(field(t("settings.home"), wrap(hbox(label(home, "mono-n", "ink2", selectable=True),
                                                        button(t("settings.openFolder"), "ghost", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(home))),

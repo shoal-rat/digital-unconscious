@@ -1,9 +1,10 @@
 """The memory: one SQLite file.
 
-Raw traces are the only high-resolution personal data and they expire after
-``sense.retention_days``. Everything derived from them (threads, dreams,
-sparks) is abstract enough to keep, which mirrors the idea behind the app:
-details fade, themes remain.
+Raw traces are the only high-resolution personal data. After two weeks the
+visits to one subject on one day are merged into a single row, and after
+``sense.retention_days`` they expire. Everything derived from them (threads,
+dreams, sparks) is abstract enough to keep, which mirrors the idea behind the
+app: details fade, themes remain. When the shark eats, the file shrinks.
 """
 
 from __future__ import annotations
@@ -14,11 +15,11 @@ import threading
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
@@ -38,7 +39,8 @@ CREATE TABLE IF NOT EXISTS traces(
   domain TEXT NOT NULL DEFAULT '',
   body TEXT NOT NULL DEFAULT '',
   subject_key TEXT NOT NULL,
-  subject TEXT NOT NULL
+  subject TEXT NOT NULL,
+  visits INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS traces_day ON traces(day, subject_key);
 
@@ -210,9 +212,12 @@ class Store:
         self._write_lock = threading.Lock()
         with self.tx() as db:
             db.executescript(SCHEMA)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(traces)")}
+            if "visits" not in columns:  # schema 1: one row was always one visit
+                db.execute("ALTER TABLE traces ADD COLUMN visits INTEGER NOT NULL DEFAULT 1")
             db.execute(
                 "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
-                "ON CONFLICT(key) DO NOTHING",
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (str(SCHEMA_VERSION),),
             )
 
@@ -222,6 +227,7 @@ class Store:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA synchronous=NORMAL")
+        db.execute("PRAGMA journal_size_limit=1048576")  # the write-ahead log never lingers above 1 MB
         try:
             yield db
         finally:
@@ -293,7 +299,7 @@ class Store:
                 """
                 SELECT subject_key, MIN(subject) AS subject, MIN(kind) AS kind, MIN(category) AS category,
                        MIN(app) AS app, MIN(domain) AS domain, MAX(url) AS url,
-                       SUM(seconds) AS seconds, COUNT(*) AS visits,
+                       SUM(seconds) AS seconds, SUM(visits) AS visits,
                        MIN(started_at) AS first_at, MAX(ended_at) AS last_at,
                        MAX(body) AS body
                 FROM traces WHERE day=? GROUP BY subject_key
@@ -302,6 +308,16 @@ class Store:
                 (day,),
             ).fetchall()
         return _rows(rows)
+
+    def undigested_days(self, since: str, before: str, limit: int = 5) -> list[str]:
+        """Days in [since, before) with enough on the driftline to sort, but no digest yet."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT day FROM traces WHERE day>=? AND day<? AND day NOT IN (SELECT day FROM digests) "
+                "GROUP BY day HAVING SUM(seconds)>=900 OR COUNT(*)>=3 ORDER BY day LIMIT ?",
+                (since, before, limit),
+            ).fetchall()
+        return [r["day"] for r in rows]
 
     def days_with_traces(self, limit: int = 60) -> list[str]:
         with self.connect() as db:
@@ -320,14 +336,93 @@ class Store:
             db.execute("DELETE FROM subject_threads WHERE day=?", (day,))
             db.execute("DELETE FROM digests WHERE day=?", (day,))
             db.execute("DELETE FROM thread_days WHERE day=?", (day,))
+        self.vacuum()
         return n
 
     def forget_before(self, day: str) -> int:
-        """Expire raw traces older than ``day``; abstractions are kept."""
+        """Expire raw traces older than ``day``, and the digests that only existed to
+        avoid sorting them again (the dream keeps its own copy of the topics)."""
         with self.tx() as db:
             n = db.execute("DELETE FROM traces WHERE day<?", (day,)).rowcount
             db.execute("DELETE FROM subject_threads WHERE day<?", (day,))
+            db.execute("DELETE FROM digests WHERE day<?", (day,))
         return n
+
+    def compact_before(self, day: str) -> int:
+        """Merge the visits to one subject on one day into a single row, for days before
+        ``day``. A dream reads subjects, not visits, so nothing it sees changes; the day's
+        timeline keeps each subject's total time, drawn from its first visit."""
+        merged = 0
+        with self.tx() as db:
+            groups = db.execute(
+                "SELECT day, subject_key, COUNT(*) AS n FROM traces WHERE day<? "
+                "GROUP BY day, subject_key HAVING n>1",
+                (day,),
+            ).fetchall()
+            touched: dict[str, int] = {}
+            for group in groups:
+                rows = db.execute(
+                    "SELECT * FROM traces WHERE day=? AND subject_key=? ORDER BY started_at, id",
+                    (group["day"], group["subject_key"]),
+                ).fetchall()
+                first = rows[0]
+                seconds = sum(r["seconds"] or 0 for r in rows)
+                start = datetime.fromisoformat(first["started_at"])
+                db.execute(
+                    "UPDATE traces SET seconds=?, ended_at=?, visits=?, url=?, body=? WHERE id=?",
+                    (
+                        round(seconds, 1),
+                        (start + timedelta(seconds=seconds)).isoformat(timespec="seconds"),
+                        sum(r["visits"] for r in rows),
+                        max((r["url"] for r in rows), key=len),
+                        max((r["body"] for r in rows), key=len),
+                        first["id"],
+                    ),
+                )
+                db.execute(f"DELETE FROM traces WHERE id IN ({','.join('?' * (len(rows) - 1))})", [r["id"] for r in rows[1:]])
+                merged += len(rows) - 1
+                touched[group["day"]] = touched.get(group["day"], 0) + len(rows) - 1
+            for touched_day, removed in touched.items():
+                # the digest still describes the same subjects; keep it valid for the new row count
+                db.execute(
+                    "UPDATE digests SET trace_count=trace_count-? WHERE day=? AND trace_count="
+                    "(SELECT COUNT(*) FROM traces WHERE day=?)+?",
+                    (removed, touched_day, touched_day, removed),
+                )
+        return merged
+
+    def prune_logs(self, today: str) -> int:
+        """Finished jobs leave after a month, the crew's log after a year."""
+        day = datetime.fromisoformat(today)
+        with self.tx() as db:
+            n = db.execute(
+                "DELETE FROM jobs WHERE state IN ('done','failed') AND created_at<?",
+                ((day - timedelta(days=30)).isoformat(),),
+            ).rowcount
+            n += db.execute("DELETE FROM llm_calls WHERE ts<?", ((day - timedelta(days=400)).isoformat(),)).rowcount
+        return n
+
+    def size(self) -> int:
+        """Bytes on disk: the memory file and its write-ahead log."""
+        return sum(p.stat().st_size for p in self.path.parent.glob(self.path.name + "*") if p.is_file())
+
+    def vacuum(self, threshold: float = 0.0) -> bool:
+        """Give freed pages back to the disk. With a threshold, only when that share of the
+        file (and at least a megabyte) is free, so the file is not rewritten for crumbs."""
+        with self.connect() as db:
+            pages = db.execute("PRAGMA page_count").fetchone()[0]
+            free = db.execute("PRAGMA freelist_count").fetchone()[0]
+            size = db.execute("PRAGMA page_size").fetchone()[0]
+        if not free or (threshold and (free < threshold * pages or free * size < 1 << 20)):
+            return False
+        with self._write_lock:
+            db = sqlite3.connect(self.path, timeout=15)
+            try:
+                db.execute("VACUUM")
+                db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            finally:
+                db.close()
+        return True
 
     def forget_everything(self) -> None:
         with self.tx() as db:
@@ -336,6 +431,7 @@ class Store:
                 "sparks", "dives", "events", "llm_calls", "jobs",
             ):
                 db.execute(f"DELETE FROM {table}")
+        self.vacuum()
 
     # ------------------------------------------------------------- threads
 

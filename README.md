@@ -257,6 +257,37 @@ Share of one CPU core on a MacBook (Apple M5, Retina), sample sea, 45 seconds pe
 
 *Harbour → the water's motion* chooses calm on battery (the default), always moving, always calm or still water.
 
+## Small, and it never forgets the main line
+
+<p align="center">
+  <img src="docs/assets/memory-tide.svg" alt="What fades and what stays: every visit is kept for two weeks, then merged, then washed away after ninety days; every day is first sorted into currents; the main line is never tidied away" width="900">
+</p>
+
+The harbour tidies itself once a day, and the rule is simple: **details fade, the main line stays.**
+
+- **The main line is never tidied away.** Your currents and each current's day-by-day history, your dreams, your fish
+  and your net (what you kept, followed or threw back, and why) are what a dive remembers you by. Housekeeping never
+  touches them; only the shark removes them, when you ask.
+- **Details fade.** After two weeks, visits to the same thing on the same day merge into one row: same subjects, same
+  totals, so nothing a dive reads changes. After 90 days the raw driftline washes away.
+- **No day slips through.** A day becomes part of a current's history when it is sorted. If the laptop slept through
+  the night, the night watch quietly sorts the days it missed, long before they could wash away.
+- **The shark really eats.** Forgetting a day, or everything, gives the space back to the disk. Old job records, the
+  crew's call log and the login log are trimmed too.
+
+Two years of heavy use (450 visits a day, a dive every night), same data on both versions:
+
+| | 3.0.0 | now |
+| --- | --- | --- |
+| after 90 days | 21.0 MB | **12.8 MB** |
+| after a year | 27.5 MB | **18.0 MB** |
+| after two years | 35.5 MB | **24.4 MB** |
+| after feeding everything to the sharks | 35.5 MB | **0.1 MB** |
+
+About 6 MB a year of what remains is the main line itself, your logbook, and it grows only as you dive.
+*Harbour → The sea* shows how much the harbour holds. Starting at login, the app waits in the menu bar at about 54 MB
+of memory; with the window open, about 130–170 MB, most of it Qt.
+
 ## What stays in the harbour
 
 Memory is one SQLite file in `~/.digital-unconscious/` (or `$DUN_HOME`). Only a dive crosses the water: the day's

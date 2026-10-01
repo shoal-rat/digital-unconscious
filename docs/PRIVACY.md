@@ -29,9 +29,11 @@ Slack water (no input for `sense.idle_seconds`) is not credited.
 ## Where it settles
 
 One SQLite file, `memory.db`, in the harbour folder (`~/.digital-unconscious/` or `$DUN_HOME`), plus `config.toml`.
-The tide washes the raw driftline away after `sense.retention_days` (90 by default). Currents, their daily tides,
-dives, fish and seabed searches stay until you let the sharks have them: *Harbour → The sea* can let the shark eat a
-day or feed everything to the sharks, and so can `dun forget`.
+After two weeks the visits to one subject on one day merge into a single row, and the tide washes the raw driftline
+away after `sense.retention_days` (90 by default), together with the digest that cached its sorting. Currents, their
+daily tides, dives, fish and seabed searches stay until you let the sharks have them: *Harbour → The sea* can let the
+shark eat a day or feed everything to the sharks, and so can `dun forget`. When the shark eats, the space is given
+back to the disk. A login item's log is kept under 1 MB.
 
 ## What crosses the water
 
@@ -39,7 +41,7 @@ Only the crew's errands and seabed soundings:
 
 | When | What is sent | To |
 | --- | --- | --- |
-| Sorting the catch | subject labels (cleaned titles, search queries, domains), times, bottle and washed-in excerpts, current names | the *digest* crew member |
+| Sorting the catch (each dive, and any past day the night watch missed while night diving is on) | subject labels (cleaned titles, search queries, domains), times, bottle and washed-in excerpts, current names | the *digest* crew member |
 | Diving | the day's topics with evidence labels, measured undercurrents, current names, your persona and waters, your net's counts, recent fish titles | the *dream* crew member |
 | The lighthouse | the candidate fish and what they cite | the *critique* crew member |
 | The seabed | the fish's sounding lines (search terms) | OpenAlex, then arXiv if needed |

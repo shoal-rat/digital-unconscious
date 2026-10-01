@@ -24,6 +24,10 @@ and dreams up grounded ideas. Keep it that way:
 - Patterns are computed in `mind/signals.py`, not asked of a model.
 - The critique scores; code applies weights, taste and diversity.
 - All model text is rendered as plain text (`QLabel` with `PlainText`, or the `Para` widget).
+- The main line (`housekeeping.MAIN_LINE`: currents, their daily history, dreams, fish, seabed searches, the net) is
+  never deleted except by the shark (`forget_day`, `forget_everything`). Anything that fades is decided in
+  `housekeeping.tidy()` and must leave what a dive reads unchanged; a new table goes on one side or the other, and
+  `tests/test_housekeeping.py` gets a line for it.
 - Prompts and schemas live only in `mind/prompts.py`. Schemas are strict (every property required, no extras),
   because Codex and the Anthropic structured-output API require it.
 

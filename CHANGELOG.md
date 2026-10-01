@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.0.1 — small, and it never forgets the main line
+
+- **The main line is fenced off.** Currents and their day-by-day history, dreams, fish, seabed searches and your net
+  are never touched by housekeeping; only the shark removes them. The policy lives in one place
+  (`housekeeping.py`) and a test checks that a year of tidying leaves every main-line row and every undercurrent
+  unchanged.
+- **No day slips through.** The night watch now sorts any past day it missed (the laptop slept through the night)
+  into its currents, so the history undercurrents are measured from has no holes before raw driftlines expire.
+- **Details fade, quietly.** After two weeks the visits to one subject on one day merge into one row (same subjects,
+  same totals for every dive); digests leave with their raw driftlines; old job records and the crew's call log are
+  trimmed; the login log stays under 1 MB.
+- **The shark really eats.** Forgetting gives the space back to the disk. Two years of heavy use now take about 24 MB
+  instead of 36 MB, and feeding everything to the sharks leaves 0.1 MB instead of 36 MB.
+- *Harbour → The sea* shows how much the harbour holds.
+- A sea that starts in the menu bar builds no page until the window opens (54 MB instead of 65 MB at login), and Qt no
+  longer searches for Chinese fonts the machine does not have.
+
 ## 3.0.0 — rebuilt from the idea up
 
 A new codebase. Earlier versions remain in Git history.

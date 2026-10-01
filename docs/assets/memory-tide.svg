@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="350" viewBox="0 0 960 350" role="img" aria-label="What fades and what stays: every visit is kept for two weeks, then merged, then washed away after ninety days; every day is first sorted into currents. The main line (currents and their day-by-day history, dreams, fish, your net) is never tidied away; only the shark removes it, when you ask.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" fill="#2f6db1"/></marker>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f5aa8"/><stop offset="0.6" stop-color="#1a77c2"/><stop offset="1" stop-color="#55c3cf"/></linearGradient>
+    <linearGradient id="shallow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d8fd4"/><stop offset="1" stop-color="#5bc0cf"/></linearGradient>
+    <linearGradient id="ebb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5bb7cf" stop-opacity="0.9"/><stop offset="1" stop-color="#5bb7cf" stop-opacity="0"/></linearGradient>
+    <linearGradient id="deep" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#173f72"/><stop offset="1" stop-color="#2a66ad"/></linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect width="960" height="350" rx="26" fill="#f6f1e8"/>
+  <path d="M0 26 a26 26 0 0 1 26 -26 h908 a26 26 0 0 1 26 26 v18 c-60 8 -120 -6 -180 0 s-120 10 -180 2 s-120 -10 -180 -2 s-120 8 -180 0 s-120 -8 -194 -2 z" fill="url(#sea)" opacity="0.92"/>
+  <text x="34" y="30" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="15" fill="#fdfaf3">what fades, what stays</text>
+
+  <!-- the time axis -->
+  <g font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780" text-anchor="middle">
+    <line x1="80" y1="104" x2="900" y2="104" stroke="#cdbfa6" stroke-width="1.2" stroke-dasharray="2 5"/>
+    <circle cx="80" cy="104" r="3.5" fill="#2f6db1"/><text x="80" y="92">today</text>
+    <circle cx="300" cy="104" r="3" fill="#b9a988"/><text x="300" y="92">two weeks</text>
+    <circle cx="640" cy="104" r="3" fill="#b9a988"/><text x="640" y="92">90 days</text>
+    <text x="880" y="92">years →</text>
+  </g>
+
+  <!-- the driftline: every visit, then merged, then gone -->
+  <rect x="80" y="122" width="220" height="48" rx="12" fill="url(#shallow)"/>
+  <rect x="88.0" y="133.9" width="2.2" height="15.2" rx="1.1" fill="#ffffff" opacity="0.71"/><rect x="93.2" y="133.2" width="2.2" height="14.8" rx="1.1" fill="#ffffff" opacity="0.71"/><rect x="98.4" y="139.3" width="2.2" height="23.6" rx="1.1" fill="#ffffff" opacity="0.86"/><rect x="103.6" y="133.8" width="2.2" height="20.4" rx="1.1" fill="#ffffff" opacity="0.66"/><rect x="108.8" y="133.4" width="2.2" height="15.3" rx="1.1" fill="#ffffff" opacity="0.64"/><rect x="114.0" y="139.4" width="2.2" height="23.9" rx="1.1" fill="#ffffff" opacity="0.87"/><rect x="119.2" y="138.4" width="2.2" height="16.3" rx="1.1" fill="#ffffff" opacity="0.67"/><rect x="124.4" y="137.0" width="2.2" height="22.8" rx="1.1" fill="#ffffff" opacity="0.89"/><rect x="129.6" y="139.0" width="2.2" height="15.0" rx="1.1" fill="#ffffff" opacity="0.79"/><rect x="134.8" y="137.4" width="2.2" height="20.1" rx="1.1" fill="#ffffff" opacity="0.62"/><rect x="140.0" y="135.8" width="2.2" height="15.1" rx="1.1" fill="#ffffff" opacity="0.92"/><rect x="145.2" y="138.9" width="2.2" height="20.6" rx="1.1" fill="#ffffff" opacity="0.67"/><rect x="150.4" y="139.3" width="2.2" height="20.9" rx="1.1" fill="#ffffff" opacity="0.90"/><rect x="155.6" y="138.8" width="2.2" height="20.1" rx="1.1" fill="#ffffff" opacity="0.72"/><rect x="160.8" y="136.8" width="2.2" height="19.2" rx="1.1" fill="#ffffff" opacity="0.61"/><rect x="166.0" y="134.4" width="2.2" height="23.8" rx="1.1" fill="#ffffff" opacity="0.57"/><rect x="171.2" y="132.4" width="2.2" height="21.5" rx="1.1" fill="#ffffff" opacity="0.66"/><rect x="176.4" y="136.3" width="2.2" height="19.7" rx="1.1" fill="#ffffff" opacity="0.69"/><rect x="181.6" y="140.0" width="2.2" height="16.3" rx="1.1" fill="#ffffff" opacity="0.72"/><rect x="186.8" y="133.6" width="2.2" height="21.6" rx="1.1" fill="#ffffff" opacity="0.66"/><rect x="192.0" y="134.8" width="2.2" height="23.0" rx="1.1" fill="#ffffff" opacity="0.68"/><rect x="197.2" y="136.5" width="2.2" height="24.9" rx="1.1" fill="#ffffff" opacity="0.59"/><rect x="202.4" y="132.5" width="2.2" height="16.7" rx="1.1" fill="#ffffff" opacity="0.86"/><rect x="207.6" y="136.9" width="2.2" height="16.8" rx="1.1" fill="#ffffff" opacity="0.68"/><rect x="212.8" y="133.4" width="2.2" height="19.5" rx="1.1" fill="#ffffff" opacity="0.57"/><rect x="218.0" y="137.6" width="2.2" height="24.8" rx="1.1" fill="#ffffff" opacity="0.93"/><rect x="223.2" y="137.9" width="2.2" height="25.5" rx="1.1" fill="#ffffff" opacity="0.56"/><rect x="228.4" y="134.3" width="2.2" height="25.6" rx="1.1" fill="#ffffff" opacity="0.86"/><rect x="233.6" y="135.3" width="2.2" height="25.3" rx="1.1" fill="#ffffff" opacity="0.80"/><rect x="238.8" y="138.5" width="2.2" height="17.5" rx="1.1" fill="#ffffff" opacity="0.63"/><rect x="244.0" y="135.6" width="2.2" height="15.6" rx="1.1" fill="#ffffff" opacity="0.70"/><rect x="249.2" y="139.7" width="2.2" height="18.0" rx="1.1" fill="#ffffff" opacity="0.55"/><rect x="254.4" y="132.4" width="2.2" height="16.0" rx="1.1" fill="#ffffff" opacity="0.86"/><rect x="259.6" y="134.9" width="2.2" height="17.5" rx="1.1" fill="#ffffff" opacity="0.59"/><rect x="264.8" y="139.9" width="2.2" height="19.1" rx="1.1" fill="#ffffff" opacity="0.63"/><rect x="270.0" y="132.5" width="2.2" height="14.7" rx="1.1" fill="#ffffff" opacity="0.62"/><rect x="275.2" y="137.4" width="2.2" height="15.8" rx="1.1" fill="#ffffff" opacity="0.57"/><rect x="280.4" y="135.9" width="2.2" height="17.0" rx="1.1" fill="#ffffff" opacity="0.95"/><rect x="285.6" y="133.0" width="2.2" height="20.4" rx="1.1" fill="#ffffff" opacity="0.86"/><rect x="290.8" y="135.3" width="2.2" height="25.9" rx="1.1" fill="#ffffff" opacity="0.74"/>
+  <rect x="300" y="122" width="340" height="48" fill="#5bb7cf" opacity="0.9"/>
+  <rect x="308" y="137.5" width="18.1" height="16.2" rx="5" fill="#ffffff" opacity="0.72"/><rect x="341" y="138.5" width="16.5" height="21.3" rx="5" fill="#ffffff" opacity="0.72"/><rect x="374" y="141.0" width="19.0" height="16.2" rx="5" fill="#ffffff" opacity="0.72"/><rect x="407" y="137.5" width="16.4" height="17.2" rx="5" fill="#ffffff" opacity="0.72"/><rect x="440" y="137.4" width="22.7" height="16.9" rx="5" fill="#ffffff" opacity="0.72"/><rect x="473" y="136.3" width="23.3" height="19.4" rx="5" fill="#ffffff" opacity="0.72"/><rect x="506" y="141.9" width="18.0" height="21.4" rx="5" fill="#ffffff" opacity="0.72"/><rect x="539" y="139.9" width="21.9" height="20.5" rx="5" fill="#ffffff" opacity="0.72"/><rect x="572" y="139.0" width="14.9" height="17.3" rx="5" fill="#ffffff" opacity="0.72"/><rect x="605" y="141.2" width="23.0" height="21.5" rx="5" fill="#ffffff" opacity="0.72"/>
+  <rect x="640" y="122" width="250" height="48" rx="12" fill="url(#ebb)"/>
+  <rect x="80" y="122" width="560" height="20" rx="10" fill="url(#gloss)"/>
+  <g font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#4e5a66" text-anchor="middle">
+    <text x="190" y="190">every visit</text>
+    <text x="470" y="190">visits to one thing merge: same subjects, same totals</text>
+    <text x="765" y="190">the raw driftline washes away</text>
+  </g>
+
+  <!-- sorting: each day joins its currents before it can fade -->
+  <path d="M112 172 C112 214 140 222 170 228" fill="none" stroke="#2f6db1" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+  <text x="182" y="219" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#2f6db1">sorted into currents every night (missed nights are caught up)</text>
+
+  <!-- the main line -->
+  <rect x="80" y="236" width="820" height="56" rx="28" fill="url(#deep)"/>
+  <rect x="92" y="240" width="796" height="22" rx="11" fill="url(#gloss)"/>
+  <path d="M904 264 l14 0" stroke="#2a66ad" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <text x="112" y="270" font-family="Georgia, 'Iowan Old Style', serif" font-size="18" fill="#ffffff">the main line</text>
+  <text x="236" y="270" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#dbe8f7">currents and their day-by-day history · dreams · fish · your net</text>
+  <text x="490" y="322" text-anchor="middle" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="14" fill="#2f6db1">never tidied away; only the shark, when you ask</text>
+</svg>

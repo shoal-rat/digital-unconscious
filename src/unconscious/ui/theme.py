@@ -132,13 +132,24 @@ ROLES: dict[str, tuple[str, int, int, bool, float]] = {
 
 CJK_SERIF = ["Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun"]
 CJK_SANS = ["PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC"]
+_present: dict[bool, list[str]] = {}
+
+
+def _fallbacks(serif: bool) -> list[str]:
+    """Only the Chinese fallbacks this machine has: asking Qt for a missing family makes
+    it build its whole alias table (tens of milliseconds) and warn about it."""
+    if serif not in _present:
+        installed = set(QFontDatabase.families())
+        wanted = CJK_SERIF if serif else CJK_SANS
+        _present[serif] = [name for name in wanted if name in installed] or wanted[:1]
+    return _present[serif]
 
 
 def font(role: str) -> QFont:
     family, size, weight, italic, spacing = ROLES.get(role, ROLES["body"])
     f = QFont(family)
     # Chinese falls back to a serif beside Fraunces and a sans beside Figtree.
-    f.setFamilies([family, *(CJK_SERIF if family.startswith("Fraunces") else CJK_SANS)])
+    f.setFamilies([family, *_fallbacks(family.startswith("Fraunces"))])
     f.setPixelSize(size)
     f.setWeight(QFont.Weight(weight))
     f.setItalic(italic)

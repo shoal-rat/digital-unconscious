@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from unconscious.config import app_home
+
 LABEL = "com.digital-unconscious.dun"
 
 
@@ -50,7 +52,7 @@ def _mac(action: str) -> int:
         path.unlink(missing_ok=True)
         print("Removed the login item.")
         return 0
-    logs = Path.home() / ".digital-unconscious" / "logs"
+    logs = app_home() / "logs"  # trimmed daily by housekeeping
     logs.mkdir(parents=True, exist_ok=True)
     args = "\n".join(f"    <string>{escape(part)}</string>" for part in _command())
     path.parent.mkdir(parents=True, exist_ok=True)

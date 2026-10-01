@@ -36,16 +36,16 @@ Everything runs in one process on one machine. Nothing lives on a server.
 
 <p align="center"><img src="assets/data-model.svg" alt="Driftline, tides, currents, undercurrents, dives, fish, seabed searches, your net and taste" width="880"></p>
 
-The **driftline** (`traces`) is the only minute-by-minute record of a person, and the tide washes it away after
-`sense.retention_days`. Everything else is a shape, and settles:
+The **driftline** (`traces`) is the only minute-by-minute record of a person. After two weeks it smooths and after
+`sense.retention_days` the tide washes it away (see *What fades, what stays*). Everything else is a shape, and settles:
 
 | In the sea | Table | Notes |
 | --- | --- | --- |
-| driftline | `traces` | one row per stretch of attention on one subject |
+| driftline | `traces` | one row per visit to a subject; after two weeks, one row per subject per day (`visits` counts them) |
 | tides | `thread_days`, `subject_threads` | how much time each current carried each day, and which subjects belong to it |
 | currents | `threads` | buoyed (`pinned`), becalmed (`muted`) or joined to another (`merged`) |
 | undercurrents | — | measured on demand from the tides, never stored |
-| dives | `dreams`, `digests` | one per night: headline, reflection, undercurrent, what was measured |
+| dives | `dreams`, `digests` | one per night: headline, reflection, undercurrent, what was measured; a digest caches the sorting and leaves with its driftline |
 | fish | `sparks` | each keeps a copy of where it rose, so it outlives the driftline |
 | seabed | `dives` | the report and what came up |
 | your net | `events` | keep, swim after, throw back (with a reason) |
@@ -54,6 +54,32 @@ The **driftline** (`traces`) is the only minute-by-minute record of a person, an
 
 A *subject* is a day's driftline gathered by `subject_key`. Keys are made to survive trivial title changes (unread
 counters, unsaved markers, page numbers) and to gather an editor's windows by project.
+
+## What fades, what stays
+
+<p align="center"><img src="assets/memory-tide.svg" alt="Every visit for two weeks, then merged, then washed away after ninety days; every day sorted into currents first; the main line never tidied away" width="880"></p>
+
+A dive remembers a person by the **main line**: `threads`, `thread_days`, `dreams`, `sparks`, `dives` and `events`
+(`housekeeping.MAIN_LINE`). Nothing automatic deletes from those tables; only `Store.forget_day` and
+`Store.forget_everything` do, and only the shark calls them. Everything else is allowed to fade, and all of it is
+decided in one place, `housekeeping.tidy()`, which runs at most once a day in whichever process is awake (the
+watcher's hourly check or the night watch's minute tick):
+
+| When | What fades | Why a dive does not notice |
+| --- | --- | --- |
+| after 14 days | `Store.compact_before`: a day's visits to one subject merge into one row, `visits` keeps the count | dreams read `Store.subjects()`, which groups by subject; keys, seconds, visits and excerpts are identical |
+| after `retention_days` | `Store.forget_before`: raw driftlines, their subject map and their digest | undercurrents are measured from `thread_days`; the dream keeps its own copy of the topics |
+| after 30 / 400 days | `Store.prune_logs`: finished jobs, the crew's call log | nothing reads them for a dive |
+| above 1 MB | `housekeeping.trim_log`: the login item's log keeps its last 256 KB | — |
+
+A day only enters `thread_days` when it is sorted, so the night watch also runs `jobs.due_sorting()`: any past day
+with enough driftline and no digest (the laptop slept through the night, say) is sorted quietly, oldest first, one at
+a time, while night diving is on. Freed pages go back to the disk (`Store.vacuum`) when a fifth of the file is
+free, and always after the shark.
+
+`tests/test_housekeeping.py` holds the line: after a month of dives and a year of tidying, every main-line row is
+byte-for-byte the same, tonight's undercurrents and the history they are measured from are unchanged, and a merged
+day gives a dive exactly the subjects it gave before.
 
 ## Keeping the fish honest
 
@@ -85,6 +111,7 @@ listed; then the next crew member takes over. Every attempt goes in the crew's l
 `dun` runs the window, the menu-bar mark, the tide watcher (a daemon thread), the night watch (one worker thread) and
 the watch keeper in one process. Opening it a second time brings the first window forward (`QLocalServer`).
 `dun watch` runs only the tide watcher; the shore notices a living watcher and does not start a second.
+A sea that starts in the menu bar at login builds no page until the window first opens.
 
 Pages are redrawn from the sea floor on `refresh()`, which reads the full `api.state()`. Between redraws the window
 polls `api.pulse()`, a handful of counts: a dive's progress moves in place, and when it surfaces the page is redrawn
