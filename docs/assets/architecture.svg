@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="580" viewBox="0 0 960 580" role="img" aria-label="The ecosystem in code: the shore (ui), the tide watcher (sense, ingest), the sea floor (store), the deep (mind), the crew (llm router) and the night watch (jobs)">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L10,5 L0,9 z" fill="#2f6db1"/>
+    </marker>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f5aa8"/><stop offset="0.7" stop-color="#1a77c2"/><stop offset="1" stop-color="#2694cc"/></linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf9"/><stop offset="1" stop-color="#f6efe3"/></linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1e6d3"/><stop offset="1" stop-color="#e6d6bb"/></linearGradient>
+    <linearGradient id="gel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fbbe8"/><stop offset="0.48" stop-color="#4f8fd2"/><stop offset="0.52" stop-color="#2f6db1"/><stop offset="1" stop-color="#4a8fd4"/></linearGradient>
+  </defs>
+  <rect width="960" height="580" rx="26" fill="#f6f1e8"/>
+
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <!-- the app -->
+    <rect x="60" y="34" width="840" height="92" rx="22" fill="url(#sea)"/>
+    <text x="92" y="74" font-family="Georgia, 'Iowan Old Style', serif" font-size="24" fill="#fdfaf3">The shore</text>
+    <text x="92" y="100" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="14" fill="#d8ebf7">ui/ · PySide6 — the window, the menu-bar watcher, bottles, pebbles and the sea</text>
+    <g font-size="12" fill="#ffffff">
+      <rect x="650" y="58" width="88" height="26" rx="13" fill="url(#gel)" stroke="#245a94"/>
+      <text x="694" y="75" text-anchor="middle">shore</text>
+      <rect x="746" y="58" width="88" height="26" rx="13" fill="#ffffff" fill-opacity="0.14" stroke="#ffffff" stroke-opacity="0.45"/>
+      <text x="790" y="75" text-anchor="middle">currents</text>
+    </g>
+
+    <path d="M480 128 v36" stroke="#2f6db1" stroke-width="2" fill="none" marker-end="url(#a)"/>
+    <text x="494" y="152" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">api.py — what the shore asks of the sea</text>
+
+    <!-- middle row -->
+    <rect x="60" y="176" width="250" height="132" rx="20" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="84" y="210" font-family="Georgia, 'Iowan Old Style', serif" font-size="20" fill="#1f2d3d">The tide watcher</text>
+    <text x="84" y="236" font-size="13" fill="#4b5a69">sense/ — glances at the front</text>
+    <text x="84" y="254" font-size="13" fill="#4b5a69">window; notices slack water</text>
+    <text x="84" y="280" font-size="13" fill="#4b5a69">ingest.py — bottles, papers that</text>
+    <text x="84" y="298" font-size="13" fill="#4b5a69">wash in, ActivityWatch</text>
+
+    <rect x="355" y="176" width="250" height="132" rx="20" fill="url(#sand)" stroke="#dccbb1"/>
+    <text x="379" y="210" font-family="Georgia, 'Iowan Old Style', serif" font-size="20" fill="#1f2d3d">The sea floor</text>
+    <text x="379" y="236" font-size="13" fill="#4b5a69">store.py — one SQLite file</text>
+    <text x="379" y="262" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6d5c47">the tide washes driftlines away;</text>
+    <text x="379" y="280" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6d5c47">currents, dives and fish settle</text>
+
+    <rect x="650" y="176" width="250" height="132" rx="20" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="674" y="210" font-family="Georgia, 'Iowan Old Style', serif" font-size="20" fill="#1f2d3d">The deep</text>
+    <text x="674" y="236" font-size="13" fill="#4b5a69">mind/ — sort · read currents</text>
+    <text x="674" y="254" font-size="13" fill="#4b5a69">dive · lighthouse · net · seabed</text>
+    <text x="674" y="280" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">code checks where every fish rose</text>
+    <text x="674" y="298" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">and measures every current</text>
+
+    <g fill="none" stroke="#2f6db1" stroke-width="2" stroke-linecap="round">
+      <path d="M312 242 q5 -5 10 0 t10 0 t10 0 t10 0" marker-end="url(#a)"/>
+      <path d="M607 230 h36" marker-end="url(#a)"/>
+      <path d="M648 256 h-36" marker-end="url(#a)"/>
+    </g>
+    <text x="318" y="230" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="12" fill="#6f7780">driftline</text>
+
+    <!-- bottom row -->
+    <path d="M775 310 v40" stroke="#2f6db1" stroke-width="2" fill="none" marker-end="url(#a)"/>
+    <rect x="650" y="356" width="250" height="84" rx="20" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="674" y="386" font-family="Georgia, 'Iowan Old Style', serif" font-size="18" fill="#1f2d3d">The crew</text>
+    <text x="674" y="408" font-size="12.5" fill="#4b5a69">llm/router — each job to the best</text>
+    <text x="674" y="426" font-size="12.5" fill="#4b5a69">hand aboard; the next takes over</text>
+
+    <g font-size="12" fill="#1f2d3d">
+      <rect x="60" y="480" width="120" height="30" rx="15" fill="#fcf9f4" stroke="#e3d9ca"/>
+      <text x="120" y="500" text-anchor="middle">Claude Code</text>
+      <rect x="190" y="480" width="90" height="30" rx="15" fill="#fcf9f4" stroke="#e3d9ca"/>
+      <text x="235" y="500" text-anchor="middle">Codex</text>
+      <rect x="290" y="480" width="330" height="30" rx="15" fill="#fcf9f4" stroke="#e3d9ca"/>
+      <text x="455" y="500" text-anchor="middle">OpenAI-compatible: DeepSeek · GLM · Kimi · Ollama</text>
+      <rect x="630" y="480" width="120" height="30" rx="15" fill="#fcf9f4" stroke="#e3d9ca"/>
+      <text x="690" y="500" text-anchor="middle">Anthropic SDK</text>
+      <rect x="760" y="480" width="140" height="30" rx="15" fill="#efe7da" stroke="#e3d9ca"/>
+      <text x="830" y="500" text-anchor="middle" fill="#6f7780">a paper crew (tests)</text>
+    </g>
+    <path d="M700 442 C700 462 620 466 480 472" stroke="#2f6db1" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#a)"/>
+    <text x="60" y="542" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">Claude Code and Codex need no API key · each errand runs in an empty folder, tools off</text>
+
+    <rect x="60" y="356" width="545" height="84" rx="20" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="84" y="386" font-family="Georgia, 'Iowan Old Style', serif" font-size="18" fill="#1f2d3d">The night watch</text>
+    <text x="84" y="408" font-size="12.5" fill="#4b5a69">jobs.py — one diver at a time, dreams and seabed searches;</text>
+    <text x="84" y="426" font-size="12.5" fill="#4b5a69">a watch keeper sends them down each night</text>
+    <path d="M610 391 C628 391 632 330 680 312" stroke="#2f6db1" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#a)"/>
+  </g>
+</svg>

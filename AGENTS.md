@@ -1,57 +1,57 @@
-# Digital Unconscious agent guide
+# Digital Unconscious — notes for contributors and coding agents
 
 ## Product boundary
 
-Keep this a small, single-user, local-first research loop. Do not add accounts, team sync, a generic chat surface, autonomous publication, payments, or hidden global configuration.
+A native desktop app for one person on one machine. It records attention, sorts it into threads, computes patterns,
+and dreams up grounded ideas. Keep it that way:
 
-Local-first describes storage and orchestration. Model inference may be remote. Never claim that screenshots stay on-device when vision is enabled.
+- No accounts, sync, servers, web dashboards or HTML-in-a-wrapper UIs. The interface is PySide6.
+- No browser automation, no stored credentials, no autonomous publishing.
+- No screenshots or keystroke capture. Window metadata only.
+- Model inference may be remote; never claim otherwise in UI or docs.
 
-## Project shape
+## Layout
 
-- Python package: `src/du_research`
-- Tests: `tests`, using `unittest`
-- Default config: `config/pipeline.toml`
-- Runtime state: `workspace/` (ignored by Git)
-- Optional integrations must stay lazy so a core install can import, test, and run from a text log.
+- `src/unconscious/`: engine (standard library only) and `ui/` (PySide6).
+- `tests/`: `unittest`; run offline with the fake model. `tests/helpers.py` has `TempApp`.
+- `scripts/snapshots.py`: renders every page to PNG offscreen. Use it to check UI changes.
 
-## Model boundary
+## Rules that keep the output honest
 
-- All model access uses `AIBackend.call(...)`.
-- `backends/base.py` owns the contract and normalization.
-- `backends/local.py` owns Codex and Claude Code subscription runners.
-- `backends/hosted.py` owns optional API adapters.
-- `backends/router.py` owns provider selection and fallback.
-- `ai_backend.py` is a compatibility facade; do not rebuild logic there.
-- Provider prefixes: `codex:`, `claude_code:`, `deepseek:`, `glm:`, `openai:`, `anthropic:`, `kimi:`.
-- A fallback provider must use its own default model, never an incompatible model name from the failed provider.
+- The model never invents provenance: inputs carry `S`/`T` references and code rejects anything else.
+- Patterns are computed in `mind/signals.py`, not asked of a model.
+- The critique scores; code applies weights, taste and diversity.
+- All model text is rendered as plain text (`QLabel` with `PlainText`, or the `Para` widget).
+- Prompts and schemas live only in `mind/prompts.py`. Schemas are strict (every property required, no extras),
+  because Codex and the Anthropic structured-output API require it.
 
-Local model calls must remain isolated: temporary working directory, read-only/safe execution, and no tools unless the call explicitly needs image reading or web search.
+## The ocean vocabulary
 
-## Secrets and safety
+People read the app as a small sea; the code keeps plain names. Keep both consistent:
+Shore (today), Currents (threads), Shoal (sparks, each one a fish), Logbook (journal), Harbour (settings),
+tide watcher (sensor), driftline (traces), slack water / fog / at anchor (idle / quiet app / paused), bottle (jot),
+washed in (fed document), eddy / return tide / swell / driftwood / confluence / main current / ebb / channel
+(orbit / return / surge / seed / collision / steady / fade / gap), the lighthouse (critique), the crew (models),
+the seabed (literature dive), the shark (forgetting). New strings follow the same voice in English and Chinese;
+avoid computer words like "filter", "purge" or "sync" in anything a person reads.
 
-- Do not commit or persist provider keys in setup JSON. Use environment variables.
-- Keep the encrypted credential vault for supervised browser tasks only.
-- Do not copy browser profiles, cookies, or credentials.
-- Never automate CAPTCHA, MFA, terms acceptance, payments, subscriptions, or final submission.
-- Treat passive screenshots as sensitive outbound model input.
+## Interface conventions
 
-## Verification
+- Colours, fonts and the stylesheet come from `ui/theme.py`. Never hard-code colours in pages; add a token.
+- The dream panel is the sea: azure in the morning theme, deep blue in the evening theme. Motion is slow and
+  meaningful: the waterline, a shoal with one fish per idea, a bobbing bottle, a passing fin.
+- Paint with `QPainter`; avoid `QGraphicsEffect` (it re-composites the textured page and leaves seams).
+- Qt ignores a `border-radius` larger than half a widget's height: size pills with `min-height`.
+- Strings go through `ui/i18n.py` in both English and Chinese.
 
-Before publishing:
+## Verify before publishing
 
 ```bash
-python -m unittest discover -s tests -v
-python -m compileall -q src
+QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
+ruff check src tests scripts
+python scripts/snapshots.py snapshots/ && python scripts/snapshots.py snapshots/ --dark --zh
 python -m build
 ```
 
-For backend changes, add mocked CLI/SDK tests and run one real local smoke call when the relevant signed-in CLI is available.
-
-For dashboard changes, start `du dashboard --no-open` on an unused port and inspect setup, dashboard, models, and status in a browser.
-
-## Style
-
-- Prefer explicit dataclasses and small functions over frameworks.
-- Preserve artifact compatibility when refactoring orchestration.
-- Comments should explain a security boundary, data contract, or non-obvious provider quirk.
-- Add a dependency only when its feature cannot remain optional.
+For provider changes, add a test with a stand-in executable (see `tests/test_llm.py`) and, when the CLI is signed
+in, run `dun doctor --ping`.

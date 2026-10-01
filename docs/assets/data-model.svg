@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-label="What settles on the sea floor: the driftline is sorted into tides and currents; undercurrents are measured; each night's dive holds fish; fish hold seabed searches; your net becomes taste, which steers the next dive">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L10,5 L0,9 z" fill="#2f6db1"/>
+    </marker>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf9"/><stop offset="1" stop-color="#f6efe3"/></linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1e6d3"/><stop offset="1" stop-color="#e6d6bb"/></linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f5aa8"/><stop offset="1" stop-color="#2694cc"/></linearGradient>
+  </defs>
+  <rect width="960" height="330" rx="26" fill="#f6f1e8"/>
+
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <!-- row 1: from raw to abstract -->
+    <rect x="40" y="40" width="170" height="78" rx="18" fill="url(#fade)" stroke="#dccbb1" stroke-dasharray="5 4"/>
+    <text x="62" y="72" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">driftline</text>
+    <text x="62" y="96" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="12.5" fill="#6d5c47">washed away in 90 days</text>
+
+    <rect x="290" y="40" width="230" height="78" rx="18" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="312" y="72" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">tides</text>
+    <text x="312" y="96" font-size="12.5" fill="#4b5a69">time per current per day</text>
+
+    <rect x="600" y="40" width="150" height="78" rx="18" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="622" y="72" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">currents</text>
+    <text x="622" y="96" font-size="12.5" fill="#4b5a69">buoy · becalm · join</text>
+
+    <g fill="none" stroke="#2f6db1" stroke-width="2" stroke-linecap="round">
+      <path d="M214 79 q6.5 -6 13 0 t13 0 t13 0 t13 0 t13 0" marker-end="url(#a)"/>
+      <path d="M524 79 q6.5 -6 13 0 t13 0 t13 0 t13 0 t13 0" marker-end="url(#a)"/>
+    </g>
+    <text x="226" y="62" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="12" fill="#6f7780">sorted</text>
+
+    <!-- row 2: the night -->
+    <rect x="290" y="168" width="230" height="78" rx="18" fill="#fcf9f4" stroke="#2f6db1" stroke-dasharray="3 4"/>
+    <text x="312" y="200" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">undercurrents</text>
+    <text x="312" y="224" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="12.5" fill="#2f6db1">measured, never stored</text>
+    <path d="M405 120 v42" stroke="#2f6db1" stroke-width="2" fill="none" marker-end="url(#a)"/>
+
+    <rect x="600" y="168" width="124" height="78" rx="18" fill="url(#sea)"/>
+    <text x="622" y="200" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#fdfaf3">dives</text>
+    <text x="622" y="224" font-size="12.5" fill="#d8ebf7">one per night</text>
+
+    <rect x="748" y="168" width="100" height="78" rx="18" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="764" y="200" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">fish</text>
+    <text x="764" y="224" font-size="12" fill="#4b5a69">in the net</text>
+
+    <rect x="864" y="168" width="84" height="78" rx="18" fill="url(#card)" stroke="#e3d9ca"/>
+    <text x="880" y="200" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">seabed</text>
+    <text x="880" y="224" font-size="12" fill="#4b5a69">papers</text>
+
+    <g fill="none" stroke="#2f6db1" stroke-width="2" stroke-linecap="round">
+      <path d="M524 207 q6.5 -6 13 0 t13 0 t13 0 t13 0 t13 0" marker-end="url(#a)"/>
+      <path d="M726 207 h16" marker-end="url(#a)"/>
+      <path d="M850 207 h10" marker-end="url(#a)"/>
+      <path d="M675 120 v42" marker-end="url(#a)"/>
+    </g>
+
+    <!-- row 3: what you tell it -->
+    <rect x="600" y="272" width="150" height="40" rx="20" fill="#fcf9f4" stroke="#e3d9ca"/>
+    <text x="675" y="297" text-anchor="middle" font-size="13" fill="#1f2d3d">your net</text>
+    <rect x="290" y="272" width="230" height="40" rx="20" fill="#fcf9f4" stroke="#e3d9ca"/>
+    <text x="405" y="297" text-anchor="middle" font-size="13" fill="#1f2d3d">taste: counted, never guessed</text>
+    <g fill="none" stroke="#2f6db1" stroke-width="1.6" stroke-dasharray="4 4" stroke-linecap="round">
+      <path d="M800 248 C800 276 780 292 754 292" marker-end="url(#a)"/>
+      <path d="M598 292 h-72" marker-end="url(#a)"/>
+      <path d="M522 280 C560 268 610 262 640 250" marker-end="url(#a)"/>
+    </g>
+    <text x="40" y="200" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">every fish keeps a note</text>
+    <text x="40" y="218" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">of where it rose,</text>
+    <text x="40" y="236" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">so it outlives the driftline</text>
+  </g>
+</svg>

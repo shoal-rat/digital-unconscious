@@ -1,23 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="560" height="112" viewBox="0 0 560 112" role="img" aria-labelledby="title desc">
-  <title id="title">Digital Unconscious</title>
-  <desc id="desc">A quiet signal above a connected field of latent ideas.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="128" viewBox="0 0 560 128" role="img" aria-label="Digital Unconscious">
   <defs>
-    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#72e6c1"/>
-      <stop offset="0.52" stop-color="#8b9cff"/>
-      <stop offset="1" stop-color="#d28cff"/>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a92cf"/>
+      <stop offset="0.5" stop-color="#2f6db1"/>
+      <stop offset="1" stop-color="#1d4f86"/>
     </linearGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
   </defs>
-  <g transform="translate(12 8)">
-    <rect width="96" height="96" rx="28" fill="#0d1220"/>
-    <path d="M17 43 C29 31 40 55 51 43 S73 31 81 43" fill="none" stroke="url(#aurora)" stroke-width="4" stroke-linecap="round" filter="url(#glow)"/>
-    <path d="M24 60 L47 73 L74 56 M24 60 L42 53 M47 73 L57 51 M74 56 L57 51" fill="none" stroke="#7d8caf" stroke-width="1.5" opacity=".72"/>
-    <g fill="url(#aurora)"><circle cx="24" cy="60" r="3.5"/><circle cx="42" cy="53" r="3"/><circle cx="47" cy="73" r="4"/><circle cx="57" cy="51" r="3.5"/><circle cx="74" cy="56" r="3.5"/></g>
+  <rect x="8" y="8" width="112" height="112" rx="30" fill="#f6f1e8"/>
+  <g>
+    <path d="M26 66 A38 38 0 0 0 102 66 Z" fill="url(#sea)"/>
+    <path d="M26 66 A38 38 0 0 0 102 66 Z" fill="url(#gloss)"/>
+    <path d="M38 82c6-3 10 3 16 0s10-3 16 0 10 3 16 0 6-2 6-2" fill="none" stroke="#f6f1e8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M48 94c5-2.5 8 2.5 13 0s8-2.5 13 0 6 1.5 6 1.5" fill="none" stroke="#f6f1e8" stroke-width="3" stroke-linecap="round"/>
   </g>
-  <text x="130" y="54" font-family="Inter,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="31" font-weight="760" letter-spacing="-.7" fill="#e9edf7">Digital <tspan fill="url(#aurora)">Unconscious</tspan></text>
-  <text x="132" y="78" font-family="Inter,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12" font-weight="600" letter-spacing="2.35" fill="#8e98b3">THE QUIET RESEARCH LOOP</text>
+  <circle cx="64" cy="66" r="38" fill="none" stroke="#1f2d3d" stroke-width="4.5"/>
+  <path d="M16 66h96" stroke="#1f2d3d" stroke-width="4.5" stroke-linecap="round"/>
+  <text x="148" y="60" font-family="Fraunces, 'Iowan Old Style', Georgia, serif" font-weight="300" font-size="44" fill="#1f2d3d">Digital</text>
+  <text x="148" y="106" font-family="Fraunces, 'Iowan Old Style', Georgia, serif" font-style="italic" font-weight="300" font-size="44" fill="#1f2d3d">Unconscious</text>
 </svg>

@@ -7,3 +7,5 @@ dist/
 workspace/
 .pytest_cache/
 .claude/
+snapshots/
+.DS_Store
