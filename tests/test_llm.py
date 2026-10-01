@@ -8,6 +8,7 @@ from pathlib import Path
 from unconscious.config import Settings
 from unconscious.llm.base import STR, LLMRequest, LLMResult, check, extract_json, obj
 from unconscious.llm.providers import ClaudeCodeCLI, CodexCLI
+from unconscious.llm.region import RegionCheck
 from unconscious.llm.router import Router
 
 SCHEMA = obj({"answer": STR})
@@ -34,7 +35,8 @@ class Scripted:
 
 
 def router(settings, **providers):
-    return Router(settings, None, providers=providers)
+    # tests never look anything up: the connection is "abroad" unless a test says otherwise
+    return Router(settings, None, providers=providers, region=RegionCheck(fetch=lambda: "US"))
 
 
 class JsonTests(unittest.TestCase):

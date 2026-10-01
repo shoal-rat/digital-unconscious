@@ -56,6 +56,23 @@ class Jobs:
                 store.update_job(job_id, state="failed", error=str(exc)[:1500])
 
 
+def counted(app: App, day: str, key: str, work: Work, keep_days: int = 14) -> Work:
+    """Count an automatic attempt only when it really failed. A crew that could not sail
+    (signed out, limited, offline, held by region) leaves the attempts untouched: the
+    scheduler waits for the crew and tries again."""
+    from unconscious.llm.crew import parse
+
+    def run(progress: Callable[[str], None]) -> dict[str, Any]:
+        try:
+            return work(progress)
+        except Exception as exc:
+            if parse(str(exc)) is None:
+                record_attempt(app, day, key, keep_days)
+            raise
+
+    return run
+
+
 def dream_job(app: App, day: str, force_digest: bool = False) -> Work:
     from unconscious.mind.dream import run_dream
 
@@ -128,30 +145,40 @@ def due_sorting(app: App, now: datetime | None = None) -> list[str]:
 
 
 def crew_ready(app: App, role: str = "digest") -> bool:
+    """Someone aboard who may sail for this role now, the region guard included (background threads)."""
     try:
-        return bool(app.router.describe()["routes"][role]["chain"])
+        return app.router.ready(role)
     except Exception:
         return False
 
 
-def run_scheduler(app: App, jobs: Jobs, stop: threading.Event, every: float = 60.0) -> None:
+def scheduler_tick(app: App, jobs: Jobs) -> None:
+    """One minute of the night watch: tidy the harbour, dive when a dive is due and the crew
+    can sail, and otherwise sort any day that was missed. Nothing here waits on the crew."""
     from unconscious.housekeeping import tidy
 
-    while not stop.wait(every):
-        try:
-            tidy(app)  # at most once a day; covers machines where the watcher is off
-        except Exception:
-            log.exception("housekeeping failed")
-        try:
-            for day in due_dreams(app):
-                record_attempt(app, day)
-                jobs.submit("dream", day, dream_job(app, day))
+    try:
+        tidy(app)  # at most once a day; covers machines where the watcher is off
+    except Exception:
+        log.exception("housekeeping failed")
+    try:
+        due = due_dreams(app)
+        # A crew that cannot sail (nobody signed in, signed out, limited, offline, or the connection
+        # in a held region) does not spend the day's attempts: the dive waits for the crew.
+        if due and crew_ready(app, "digest") and crew_ready(app, "dream"):
+            for day in due:
+                jobs.submit("dream", day, counted(app, day, "auto_dream_attempts", dream_job(app, day)))
                 log.info("auto-dream queued for %s", day)
-            if not app.store.active_jobs():
-                for day in due_sorting(app):
-                    if crew_ready(app):
-                        record_attempt(app, day, "auto_sort_attempts", app.settings.sense.retention_days)
-                        jobs.submit("sort", day, sort_job(app, day))
-                        log.info("catch-up sorting queued for %s", day)
-        except Exception:
-            log.exception("scheduler tick failed")
+        if not app.store.active_jobs():
+            for day in due_sorting(app):
+                if crew_ready(app):
+                    keep = app.settings.sense.retention_days
+                    jobs.submit("sort", day, counted(app, day, "auto_sort_attempts", sort_job(app, day), keep))
+                    log.info("catch-up sorting queued for %s", day)
+    except Exception:
+        log.exception("scheduler tick failed")
+
+
+def run_scheduler(app: App, jobs: Jobs, stop: threading.Event, every: float = 60.0) -> None:
+    while not stop.wait(every):
+        scheduler_tick(app, jobs)

@@ -126,7 +126,9 @@ def cmd_dream(args: argparse.Namespace) -> int:
     try:
         result = run_dream(app, day, progress, force_digest=args.redigest)
     except (DreamError, DigestError) as exc:
-        print(accent("  ✕ ") + str(exc))
+        from unconscious.ui.i18n import crew_message
+
+        print(accent("  ✕ ") + crew_message(str(exc)))
         return 1
     _print_dream(app, day)
     if args.json:
@@ -314,6 +316,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     for role, route in described["routes"].items():
         chain = " → ".join(route["chain"]) or accent("nothing available")
         print(f"    {role:<9} {chain}")
+    print()
+    if app.settings.models.region_guard:
+        country = app.router.region.current(max_age=0)
+        held = country == "?" or country in app.settings.models.hold_regions
+        if country == "?":
+            print(accent("    ✕ ") + "could not tell where the connection is: Claude and Codex wait ashore")
+        else:
+            print(f"    {accent('✕') if held else '✓'} connection in {country}: "
+                  + ("Claude, Codex, Anthropic and OpenAI stay ashore" if held else "the whole crew may sail"))
+    for name in ("claude", "codex"):
+        provider = app.router.providers.get(name)
+        if described["available"].get(name) and hasattr(provider, "signed_in"):
+            signed = provider.signed_in()
+            if signed is False:
+                print(accent("    ✕ ") + f"{name} is not signed in: run `{'claude auth login' if name == 'claude' else 'codex login'}`")
+            elif signed:
+                print(f"    ✓ {name} signed in")
+    for name, trouble in (described.get("troubles") or {}).items():
+        print(accent("    ! ") + f"{name} is resting after {trouble['kind']} ({trouble['strikes']}×): {trouble['detail'][:120]}")
     if args.ping:
         print()
         print("  " + bold("Ping"))

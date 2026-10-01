@@ -9,6 +9,7 @@ screenshots in docs/assets.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -62,6 +63,8 @@ def main() -> int:
         page.resize(window.page.viewport().width(), page.sizeHint().height())
         app.processEvents()
         page.grab().save(str(out / f"{name}{suffix}-full.png"))
+    window.close()
+    shutil.rmtree(home, ignore_errors=True)  # the borrowed sea leaves nothing behind
     print(out)
     return 0
 

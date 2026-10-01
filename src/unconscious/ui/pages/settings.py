@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from unconscious import api, ingest
 from unconscious.llm.router import ROLE_PREFERENCES, ROLES
 from unconscious.ui.dialogs import SharkDialog
-from unconscious.ui.i18n import t
+from unconscious.ui.i18n import crew_message, region_name, t, trouble_message
 from unconscious.ui.pages.base import Page
 from unconscious.ui.theme import font
 from unconscious.ui.widgets import SectionHead, button, eyebrow, hbox, label, vbox, wrap
@@ -336,6 +336,25 @@ class SettingsPage(Page):
         fallback = QCheckBox(t("settings.fallback"))
         fallback.setChecked(s["models"]["fallback"])
         self.add(fallback, 14)
+        guard = QCheckBox(t("settings.regionGuard"))
+        guard.setChecked(s["models"]["region_guard"])
+        self.add(guard, 6)
+        region = models.get("region") or {}
+        country = region.get("country")
+        if not country:
+            status = t("region.never")
+        elif country == "?":
+            status = t("region.unknown")
+        elif region.get("ashore"):
+            status = t("region.held", region=region_name(country))
+        else:
+            status = t("region.clear", region=region_name(country))
+        self.add(label(t("settings.regionHint") + " " + status, "small", "muted"), 4)
+        troubles = [tr for tr in (self.window.state.get("crew") or []) if tr["kind"] != "region"]
+        if troubles:
+            self.add(eyebrow(t("crew.troubles")), 16)
+            for trouble in troubles:
+                self.add(label(trouble_message(trouble["kind"], trouble["who"], trouble["detail"]), "small", "ink2", selectable=True), 4)
         usage = self.view.get("usage") or []
         if usage:
             self.add(eyebrow(t("settings.usage")), 18)
@@ -346,9 +365,10 @@ class SettingsPage(Page):
         error = self.view.get("last_error")
         if error:
             self.add(eyebrow(t("settings.lastError")), 16)
-            self.add(label(f"{error['ts'][:16]} · {error['provider']} · {error['error'][:400]}", "small", "error", selectable=True), 6)
+            self.add(label(f"{error['ts'][:16]} · {error['provider']} · {crew_message(error['error'])[:400]}", "small", "error", selectable=True), 6)
         self._save_row(lambda: self._save({"models": {
             **{role: combo.currentData() for role, combo in combos.items()}, "fallback": fallback.isChecked(),
+            "region_guard": guard.isChecked(),
         }}))
 
     # -- memory --------------------------------------------------------------

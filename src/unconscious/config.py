@@ -78,6 +78,10 @@ class Models:
     dive: str = "auto"
     fallback: bool = True
     timeout_seconds: int = 300
+    # Anthropic and OpenAI do not serve mainland China: while the connection is there,
+    # Claude, Codex, the Anthropic API and OpenAI stay ashore (see llm/region.py).
+    region_guard: bool = True
+    hold_regions: list[str] = field(default_factory=lambda: ["CN"])
 
 
 @dataclass
@@ -199,6 +203,7 @@ def _clamp(settings: Settings) -> None:
     if settings.you.language not in {"auto", "en", "zh"}:
         settings.you.language = "auto"
     settings.models.timeout_seconds = max(30, min(settings.models.timeout_seconds, 1800))
+    settings.models.hold_regions = [code.strip().upper() for code in settings.models.hold_regions if code.strip()]
     if settings.ui.theme not in {"system", "light", "dark"}:
         settings.ui.theme = "system"
     if settings.ui.motion not in {"auto", "full", "calm", "off"}:

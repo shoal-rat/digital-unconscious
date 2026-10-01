@@ -11,7 +11,7 @@ from unconscious import api
 from unconscious.mind.dream import STEPS as DREAM_STEPS
 from unconscious.store import today
 from unconscious.ui.charts import Pebbles, Ribbon, human, shore_threads
-from unconscious.ui.i18n import language, t
+from unconscious.ui.i18n import language, t, trouble_message
 from unconscious.ui.pages.base import Page
 from unconscious.ui.theme import font
 from unconscious.ui.widgets import (
@@ -187,6 +187,11 @@ class TodayPage(Page):
         if failure:
             b.addSpacing(14)
             b.addWidget(label(failure, "small", "error", selectable=True))
+        for trouble in state.get("crew") or []:  # why the crew is not sailing, in plain words
+            message = trouble_message(trouble["kind"], trouble["who"], trouble["detail"])
+            if message != failure:
+                b.addSpacing(10)
+                b.addWidget(label(message, "small", "ink2", selectable=True))
         if not state.get("models_ready"):
             b.addSpacing(14)
             b.addWidget(label(t("error.noModel"), "small", "error"))

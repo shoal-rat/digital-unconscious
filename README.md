@@ -232,6 +232,18 @@ Each job names the hand it prefers and passes to the next if they falter. *Harbo
 job. `dun doctor --ping` sends every crew member a tiny real errand. A full night on the sample sea (sorting, diving,
 the lighthouse) takes a little over a minute with Sonnet 5.5 and Opus 5.5.
 
+**When the crew can't sail, the dive waits instead of failing.**
+
+| What happens | What the sea does |
+| --- | --- |
+| the connection is in mainland China | Claude, Codex, the Anthropic API and OpenAI stay ashore: nothing is sent to them. The connection is looked up right before every errand, through the same exit the CLIs would take, so a VPN that carries them abroad counts, and switching it off mid-dive is caught. DeepSeek, GLM, Kimi and local models still sail. |
+| no network | it cannot tell where the connection is, so it waits (unsure is not abroad) and goes ahead once the network is back |
+| Claude or Codex asks to be signed in again | the errand passes to the next crew member, the menu bar tells you once (`claude auth login` / `codex login`), and the sea notices by itself when you have signed in, without a restart |
+| a usage limit, a timeout, an overloaded service | a pause that grows (5, 10, 20 minutes… at most two hours), then another try |
+
+None of these spends the night's attempts; only an unusable answer does. *Harbour → The crew* turns the region guard
+off or on and says what is keeping anyone in port; `dun doctor` checks it all from the terminal.
+
 ## Light on the battery
 
 The sea is meant to stay open on a laptop all day, so it moves the way the Mediterranean does at noon: barely.
@@ -343,6 +355,8 @@ critique = true          # the lighthouse
 [models]                 # the crew: "auto", or e.g. "claude:claude-opus-5-5", "codex", "deepseek:deepseek-v4-pro"
 dream = "auto"
 critique = "auto"
+region_guard = true      # keep Claude, Codex, Anthropic and OpenAI ashore while the connection is in…
+hold_regions = ["CN"]    # …these regions
 
 [ui]
 theme = "system"         # system | light (morning) | dark (evening)
