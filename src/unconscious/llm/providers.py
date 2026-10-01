@@ -42,6 +42,17 @@ class ClaudeCodeCLI:
     def available(self) -> bool:
         return shutil.which("claude") is not None
 
+    def signed_in(self) -> bool | None:
+        """`claude auth status`: no model call, no tokens. None when it cannot tell.
+        Starts a process, so only background threads ask."""
+        try:
+            proc = subprocess.run(["claude", "auth", "status", "--json"], capture_output=True, text=True, timeout=20)
+            raw = proc.stdout
+            start, end = raw.find("{"), raw.rfind("}")
+            return bool(json.loads(raw[start:end + 1]).get("loggedIn")) if start >= 0 else None
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+
     def complete(self, request: LLMRequest, model: str | None) -> LLMResult:
         model = model or self.default_model
         cmd = [
@@ -108,6 +119,17 @@ class CodexCLI:
 
     def available(self) -> bool:
         return shutil.which("codex") is not None
+
+    def signed_in(self) -> bool | None:
+        """`codex login status`: no model call. None when it cannot tell (background threads only)."""
+        try:
+            proc = subprocess.run(["codex", "login", "status"], capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        said = (proc.stdout + proc.stderr).lower()
+        if "not logged in" in said:
+            return False
+        return True if proc.returncode == 0 else None
 
     def complete(self, request: LLMRequest, model: str | None) -> LLMResult:
         model = model or self.default_model

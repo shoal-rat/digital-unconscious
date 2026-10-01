@@ -28,6 +28,8 @@ and dreams up grounded ideas. Keep it that way:
   never deleted except by the shark (`forget_day`, `forget_everything`). Anything that fades is decided in
   `housekeeping.tidy()` and must leave what a dive reads unchanged; a new table goes on one side or the other, and
   `tests/test_housekeeping.py` gets a line for it.
+- Every errand goes through `Router.call`, which applies the region guard and crew pauses. Nothing calls a
+  provider's `complete` directly outside tests, and nothing about the network or a CLI is asked on the UI thread.
 - Prompts and schemas live only in `mind/prompts.py`. Schemas are strict (every property required, no extras),
   because Codex and the Anthropic structured-output API require it.
 

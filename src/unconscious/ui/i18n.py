@@ -127,6 +127,21 @@ EN: dict[str, str] = {
     "settings.models": "The crew", "settings.modelsNote": "Each job goes to the best hand on deck, and the next one takes over if they falter.",
     "settings.choice": "preference", "settings.chain": "will try", "settings.autoModel": "Whoever is aboard",
     "settings.fallback": "Hand over to the next crew member when one falters",
+    "settings.regionGuard": "Keep Claude and Codex ashore while the connection is in mainland China",
+    "settings.regionHint": "Checked right before each errand, through the same exit the crew would take. Dives wait and go ahead on their own once the connection is outside. DeepSeek, GLM, Kimi and local models still sail.",
+    "region.held": "Last check: the connection is in {region}, so Claude, Codex, Anthropic and OpenAI are ashore.",
+    "region.clear": "Last check: the connection is in {region}; the whole crew may sail.",
+    "region.unknown": "Last check could not tell where the connection is; Claude and Codex wait ashore until it can.",
+    "region.never": "The connection is checked before the first errand.",
+    "region.CN": "mainland China", "region.HK": "Hong Kong", "region.MO": "Macau", "region.?": "an unknown place",
+    "crew.region": "The connection is in {region}, so {who} stays ashore. The night's dive waits and goes ahead on its own once the connection is outside.",
+    "crew.unknown": "Couldn't tell where the connection is (offline?), so {who} waits ashore. The night's dive goes ahead on its own once the network is back.",
+    "crew.sign_in": "{who} needs you to sign in again: open Terminal and run `{command}`. The night's dive waits and goes ahead on its own afterwards.",
+    "crew.limit": "{who} has reached a usage limit and is resting. The night's dive waits for it.",
+    "crew.offline": "{who} can't be reached right now (no network?). The night's dive waits and goes ahead on its own once it can.",
+    "crew.signInTitle": "{who} needs signing in",
+    "crew.troubles": "Not sailing right now",
+    "crew.both": "Claude and Codex",
     "settings.role.digest": "Sorting the catch", "settings.role.dream": "Diving", "settings.role.critique": "Keeping the lighthouse",
     "settings.role.dive": "Searching the seabed",
     "settings.available": "aboard", "settings.usage": "the last 30 days", "settings.calls": "{n} trips · {tokens} tokens",
@@ -254,6 +269,21 @@ ZH: dict[str, str] = {
     "settings.models": "船员", "settings.modelsNote": "每份工作交给甲板上最合适的人，他们失手时下一位接上。",
     "settings.choice": "偏好", "settings.chain": "将依次尝试", "settings.autoModel": "船上有谁就谁",
     "settings.fallback": "有人失手时交给下一位船员",
+    "settings.regionGuard": "网络位于中国大陆时，让 Claude 和 Codex 留在岸上",
+    "settings.regionHint": "每次出航前，按船员实际会走的网络出口检查一次。下潜会等待，网络回到中国大陆以外后自动继续。DeepSeek、智谱、Kimi 和本地模型不受影响。",
+    "region.held": "上次检查：网络位于{region}，Claude、Codex、Anthropic 和 OpenAI 留在岸上。",
+    "region.clear": "上次检查：网络位于{region}，船员都可以出航。",
+    "region.unknown": "上次检查无法判断网络所在地；在确认之前，Claude 和 Codex 留在岸上。",
+    "region.never": "第一次出航前会检查网络所在地。",
+    "region.CN": "中国大陆", "region.HK": "中国香港", "region.MO": "中国澳门", "region.?": "未知地区",
+    "crew.region": "当前网络位于{region}，{who} 暂时留在岸上。夜里的下潜会等待，网络回到中国大陆以外后自动继续。",
+    "crew.unknown": "暂时无法判断网络所在地（可能断网了），{who} 先留在岸上。网络恢复后，夜里的下潜会自动继续。",
+    "crew.sign_in": "{who} 需要你重新登录：打开终端运行 `{command}`。夜里的下潜会等待，登录后自动继续。",
+    "crew.limit": "{who} 达到了用量上限，正在休息。夜里的下潜会等它。",
+    "crew.offline": "暂时联系不上 {who}（断网了？）。夜里的下潜会等待，恢复后自动继续。",
+    "crew.signInTitle": "{who} 需要重新登录",
+    "crew.troubles": "暂时不能出航",
+    "crew.both": "Claude 和 Codex",
     "settings.role.digest": "分拣渔获", "settings.role.dream": "下潜", "settings.role.critique": "看守灯塔", "settings.role.dive": "探寻海床",
     "settings.available": "在船上", "settings.usage": "最近 30 天", "settings.calls": "{n} 趟 · {tokens} tokens",
     "settings.lastError": "上一次有人落水", "settings.nothing": "船上没有船员",
@@ -288,6 +318,34 @@ def set_language(language: str) -> None:
 
 def language() -> str:
     return _current
+
+
+def region_name(code: str) -> str:
+    key = f"region.{code}"
+    table = ZH if _current == "zh" else EN
+    return table.get(key) or EN.get(key) or code
+
+
+CREW_NAMES = {"claude": "Claude", "codex": "Codex", "anthropic": "Anthropic API", "openai": "OpenAI"}
+SIGN_IN_COMMANDS = {"claude": "claude auth login", "codex": "codex login"}
+
+
+def trouble_message(kind: str, who: str, detail: str = "") -> str:
+    name = t("crew.both") if who == "crew" else CREW_NAMES.get(who, who)
+    if kind == "region":
+        code = detail.strip()
+        return t("crew.unknown", who=name) if code in {"", "?"} else t("crew.region", who=name, region=region_name(code))
+    if kind == "sign_in":
+        return t("crew.sign_in", who=name, command=SIGN_IN_COMMANDS.get(who, who))
+    return t(f"crew.{kind}", who=name)
+
+
+def crew_message(error: str) -> str:
+    """Turn a crew mark (crew:<kind>:<who>:<detail>) into a sentence; other errors pass through."""
+    from unconscious.llm.crew import parse
+
+    found = parse(error or "")
+    return trouble_message(*found) if found else error
 
 
 def t(key: str, **values: object) -> str:

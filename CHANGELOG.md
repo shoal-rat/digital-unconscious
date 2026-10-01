@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.0.2 — when the crew can't sail
+
+- **Region guard.** While the connection is in mainland China, Claude, Codex, the Anthropic API and OpenAI stay
+  ashore: nothing is sent to them. The connection is looked up right before every errand, through the same exit the
+  CLIs would take, so a VPN counts and switching it off mid-dive is caught. Unsure (no network) means wait. DeepSeek,
+  GLM, Kimi and local models still sail. *Harbour → The crew* can turn it off; `models.hold_regions` sets the regions.
+- **Signed out, limited, offline.** Errors are recognised; the errand passes to the next crew member and the one in
+  trouble pauses (5, 10, 20 minutes… at most two hours). A sign-in is asked for once in the menu bar, and noticed by
+  itself afterwards through `claude auth status` / `codex login status`.
+- **Waiting is not failing.** A crew that cannot sail no longer spends the night's attempts; the night watch queues
+  the dive once someone can sail. The shore says in plain words why it is waiting.
+- `dun doctor` shows where the connection is and whether Claude and Codex are signed in.
+- The screenshot scripts no longer leave their borrowed seas in the temp folder.
+
 ## 3.0.1 — small, and it never forgets the main line
 
 - **The main line is fenced off.** Currents and their day-by-day history, dreams, fish, seabed searches and your net

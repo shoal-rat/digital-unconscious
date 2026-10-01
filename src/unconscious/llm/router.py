@@ -16,7 +16,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from unconscious.llm.base import LLMRequest, LLMResult, check, extract_json
+from unconscious.llm.crew import REGION, Crew, mark
 from unconscious.llm.providers import AnthropicAPI, ClaudeCodeCLI, CodexCLI, OpenAICompatible
+from unconscious.llm.region import GUARDED, UNKNOWN, RegionCheck, region_check
 
 if TYPE_CHECKING:
     from unconscious.config import Settings
@@ -81,11 +83,15 @@ class Router:
     settings: Settings
     store: Store | None = None
     providers: dict[str, Any] = field(default_factory=dict)
+    region: RegionCheck = field(default_factory=lambda: region_check)
+    crew: Crew | None = None
     _seen: dict[str, tuple[float, bool]] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if not self.providers:
             self.providers = build_providers(self.settings)
+        if self.crew is None:
+            self.crew = Crew(self.store)
 
     def _available(self, name: str) -> bool:
         # Looking for crew means searching PATH and probing servers; the answer
@@ -105,6 +111,29 @@ class Router:
                 ok = False
         self._seen[name] = (time.monotonic(), ok)
         return ok
+
+    def ashore(self, name: str, max_age: float | None = None) -> str | None:
+        """The country holding this crew member ashore, or None if it may sail.
+        May look the connection up: call it from background threads only."""
+        guard = self.settings.models
+        if not guard.region_guard or name not in GUARDED:
+            return None
+        self.region.held = frozenset(guard.hold_regions)
+        country = self.region.current(max_age)
+        return country if country == UNKNOWN or country in guard.hold_regions else None
+
+    def hold(self, name: str, max_age: float | None = None) -> tuple[str, str] | None:
+        """Why this crew member cannot sail right now, as (kind, detail), or None.
+        Background threads only: it may look up the connection or ask a CLI if it is signed in."""
+        trouble = self.crew.blocked(name, self.providers.get(name))
+        if trouble is not None:
+            return trouble.kind, trouble.detail
+        country = self.ashore(name, max_age)
+        return (REGION, country) if country is not None else None
+
+    def ready(self, role: str) -> bool:
+        """Is anyone aboard who may sail for this role right now? (background threads)"""
+        return any(self.hold(name) is None for name, _ in self.chain(role))
 
     def chain(self, role: str) -> list[tuple[str, str | None]]:
         configured = getattr(self.settings.models, role, "auto") if role in ROLES else "auto"
@@ -129,6 +158,7 @@ class Router:
         return out
 
     def describe(self) -> dict[str, Any]:
+        """For the shore and the harbour: never touches the network, so the region is the last one seen."""
         available = {name: self._available(name) for name in self.providers}
         routes = {}
         for role in ROLES:
@@ -137,7 +167,16 @@ class Router:
                 "configured": getattr(self.settings.models, role),
                 "chain": [f"{n}:{m}" if m else n for n, m in chain],
             }
-        return {"available": available, "routes": routes}
+        fix = self.region.last()
+        guard = self.settings.models
+        held = bool(fix) and guard.region_guard and (fix.country == UNKNOWN or fix.country in guard.hold_regions)
+        region = {
+            "guard": guard.region_guard,
+            "country": fix.country if fix else None,
+            "checked": fix.at if fix else None,
+            "ashore": sorted(n for n in GUARDED if available.get(n)) if held else [],
+        }
+        return {"available": available, "routes": routes, "region": region, "troubles": self.crew.snapshot()}
 
     def call(self, request: LLMRequest) -> LLMResult:
         chain = self.chain(request.role)
@@ -149,7 +188,13 @@ class Router:
             )
         request.effort = request.effort or ROLE_EFFORT.get(request.role)
         errors: list[str] = []
+        held: str | None = None  # the first crew mark, if no one could sail
         for name, model in chain:
+            reason = self.hold(name, max_age=0)  # the connection is looked up right before each errand
+            if reason is not None:
+                held = held or mark(reason[0], name, reason[1])
+                log.info("%s cannot sail (%s)", name, reason[0])
+                continue
             provider = self.providers[name]
             result = self._attempt(provider, request, model)
             if result.ok and request.schema:
@@ -177,11 +222,18 @@ class Router:
                         result.ok = False
                         result.error = result.error or "invalid JSON: " + "; ".join(problems[:4])
             if result.ok:
+                self.crew.sailed(name)
                 return result
-            errors.append(f"{result.label}: {result.error}")
+            kind = self.crew.failed(name, result.error)
+            if kind:  # signed out, limited, offline or refused: not this errand's fault
+                held = held or mark(kind, name, result.error[-200:].replace(":", " "))
+            else:
+                errors.append(f"{result.label}: {result.error}")
             if not self.settings.models.fallback:
                 break
-        return LLMResult(False, error=" | ".join(errors)[-1200:])
+        if errors:
+            return LLMResult(False, error=" | ".join(errors)[-1200:])
+        return LLMResult(False, error=held or "no crew member could sail")
 
     def _attempt(self, provider: Any, request: LLMRequest, model: str | None) -> LLMResult:
         try:

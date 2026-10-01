@@ -46,6 +46,11 @@ Only the crew's errands and seabed soundings:
 | The lighthouse | the candidate fish and what they cite | the *critique* crew member |
 | The seabed | the fish's sounding lines (search terms) | OpenAlex, then arXiv if needed |
 | The seabed | the fish and the abstracts that came up | the *dive* crew member |
+| Before an errand to Claude, Codex, the Anthropic API or OpenAI (while the region guard is on) | a plain request with nothing about you in it; like any request, it shows your IP address | Cloudflare's `cdn-cgi/trace`, then `api.country.is` or `ipinfo.io` if that fails |
+
+While the connection appears to be in a held region (mainland China by default), or cannot be placed at all,
+nothing is sent to Claude, Codex, the Anthropic API or OpenAI. Whether Claude Code and Codex are signed in is asked of
+the CLIs themselves (`claude auth status`, `codex login status`), on this machine.
 
 Claude Code and Codex use your subscription; the errand still goes to Anthropic or OpenAI. To keep every dive at
 home, bring an Ollama model aboard:

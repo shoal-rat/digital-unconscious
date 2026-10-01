@@ -41,6 +41,24 @@ def sensor_status(app: App) -> dict[str, Any]:
     return status
 
 
+def crew_status(app: App) -> list[dict[str, Any]]:
+    """What keeps crew members from sailing right now, for the shore and the menu bar.
+    Read from the store and the last region answer: never touches the network."""
+    import time
+
+    now = time.time()
+    out = [
+        {"who": name, "kind": t.get("kind", ""), "detail": t.get("detail", ""), "since": t.get("since", 0)}
+        for name, t in sorted((app.store.get("crew") or {}).items())
+        if t.get("until", 0) > now or t.get("kind") == "sign_in"
+    ]
+    guard = app.settings.models
+    fix = app.router.region.last()
+    if guard.region_guard and fix and (fix.country == "?" or fix.country in guard.hold_regions):
+        out.append({"who": "crew", "kind": "region", "detail": fix.country, "since": fix.at})
+    return out
+
+
 def pulse(app: App) -> dict[str, Any]:
     """The cheap subset of state() the window polls: no crew checks, a handful of counts."""
     store = app.store
@@ -55,6 +73,7 @@ def pulse(app: App) -> dict[str, Any]:
         "latest_dream": latest[0] if latest else None,
         "today_stats": {"seconds": round(seconds or 0)},
         "counts": {"dreams": dreams, "new_sparks": new_sparks},
+        "crew": crew_status(app),
     }
 
 
@@ -78,6 +97,7 @@ def state(app: App) -> dict[str, Any]:
         "latest_dream": latest["day"] if latest else None,
         "has_memory": app.store.trace_count() > 0,
         "jobs": app.store.active_jobs(),
+        "crew": crew_status(app),
         "models_ready": all(routes[r]["chain"] for r in ("digest", "dream")),
         "dream_time": settings.dream.time,
         "counts": {

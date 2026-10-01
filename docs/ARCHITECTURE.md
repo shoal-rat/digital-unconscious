@@ -102,6 +102,22 @@ day gives a dive exactly the subjects it gave before.
 | the lighthouse (`critique`) | Codex → Claude Code (Sonnet 5.5) → …, reordered so the keeper is not the diver when possible |
 | the seabed (`dive`) | Claude Code (Sonnet 5.5) → Codex → Anthropic API (Sonnet 5.5) → … |
 
+### When the crew cannot sail
+
+`Router.call` asks `Router.hold(name)` before every errand. Two things can hold a crew member in port, and neither
+counts as a failed dive:
+
+| | Where | Way back |
+| --- | --- | --- |
+| region | `llm/region.py`: Claude, Codex, the Anthropic API and OpenAI while the connection is in `models.hold_regions`, or cannot be placed | looked up again before every errand (`max_age=0`); readiness checks keep the answer 5 min, 10 if held, 2 if unsure |
+| sign in · limit · offline | `llm/crew.py`: an errand's error, classified | a pause per crew member that doubles per strike (at most 2 h); after a sign-in pause, `claude auth status` / `codex login status` say whether to try |
+
+A held errand passes to the next crew member. If nobody can sail, the error is a crew mark
+(`crew:<kind>:<who>:<detail>`), which the shore turns into a sentence and the night watch reads as "wait": `jobs.counted`
+records an attempt only for real failures, and `jobs.scheduler_tick` queues nothing until `Router.ready()` says
+someone can sail. Pauses are kept in the store (`crew`), so they outlive a restart and every process sees them;
+`api.crew_status` reads them, and the last region answer, without touching the network.
+
 Claude Code runs each errand in an empty temporary folder with `--safe-mode`, `--tools ""`, its own system prompt and
 no MCP servers; Codex runs in a read-only sandbox. An answer in the wrong shape is sent back once with the problems
 listed; then the next crew member takes over. Every attempt goes in the crew's log.

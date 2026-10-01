@@ -191,6 +191,17 @@ dun                                 # 然后打开你自己的海
 
 每项工作都有首选的人手，对方失手就交给下一位。*港湾 → 船员*里能看到每项工作由谁接手。`dun doctor --ping` 会给每位船员派一个很小的真实差事。在示例海上跑完完整的一夜（分拣、下潜、灯塔），用 Sonnet 5.5 和 Opus 5.5 只需一分钟多一点。
 
+**船员出不了海时，下潜会等待，而不是失败。**
+
+| 发生了什么 | 这片海怎么做 |
+| --- | --- |
+| 网络位于中国大陆 | Claude、Codex、Anthropic API 和 OpenAI 留在岸上，什么都不会发给它们。每次出航前都会按命令行工具实际会走的网络出口重新检查一次：带它们出境的 VPN 算数，下潜中途关掉 VPN 也会被发现。DeepSeek、智谱、Kimi 和本地模型照常出航。 |
+| 断网 | 判断不了网络所在地，就先等着（不确定不等于在境外），网络恢复后自动继续 |
+| Claude 或 Codex 要求重新登录 | 这件差事交给下一位船员，菜单栏提醒你一次（`claude auth login` / `codex login`），你登录后它会自己发现，不用重启 |
+| 用量上限、超时、服务过载 | 先歇一会儿再试，间隔逐步拉长（5、10、20 分钟……最多两小时） |
+
+这些情况都不会消耗当晚的下潜次数，只有无法使用的回答才算。在*港湾 → 船员*里可以开关这道区域防线，也能看到是什么让船员留在港里；`dun doctor` 能在终端里检查这一切。
+
 ## 不费电
 
 这片海是为一整天开着的笔记本准备的，所以它动起来，像正午的地中海：几乎不动。
@@ -286,6 +297,8 @@ critique = true          # 灯塔
 [models]                 # 船员："auto"，或如 "claude:claude-opus-5-5"、"codex"、"deepseek:deepseek-v4-pro"
 dream = "auto"
 critique = "auto"
+region_guard = true      # 网络位于下列地区时，让 Claude、Codex、Anthropic 和 OpenAI 留在岸上
+hold_regions = ["CN"]
 
 [ui]
 theme = "system"         # system | light（白天）| dark（夜晚）

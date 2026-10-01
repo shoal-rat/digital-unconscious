@@ -22,7 +22,7 @@ from unconscious.jobs import dive_job, dream_job
 from unconscious.store import today
 from unconscious.ui import theme
 from unconscious.ui.dialogs import JotDialog
-from unconscious.ui.i18n import set_language, t
+from unconscious.ui.i18n import CREW_NAMES, crew_message, set_language, t, trouble_message
 from unconscious.ui.motion import ticker
 from unconscious.ui.pages.journal import JournalPage
 from unconscious.ui.pages.settings import SettingsPage
@@ -308,6 +308,7 @@ class MainWindow(QMainWindow):
         current = {j["id"]: j for j in state.get("jobs", [])}
         self.state = state
         self._active_jobs = current
+        self._tell_crew(state.get("crew") or [])
         self.sidebar.set_status(state)
         if self.tray is not None:
             self.tray.update_state(state)
@@ -321,6 +322,17 @@ class MainWindow(QMainWindow):
             self.page.on_state(state)
         self._signature = signature
         self._pace()
+
+    def _tell_crew(self, troubles: list[dict]) -> None:
+        """Signing in again is the one trouble only the person can fix: say so once."""
+        told = getattr(self, "_told_crew", set())
+        for trouble in troubles:
+            key = (trouble["who"], trouble["kind"], trouble.get("since"))
+            if trouble["kind"] == "sign_in" and key not in told:
+                told.add(key)
+                name = CREW_NAMES.get(trouble["who"], trouble["who"])
+                self.notify(t("crew.signInTitle", who=name), trouble_message(trouble["kind"], trouble["who"]))
+        self._told_crew = told
 
     def _finished(self, job: dict) -> None:
         kind, ref = job.get("kind"), job.get("ref", "")
@@ -336,7 +348,7 @@ class MainWindow(QMainWindow):
                 self.notify(t("notify.dive"), "")
         else:
             key = ref if kind == "dream" else f"dive:{ref}"
-            self.failures[key] = job.get("error") or t("common.error")
+            self.failures[key] = crew_message(job.get("error") or "") or t("common.error")
             self.toast(self.failures[key][:300], error=True)
 
     # -- actions -------------------------------------------------------------

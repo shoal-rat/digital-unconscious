@@ -217,15 +217,21 @@ def squeeze() -> None:
 
 def main() -> int:
     if len(sys.argv) == 5 and sys.argv[1] == "--worker":
-        worker(sys.argv[2], sys.argv[3], Path(sys.argv[4]))
+        try:
+            worker(sys.argv[2], sys.argv[3], Path(sys.argv[4]))
+        finally:
+            shutil.rmtree(os.environ.get("DUN_HOME", ""), ignore_errors=True)  # the borrowed sea
         return 0
     raw = Path(tempfile.mkdtemp(prefix="dun-art-raw-"))
     for language in ("en", "zh"):
         for theme_name in ("light", "dark"):
             subprocess.run([sys.executable, __file__, "--worker", language, theme_name, str(raw)], check=True)
-    compose(raw)
-    loops(raw)
-    squeeze()
+    try:
+        compose(raw)
+        loops(raw)
+        squeeze()
+    finally:
+        shutil.rmtree(raw, ignore_errors=True)
     for path in sorted(ASSETS.rglob("*")):
         if path.is_file() and path.suffix in {".png", ".gif"}:
             print(f"{path.relative_to(ROOT)}  {path.stat().st_size // 1024} KB")
