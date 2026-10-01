@@ -28,6 +28,18 @@ A new codebase. Earlier versions remain in Git history.
 - English and Simplified Chinese interface and dreams (Chinese headings fall back to Songti beside Fraunces).
 - `dun demo` opens the app on three weeks of sample memory.
 
+### Light on the battery
+
+- On macOS the tide watcher asks the window server directly through `ctypes` (about 0.1 ms a glance) instead of
+  spawning AppleScript and `ioreg` three times every 15 seconds.
+- Adaptive pacing: glances stretch from 15 s to 60 s while attention rests on one thing, only the idle clock is read
+  at slack water, and on battery everything stretches further. Time is still counted from the real clock.
+- One shared animation clock that stops when the window is hidden or behind other apps and goes calm on battery;
+  the dream's waterline repaints only its own strip from cached layers. *Harbour → the water's motion* can make it
+  calm or still.
+- The window polls a small `api.pulse()` instead of the full state, every 30 s when it lives only in the menu bar.
+- The crew is Claude Sonnet 5.5 (sorting, the lighthouse, the seabed) and Opus 5.5 (diving).
+
 ### Smaller and stricter
 
 - Engine on the standard library: SQLite, urllib, subprocess. One memory file, one settings file.

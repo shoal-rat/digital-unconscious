@@ -30,8 +30,8 @@ from unconscious.ui.theme import font
 from unconscious.ui.widgets import SectionHead, button, eyebrow, hbox, label, vbox, wrap
 
 MODEL_CHOICES = [
-    "claude:opus", "claude:sonnet", "claude:haiku", "codex", "anthropic:claude-opus-5-5", "anthropic:claude-sonnet-5-5",
-    "anthropic:claude-haiku-4-5", "deepseek:deepseek-v4-flash", "deepseek:deepseek-v4-pro", "glm", "kimi", "openai", "ollama",
+    "claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "codex", "anthropic:claude-opus-5-5", "anthropic:claude-sonnet-5-5",
+    "deepseek:deepseek-v4-flash", "deepseek:deepseek-v4-pro", "glm", "kimi", "openai", "ollama",
 ]
 
 
@@ -160,7 +160,7 @@ class SettingsPage(Page):
     def _save(self, patch: dict) -> None:
         changed = self.app.update_settings(patch)
         self.window.toast(t("common.saved"))
-        if any(key.startswith(("you.language", "ui.theme")) for key in changed):
+        if any(key.startswith(("you.language", "ui.theme", "ui.motion")) for key in changed):
             self.window.apply_preferences()
         else:
             self.refresh()
@@ -177,6 +177,8 @@ class SettingsPage(Page):
         focus = QLineEdit(", ".join(s["you"]["focus"]))
         language = Segmented([("auto", "Auto"), ("en", "English"), ("zh", "中文")], s["you"]["language"])
         theme = Segmented([("system", t("settings.theme.system")), ("light", t("settings.theme.light")), ("dark", t("settings.theme.dark"))], s["ui"]["theme"])
+        motion = Segmented([("auto", t("settings.motion.auto")), ("full", t("settings.motion.full")),
+                            ("calm", t("settings.motion.calm")), ("off", t("settings.motion.off"))], s["ui"]["motion"])
         grid = TopGrid()
         grid.setHorizontalSpacing(24)
         grid.addWidget(field(t("settings.name"), name), 0, 0)
@@ -184,10 +186,11 @@ class SettingsPage(Page):
         grid.addWidget(field(t("settings.persona"), persona), 1, 0, 1, 2)
         grid.addWidget(field(t("settings.language"), language), 2, 0)
         grid.addWidget(field(t("settings.theme"), theme), 2, 1)
+        grid.addWidget(field(t("settings.motion"), motion, t("settings.motionHint")), 3, 0, 1, 2)
         self.add(grid)
         self._save_row(lambda: self._save({
             "you": {"name": name.text(), "persona": persona.toPlainText(), "focus": focus.text(), "language": language.value},
-            "ui": {"theme": theme.value},
+            "ui": {"theme": theme.value, "motion": motion.value},
         }))
 
     # -- senses --------------------------------------------------------------
@@ -228,8 +231,11 @@ class SettingsPage(Page):
         titles.setChecked(sense["capture_titles"])
         urls_box = QCheckBox(t("settings.urls"))
         urls_box.setChecked(sense["capture_urls"])
+        saver = QCheckBox(t("settings.batterySaver"))
+        saver.setChecked(sense["battery_saver"])
         self.add(titles)
         self.add(urls_box, 8)
+        self.add(saver, 8)
         self.body.addSpacing(16)
         interval, idle, retention = spin(sense["interval_seconds"], 5, 300), spin(sense["idle_seconds"], 30, 3600), spin(sense["retention_days"], 7, 3650)
         quiet_apps, private_apps, quiet_domains = lines_edit(sense["quiet_apps"]), lines_edit(sense["private_apps"], 120), lines_edit(sense["quiet_domains"])
@@ -243,7 +249,7 @@ class SettingsPage(Page):
         grid.addWidget(field(t("settings.retention"), retention, t("settings.retentionHint")), 2, 1)
         self.add(grid)
         self._save_row(lambda: self._save({"sense": {
-            "capture_titles": titles.isChecked(), "capture_urls": urls_box.isChecked(),
+            "capture_titles": titles.isChecked(), "capture_urls": urls_box.isChecked(), "battery_saver": saver.isChecked(),
             "interval_seconds": interval.value(), "idle_seconds": idle.value(), "retention_days": retention.value(),
             "quiet_apps": lines_of(quiet_apps), "private_apps": lines_of(private_apps), "quiet_domains": lines_of(quiet_domains),
         }}))

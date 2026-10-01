@@ -65,5 +65,51 @@ class WatcherTests(TempApp):
         self.assertEqual(len(self.app.store.traces("2026-10-01")), 1)
 
 
+
+class PacingTests(TempApp):
+    def setUp(self):
+        super().setUp()
+        self.watcher = Watcher(self.app, sensor=FakeSensor())
+        self.t0 = datetime(2026, 9, 30, 10, 0, 0).astimezone()
+
+    def test_backs_off_while_attention_stays_put(self):
+        page = Sample("Safari", "One long paper", "", 0)
+        delays = []
+        clock = self.t0
+        for _ in range(10):
+            self.watcher.tick(page, clock)
+            delays.append(self.watcher.next_delay(battery=False))
+            clock += timedelta(seconds=delays[-1])
+        self.assertEqual(delays[0], 15)
+        self.assertEqual(delays[5], 30)
+        self.assertEqual(delays[-1], 60)
+        # long gaps are still credited in full: 9 intervals of real time
+        total = self.app.store.subjects("2026-09-30")[0]["seconds"]
+        self.assertAlmostEqual(total, sum(delays[:-1]), delta=1)
+
+    def test_a_switch_resets_the_pace(self):
+        for i in range(9):
+            self.watcher.tick(Sample("Safari", "Paper", "", 0), self.t0 + timedelta(seconds=15 * i))
+        self.assertEqual(self.watcher.next_delay(battery=False), 60)
+        self.watcher.tick(Sample("Mail", "Inbox", "", 0), self.t0 + timedelta(seconds=200))
+        self.assertEqual(self.watcher.next_delay(battery=False), 15)
+
+    def test_battery_and_slack_water(self):
+        self.watcher.tick(Sample("Safari", "Paper", "", 0), self.t0)
+        self.assertEqual(self.watcher.next_delay(battery=True), 20)
+        self.watcher.tick(Sample("Safari", "Paper", "", 500), self.t0 + timedelta(seconds=20))
+        self.assertEqual(self.watcher.last_state, "idle")
+        self.assertEqual(self.watcher.next_delay(battery=False), 30)
+        self.assertEqual(self.watcher.next_delay(battery=True), 45)
+        self.app.store.put("sensor_paused_until", "forever")
+        self.watcher.tick(Sample("Safari", "Paper", "", 0), self.t0 + timedelta(seconds=60))
+        self.assertEqual(self.watcher.next_delay(battery=False), 60)
+
+    def test_power_probe_never_raises(self):
+        from unconscious.sense.power import on_battery
+
+        self.assertIn(on_battery(), (True, False))
+
+
 if __name__ == "__main__":
     unittest.main()

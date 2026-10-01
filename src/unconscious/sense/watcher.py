@@ -3,6 +3,12 @@
 Attribution rule: the time between two ticks belongs to whatever was in front
 at the earlier tick. Reading without touching the keyboard still counts until
 ``idle_seconds`` passes; after that, the idle stretch is not credited.
+
+Energy: the loop glances every ``interval_seconds`` while attention moves,
+backs off (2×, then 4×) while it stays on one thing, checks only the idle
+clock at slack water, and stretches further on battery. Because credit is
+computed from real elapsed time, a longer gap changes how quickly a switch is
+noticed, not how much time is counted.
 """
 
 from __future__ import annotations
@@ -10,10 +16,12 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from unconscious.sense.power import on_battery
 from unconscious.sense.sensors import Sample, SensorError, make_sensor
 from unconscious.sense.subjects import Subject, describe
 from unconscious.store import now_iso
@@ -60,6 +68,9 @@ class Watcher:
         self.error = ""
         self._last_maintenance: datetime | None = None
         self.started_at = now_iso()
+        self.steady = 0  # consecutive ticks on the same subject
+        self.planned_delay = float(settings.sense.interval_seconds)
+        self._status_written: tuple[str, str, float] = ("", "", 0.0)
 
     # -- core state machine ------------------------------------------------
 
@@ -67,7 +78,7 @@ class Watcher:
         settings = self.app.settings
         interval = settings.sense.interval_seconds
         threshold = settings.sense.idle_seconds
-        max_gap = max(interval * 3, 60)
+        max_gap = max(self.planned_delay * 2.5, interval * 3, 60)
 
         if self.current and self.last_tick:
             elapsed = (now - self.last_tick).total_seconds()
@@ -108,7 +119,9 @@ class Watcher:
 
         day = now.date().isoformat()
         if self.current and self.current.key == subject.key and self.current.day == day:
+            self.steady += 1
             return self._state("observing")
+        self.steady = 0
         self.current = OpenTrace(self._open(subject, now, day), subject.key, day, 0.0)
         self.last_label, self.last_app = subject.label, subject.app
         return self._state("observing")
@@ -132,8 +145,31 @@ class Watcher:
         )
 
     def _state(self, state: str) -> str:
+        if state != "observing":
+            self.steady = 0
         self.last_state = state
         return state
+
+    def next_delay(self, battery: bool | None = None) -> float:
+        """How long to wait before the next glance."""
+        sense = self.app.settings.sense
+        if battery is None:
+            battery = sense.battery_saver and on_battery()
+        base = float(max(sense.interval_seconds, 20) if battery else sense.interval_seconds)
+        ceiling = 90.0 if battery else 60.0
+        state = self.last_state
+        if state == "paused":
+            delay = 60.0
+        elif state in {"idle", "error"}:
+            delay = 45.0 if battery else 30.0
+        elif self.steady >= 8:
+            delay = base * 4
+        elif self.steady >= 4:
+            delay = base * 2
+        else:
+            delay = base
+        self.planned_delay = min(max(delay, float(sense.interval_seconds)), ceiling)
+        return self.planned_delay
 
     # -- loop --------------------------------------------------------------
 
@@ -148,14 +184,20 @@ class Watcher:
             "app": self.last_app if self.last_state == "observing" else "",
             "error": self.error,
             "capabilities": caps.to_dict() if caps else {},
-            "interval": self.app.settings.sense.interval_seconds,
+            "interval": round(self.planned_delay),
         }
 
     def step(self) -> str:
         now = datetime.now().astimezone()
         sample: Sample | None
         try:
-            sample = self.sensor.sample()
+            # At slack water only the idle clock is read; the full glance waits for your return.
+            idle_clock = getattr(self.sensor, "idle_seconds", None)
+            idle = idle_clock() if callable(idle_clock) else None
+            if idle is not None and idle >= self.app.settings.sense.idle_seconds:
+                sample = Sample(app="", idle_seconds=idle)
+            else:
+                sample = self.sensor.sample()
             self.error = ""
         except SensorError as exc:
             sample, self.error = None, str(exc)
@@ -163,7 +205,13 @@ class Watcher:
             log.exception("sensor failed")
             sample, self.error = None, f"{type(exc).__name__}: {exc}"
         state = self.tick(sample, now)
-        self.app.store.put("sensor", self.status())
+        # The status row is what the shore reads; write it when something
+        # visible changed or once a minute as a heartbeat, not on every glance.
+        last_state, last_subject, last_time = self._status_written
+        subject = self.last_label if state == "observing" else ""
+        if (state, subject) != (last_state, last_subject) or time.monotonic() - last_time >= 60 or self.error:
+            self.app.store.put("sensor", self.status())
+            self._status_written = (state, subject, time.monotonic())
         self._maintain(now)
         return state
 
@@ -171,7 +219,7 @@ class Watcher:
         log.info("watcher started (pid %s)", os.getpid())
         while not stop.is_set():
             self.step()
-            stop.wait(self.app.settings.sense.interval_seconds)
+            stop.wait(self.next_delay())
         self.app.store.put("sensor", {**self.status(), "state": "stopped"})
 
     def _maintain(self, now: datetime) -> None:

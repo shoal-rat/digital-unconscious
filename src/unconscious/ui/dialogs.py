@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QPlainTextEdit, QSizePolicy, QVBoxLayout, QWidget
 
 from unconscious.ui.i18n import t
+from unconscious.ui.motion import ticker
 from unconscious.ui.theme import THEME, font
 from unconscious.ui.widgets import button, eyebrow, label, para, sea_gradient
 
@@ -21,13 +22,15 @@ class _Strip(QWidget):
         self.phase = 2.6  # start with the fin (or bottle) already in view
         self.setFixedHeight(height)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(40)
+        ticker().subscribe(self, self._tick)
 
-    def _tick(self) -> None:
-        self.phase += 0.04
+    def _tick(self, step: float = 1.0) -> None:
+        self.phase += 0.08 * step
         self.update()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        ticker().refresh()
 
     def wave_y(self, x: float) -> float:
         return self.height() * 0.58 + math.sin(x / 26 + self.phase * 2.2) * 2.6
@@ -59,7 +62,7 @@ class FinStrip(_Strip):
     """A dorsal fin gliding along the surface, unhurried."""
 
     def draw(self, p: QPainter, rect: QRectF) -> None:
-        x = (self.phase * 70) % (rect.width() + 120) - 60
+        x = (self.phase * 35) % (rect.width() + 120) - 60
         base = self.wave_y(x) + 1
         fin = QPainterPath()
         fin.moveTo(x - 16, base)

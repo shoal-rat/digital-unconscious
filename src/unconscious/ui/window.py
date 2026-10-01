@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPainter, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
@@ -23,6 +23,7 @@ from unconscious.store import today
 from unconscious.ui import theme
 from unconscious.ui.dialogs import JotDialog
 from unconscious.ui.i18n import set_language, t
+from unconscious.ui.motion import ticker
 from unconscious.ui.pages.journal import JournalPage
 from unconscious.ui.pages.settings import SettingsPage
 from unconscious.ui.pages.sparks import SparkPage, SparksPage
@@ -241,8 +242,10 @@ class MainWindow(QMainWindow):
         self.addAction(close)
 
         self.timer = QTimer(self)
+        self.timer.setTimerType(Qt.TimerType.CoarseTimer)
         self.timer.timeout.connect(self.poll)
-        self.timer.start(2000)
+        self.timer.start(5000)
+        self._pace()  # started hidden in the menu bar: poll slowly until the window opens
         self.sidebar.set_status(self.state)
         self.go("today")
 
@@ -271,16 +274,35 @@ class MainWindow(QMainWindow):
 
     def refresh(self) -> None:
         if self.page is not None:
+            try:
+                self.state = api.state(self.app)  # pages read the full state when they rebuild
+            except Exception:
+                log.exception("state refresh failed")
             self.page.refresh()
 
     # -- polling -------------------------------------------------------------
 
+    def _pace(self) -> None:
+        """Poll often only when someone is looking and something is happening."""
+        if not self.isVisible() or self.isMinimized():
+            interval = 30_000  # only the menu-bar mark needs news
+        elif self._active_jobs:
+            interval = 1_500
+        else:
+            interval = 5_000
+        if self.timer.interval() != interval:
+            self.timer.setInterval(interval)
+
     def poll(self, force: bool = False) -> None:
         try:
-            state = api.state(self.app)
+            fresh = api.pulse(self.app)
         except Exception:
             log.exception("state poll failed")
             return
+        # pulse carries only part of each nested group; keep the rest from the last full state
+        state = {**self.state, **fresh}
+        for key in ("today_stats", "counts"):
+            state[key] = {**self.state.get(key, {}), **fresh[key]}
         previous = self._active_jobs
         current = {j["id"]: j for j in state.get("jobs", [])}
         self.state = state
@@ -297,6 +319,7 @@ class MainWindow(QMainWindow):
         elif current and self.page is not None:
             self.page.on_state(state)
         self._signature = signature
+        self._pace()
 
     def _finished(self, job: dict) -> None:
         kind, ref = job.get("kind"), job.get("ref", "")
@@ -366,6 +389,7 @@ class MainWindow(QMainWindow):
         settings = self.app.settings
         set_language(settings.language)
         theme.apply(QApplication.instance(), theme.detect_dark(settings.ui.theme))
+        ticker().set_mode(settings.ui.motion)
         self.sidebar.build()
         self.sidebar.set_status(self.state)
         if self.tray is not None:
@@ -388,6 +412,22 @@ class MainWindow(QMainWindow):
                 self.tray.showMessage("Digital Unconscious", t("tray.hidden"), mark_icon(), 4000)
             return
         super().closeEvent(event)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._pace()
+        ticker().refresh()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._pace()
+        ticker().refresh()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange):
+            self._pace()
+            ticker().refresh()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

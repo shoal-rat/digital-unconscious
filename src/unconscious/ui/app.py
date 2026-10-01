@@ -128,6 +128,9 @@ def run(*, hidden: bool = False, demo: bool = False, watch: bool = True, auto_dr
     qt_app.setWindowIcon(QIcon(mark_pixmap(256)))
     set_language(ctx.settings.language)
     theme.apply(qt_app, theme.detect_dark(ctx.settings.ui.theme))
+    from unconscious.ui.motion import ticker
+
+    ticker().set_mode(ctx.settings.ui.motion)
 
     jobs = Jobs(ctx)
     jobs.start()

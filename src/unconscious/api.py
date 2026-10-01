@@ -31,7 +31,7 @@ def sensor_status(app: App) -> dict[str, Any]:
     if heartbeat:
         try:
             age = (datetime.now().astimezone() - datetime.fromisoformat(heartbeat)).total_seconds()
-            stale = age > max(90, 4 * int(status.get("interval") or 15))
+            stale = age > max(180, 4 * int(status.get("interval") or 15))
         except ValueError:
             pass
     if stale and status.get("state") not in {None, "stopped"}:
@@ -39,6 +39,23 @@ def sensor_status(app: App) -> dict[str, Any]:
     status.setdefault("state", "never")
     status.update(pause_state(app))
     return status
+
+
+def pulse(app: App) -> dict[str, Any]:
+    """The cheap subset of state() the window polls: no crew checks, a handful of counts."""
+    store = app.store
+    with store.connect() as db:
+        latest = db.execute("SELECT day FROM dreams ORDER BY day DESC LIMIT 1").fetchone()
+        dreams = db.execute("SELECT COUNT(*) FROM dreams").fetchone()[0]
+        new_sparks = db.execute("SELECT COUNT(*) FROM sparks WHERE status='new'").fetchone()[0]
+        seconds = db.execute("SELECT COALESCE(SUM(seconds),0) FROM traces WHERE day=?", (today(),)).fetchone()[0]
+    return {
+        "sensor": sensor_status(app),
+        "jobs": store.active_jobs(),
+        "latest_dream": latest[0] if latest else None,
+        "today_stats": {"seconds": round(seconds or 0)},
+        "counts": {"dreams": dreams, "new_sparks": new_sparks},
+    }
 
 
 def state(app: App) -> dict[str, Any]:

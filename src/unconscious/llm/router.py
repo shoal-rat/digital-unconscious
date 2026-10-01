@@ -11,6 +11,7 @@ Roles
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -25,11 +26,15 @@ log = logging.getLogger(__name__)
 
 ROLES = ("digest", "dream", "critique", "dive")
 
+# Claude work goes to Sonnet 5.5 and Opus 5.5 by their full IDs, so an alias
+# moving to a different generation never changes behaviour silently.
+SONNET = "claude-sonnet-5-5"
+OPUS = "claude-opus-5-5"
 ROLE_PREFERENCES: dict[str, list[str]] = {
-    "digest": ["deepseek", "claude:haiku", "codex", "anthropic:claude-haiku-4-5", "openai", "glm", "kimi", "ollama"],
-    "dream": ["claude:opus", "codex", "anthropic:claude-opus-5-5", "openai", "deepseek", "glm", "kimi", "ollama"],
-    "critique": ["codex", "claude:sonnet", "anthropic:claude-sonnet-5-5", "openai", "deepseek", "glm", "kimi", "ollama"],
-    "dive": ["claude:sonnet", "codex", "anthropic:claude-opus-5-5", "openai", "deepseek", "glm", "kimi", "ollama"],
+    "digest": [f"claude:{SONNET}", "codex", f"anthropic:{SONNET}", "deepseek", "openai", "glm", "kimi", "ollama"],
+    "dream": [f"claude:{OPUS}", "codex", f"anthropic:{OPUS}", "openai", "deepseek", "glm", "kimi", "ollama"],
+    "critique": ["codex", f"claude:{SONNET}", f"anthropic:{SONNET}", "openai", "deepseek", "glm", "kimi", "ollama"],
+    "dive": [f"claude:{SONNET}", "codex", f"anthropic:{SONNET}", "openai", "deepseek", "glm", "kimi", "ollama"],
 }
 ROLE_EFFORT = {"digest": "low", "dream": "high", "critique": "medium", "dive": "medium"}
 ALIASES = {"claude_code": "claude", "zai": "glm", "moonshot": "kimi"}
@@ -76,21 +81,30 @@ class Router:
     settings: Settings
     store: Store | None = None
     providers: dict[str, Any] = field(default_factory=dict)
+    _seen: dict[str, tuple[float, bool]] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if not self.providers:
             self.providers = build_providers(self.settings)
 
     def _available(self, name: str) -> bool:
+        # Looking for crew means searching PATH and probing servers; the answer
+        # changes rarely, so it is remembered for a couple of minutes.
+        cached = self._seen.get(name)
+        if cached and time.monotonic() - cached[0] < 120:
+            return cached[1]
         provider = self.providers.get(name)
         if provider is None:
-            return False
-        if isinstance(provider, OpenAICompatible) and provider.local and not provider.default_model:
-            return False
-        try:
-            return bool(provider.available())
-        except Exception:  # availability probes must never break routing
-            return False
+            ok = False
+        elif isinstance(provider, OpenAICompatible) and provider.local and not provider.default_model:
+            ok = False
+        else:
+            try:
+                ok = bool(provider.available())
+            except Exception:  # availability probes must never break routing
+                ok = False
+        self._seen[name] = (time.monotonic(), ok)
+        return ok
 
     def chain(self, role: str) -> list[tuple[str, str | None]]:
         configured = getattr(self.settings.models, role, "auto") if role in ROLES else "auto"

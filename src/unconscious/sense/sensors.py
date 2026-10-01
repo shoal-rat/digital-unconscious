@@ -239,7 +239,14 @@ class LinuxSensor:
 def make_sensor(capture_urls: bool = True):
     system = platform.system()
     if system == "Darwin":
-        return MacSensor(capture_urls)
+        try:
+            from unconscious.sense.macnative import NativeMacSensor
+
+            sensor = NativeMacSensor(capture_urls)
+            sensor.front_app()  # prove the window server answers before relying on it
+            return sensor
+        except Exception:  # an unusual macOS build: fall back to AppleScript
+            return MacSensor(capture_urls)
     if system == "Windows":
         return WindowsSensor(capture_urls)
     return LinuxSensor(capture_urls)

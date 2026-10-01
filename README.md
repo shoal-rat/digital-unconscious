@@ -109,7 +109,7 @@ No API key is needed. Sign in once to either subscription CLI and it joins the c
 
 | Crew member | How they come aboard | Default jobs |
 | --- | --- | --- |
-| Claude Code | `claude`, signed in | diving (Opus), sorting the catch (Haiku), the lighthouse and the seabed (Sonnet) |
+| Claude Code | `claude`, signed in | diving (Opus 5.5); sorting the catch, the lighthouse and the seabed (Sonnet 5.5) |
 | Codex | `codex`, signed in | the lighthouse, so the keeper is not the diver |
 | DeepSeek · GLM · Kimi · OpenAI | `DEEPSEEK_API_KEY` · `ZAI_API_KEY` · `MOONSHOT_API_KEY` · `OPENAI_API_KEY` | optional |
 | Anthropic API | `ANTHROPIC_API_KEY` and `pip install -e ".[anthropic]"` | optional |
@@ -139,6 +139,31 @@ labels and timings go to the crew when it sorts and dives, and a fish's search l
 prior work. Claude Code and Codex need no API key, but inference still happens on Anthropic's or OpenAI's side; bring
 Ollama aboard to keep every dive at home. The tide washes raw driftlines away after 90 days; currents, dives and fish
 stay. The full boundary is in [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Light on the battery
+
+The sea is meant to stay open on a laptop all day, so it moves the way the Mediterranean does at noon: barely.
+
+- **The tide watcher glances; it does not stare.** On macOS it asks the window server directly instead of running
+  AppleScript for every sample (about 0.1 ms instead of 60–100 ms, and no processes spawned). It glances every 15
+  seconds while your attention moves, every 30 and then 60 while it rests on one thing, reads only the idle clock at
+  slack water, and stretches further on battery. Time is counted from the real clock, so a longer glance changes how
+  quickly a switch is noticed, never how much time is counted.
+- **The water moves only when you are looking.** Everything that moves shares one clock. It stops when the window is
+  hidden, minimised or behind another app; on battery the sea goes calm. Only the waterline is repainted, from
+  layers painted once.
+- **The window asks for news only when someone is there:** every 5 seconds while open, every 30 from the menu bar.
+
+Share of one CPU core on a MacBook (Apple M5, Retina), sample sea, 45 seconds per case:
+
+| | first v3 build | now |
+| --- | --- | --- |
+| only the menu-bar mark (window closed) | 1.5% | **0.05%** |
+| window open behind other apps | 31.6% | **0.26%** |
+| window in front, the water moving | 30.6% | **5.5%** |
+| window in front, calm water (the default on battery) | — | **2.9%** |
+
+*Harbour → the water's motion* chooses calm on battery (the default), always moving, always calm or still water.
 
 ## From the command line
 
@@ -176,6 +201,7 @@ idle_seconds = 120       # slack water after this long
 quiet_apps = ["1Password", "Bitwarden", "Keychain Access"]  # fog
 private_apps = ["Messages", "WeChat", "Slack", "Mail"]       # time only
 retention_days = 90      # the tide washes driftlines away
+battery_saver = true     # glance less often on battery
 
 [dream]                  # night diving
 time = "21:30"
@@ -184,12 +210,13 @@ sparks = 3               # fish kept per dive
 candidates = 6           # fish caught before sorting
 critique = true          # the lighthouse
 
-[models]                 # the crew: "auto", or e.g. "claude:opus", "codex", "deepseek:deepseek-v4-pro"
+[models]                 # the crew: "auto", or e.g. "claude:claude-opus-5-5", "codex", "deepseek:deepseek-v4-pro"
 dream = "auto"
 critique = "auto"
 
 [ui]
 theme = "system"         # system | light (morning) | dark (evening)
+motion = "auto"          # auto (calm on battery) | full | calm | off (still water)
 ```
 
 ## For shipwrights
@@ -231,6 +258,8 @@ v3 starts again from that idea:
 界面在**海岸**、**洋流**、**鱼群**、**航海日志**、**港湾**之间切换。白天的梦是阳光下尼斯的天使湾，蔚蓝渐变成近岸的绿松石色；傍晚则是缀着几点星光的深蓝海湾。每天的洋流是沙滩上的一把鹅卵石，浅水里会游过一小群鱼（鱼的数量就是当晚浮上来的想法数）。想遗忘时，就**让鲨鱼吃掉这一天**。
 
 无需 API key，登录 Claude Code 或 Codex 即可；所有记忆只停泊在本机的一个 SQLite 文件里。
+
+它为整天开着的笔记本而设计：观潮者只是偶尔看一眼，海面只在你看着它时才流动，用电池时更平静。窗口退到后台时只占约 0.3% 的单核 CPU，只留菜单栏图标时约 0.05%。
 
 ```bash
 python -m pip install -e .

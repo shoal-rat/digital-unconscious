@@ -85,8 +85,8 @@ class RouterTests(unittest.TestCase):
 
     def test_role_preferences_and_independent_critic(self):
         r = router(self.settings, claude=Scripted("claude", []), codex=Scripted("codex", []))
-        self.assertEqual(r.chain("dream")[0], ("claude", "opus"))
-        self.assertEqual(r.chain("digest")[0], ("claude", "haiku"))
+        self.assertEqual(r.chain("dream")[0], ("claude", "claude-opus-5-5"))
+        self.assertEqual(r.chain("digest")[0], ("claude", "claude-sonnet-5-5"))
         self.assertEqual(r.chain("critique")[0][0], "codex")  # not the dreamer
 
     def test_explicit_choice_without_fallback(self):
@@ -122,7 +122,7 @@ class CliRunnerTests(unittest.TestCase):
             "print(json.dumps({'result': 'done', 'structured_output': {'answer': prompt.strip()},"
             " 'usage': {'input_tokens': 7, 'output_tokens': 3}, 'total_cost_usd': 0.01}))\n"
         ))
-        result = ClaudeCodeCLI(timeout=30).complete(LLMRequest("ping", "sys", "hello", SCHEMA), "haiku")
+        result = ClaudeCodeCLI(timeout=30).complete(LLMRequest("ping", "sys", "hello", SCHEMA), "claude-sonnet-5-5")
         self.assertTrue(result.ok)
         self.assertEqual(result.data, {"answer": "hello"})
         self.assertEqual((result.tokens_in, result.tokens_out), (7, 3))

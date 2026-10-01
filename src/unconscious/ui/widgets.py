@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
+    QBrush,
     QColor,
     QFontMetrics,
     QIcon,
@@ -15,6 +16,7 @@ from PySide6.QtGui import (
     QPainterPath,
     QPen,
     QPixmap,
+    QPolygonF,
     QRadialGradient,
     QTextLayout,
     QTextOption,
@@ -590,6 +592,24 @@ def sea_gradient(rect: QRectF) -> QLinearGradient:
     return gradient
 
 
+class _Waterline(QWidget):
+    """The one strip of the dream that moves. It is opaque, so a frame repaints only
+    this strip: not the words above it, the pebbles below or the page behind."""
+
+    def __init__(self, panel: NightPanel):
+        super().__init__(panel)
+        self.panel = panel
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.translate(0, -self.y())
+        self.panel.paint_waterline(p)
+
+
 class NightPanel(QFrame):
     """The dream: the Baie des Anges after sunset. A soft wash from dusk sky to
     deep water and a low warm glow where the sun went down. With a shore, the
@@ -603,7 +623,12 @@ class NightPanel(QFrame):
         self.shore: QWidget | None = None
         self.fish = 0
         self._phase = 9.0  # the shoal is already crossing when the panel opens
-        self._timer: QTimer | None = None
+        self._layers_key: tuple | None = None
+        self._sand_layer: QPixmap | None = None
+        self._sea_layer: QPixmap | None = None
+        self._band_sand: QPixmap | None = None
+        self._band_sea: QBrush | None = None
+        self._waterline: _Waterline | None = None
 
     def set_fish(self, count: int) -> None:
         """A small shoal crossing the shallows: one fish for each idea that surfaced."""
@@ -613,15 +638,40 @@ class NightPanel(QFrame):
         self.body.addSpacing(70)
         self.body.addWidget(widget)
         self.shore = widget
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._drift)
-        self._timer.start(80)
+        self._waterline = _Waterline(self)
+        self._waterline.lower()
+        widget.installEventFilter(self)
+        from unconscious.ui.motion import SEA_MS, ticker
 
-    def _drift(self) -> None:
-        if self.isVisible() and self.shore is not None:
-            self._phase += 0.03
-            edge = self._edge()
-            self.update(0, int(edge - 130), self.width(), 160)
+        ticker().subscribe(self, self._drift, every=SEA_MS)
+
+    # Only the waterline band moves: from just under the words to just above the pebbles.
+    BAND_ABOVE, BAND_BELOW = 50, 18
+
+    def _drift(self, step: float = 1.0) -> None:
+        if self._waterline is not None:
+            self._phase += 0.03 * step
+            self._waterline.update()
+
+    def _place_waterline(self) -> None:
+        if self._waterline is not None:
+            edge = int(self._edge())
+            self._waterline.setGeometry(0, edge - self.BAND_ABOVE, self.width(), self.BAND_ABOVE + self.BAND_BELOW)
+
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self.shore and event.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+            self._place_waterline()
+        return super().eventFilter(watched, event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_waterline()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        from unconscious.ui.motion import ticker
+
+        ticker().refresh()
 
     def _edge(self) -> float:
         return float(self.shore.geometry().top() - 18) if self.shore is not None else float(self.height())
@@ -641,49 +691,132 @@ class NightPanel(QFrame):
             self._glow(p, frame, rect)
             return
         edge = self._edge()
-        p.fillPath(frame, THEME.color("sand"))
-        rng = __import__("random").Random(11)
-        speck = QColor(THEME.c["sand_shadow"])
-        for _ in range(int(rect.width() * (rect.height() - edge) / 260)):
-            speck.setAlphaF(rng.uniform(0.25, 0.7))
-            p.fillRect(QRectF(rng.uniform(0, rect.width()), rng.uniform(edge, rect.height()), 1.2, 1.2), speck)
-        wet = QPainterPath()
-        wet.moveTo(0, edge)
-        x = 0.0
-        while x <= rect.width():
-            wet.lineTo(x, self._wave_y(x, edge + 14, 6, 0.7))
-            x += 4
-        wet.lineTo(rect.width(), edge - 20)
-        wet.lineTo(0, edge - 20)
-        wet.closeSubpath()
+        sand, sea = self._layers(rect, frame, edge)
+        p.drawPixmap(0, 0, sand)
+        p.setClipRect(QRectF(0, 0, rect.width(), edge - self.BAND_ABOVE))
+        p.drawPixmap(0, 0, sea)  # the waterline strip paints the band below this
+
+    def paint_waterline(self, p: QPainter) -> None:
+        """The moving band, called by the waterline strip with panel coordinates.
+        Only cheap operations each frame: one opaque copy, two unsmoothed fills,
+        and hairline strokes, which Qt rasterises far faster than wide antialiased paths."""
+        rect = QRectF(self.rect())
+        frame = QPainterPath()
+        frame.addRoundedRect(rect, 26, 26)
+        edge = self._edge()
+        self._layers(rect, frame, edge)
+        if self._band_sand is None or self._band_sea is None:
+            return
+        top = edge - self.BAND_ABOVE
+        width = rect.width()
+        xs = [float(x) for x in range(0, int(width) + 8, 8)]
+        wave = self._wave_y
+        ratio = p.device().devicePixelRatioF() if p.device() is not None else 1.0
+
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+        p.drawPixmap(QPointF(0, top), self._band_sand)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        p.setPen(Qt.PenStyle.NoPen)
         damp = QColor(THEME.c["sand_shadow"])
         damp.setAlphaF(0.55)
-        p.fillPath(wet.intersected(frame), damp)
-        sea = QPainterPath()
-        sea.moveTo(0, 0)
-        sea.lineTo(0, edge)
-        x = 0.0
-        while x <= rect.width():
-            sea.lineTo(x, self._wave_y(x, edge))
-            x += 4
-        sea.lineTo(rect.width(), 0)
-        sea.closeSubpath()
-        sea = sea.intersected(frame)
-        p.fillPath(sea, sea_gradient(QRectF(0, 0, rect.width(), edge)))
-        self._glow(p, sea, rect)
+        wet_edge = [QPointF(x, wave(x, edge + 11, 4.5, 0.7)) for x in xs]
+        p.setBrush(damp)
+        p.drawPolygon(QPolygonF([QPointF(0, edge - 20)] + wet_edge + [QPointF(width, edge - 20)]))
+        p.setBrush(self._band_sea)
+        p.drawPolygon(QPolygonF([QPointF(0, top - 1)] + [QPointF(x, wave(x, edge)) for x in xs] + [QPointF(width, top - 1)]))
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        damp.setAlphaF(0.3)
+        self._hairline(p, QPolygonF(wet_edge), 1.2, damp, ratio)  # softens the steps of the fill
+        if not THEME.dark:
+            self._glitter(p, rect, edge, moving=True)
         foam = QColor(THEME.c["foam"])
-        for offset, alpha, width in ((0, 0.75, 1.6), (-14, 0.14, 1.1), (-30, 0.08, 1.0)):
+        for offset, alpha, line_width in ((0, 0.75, 1.6), (-14, 0.14, 1.1), (-30, 0.08, 1.0)):
             foam.setAlphaF(alpha)
-            p.setPen(QPen(foam, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            line = QPainterPath()
-            x = 8.0
-            line.moveTo(x, self._wave_y(x, edge + offset, 5 if offset == 0 else 3.4, 1.0 if offset == 0 else 0.6))
-            while x <= rect.width() - 8:
-                line.lineTo(x, self._wave_y(x, edge + offset, 5 if offset == 0 else 3.4, 1.0 if offset == 0 else 0.6))
-                x += 4
-            p.drawPath(line)
+            amplitude, speed = (5, 1.0) if offset == 0 else (3.4, 0.6)
+            line = QPolygonF([QPointF(x, wave(x, edge + offset, amplitude, speed)) for x in xs if 8 <= x <= width - 8])
+            self._hairline(p, line, line_width, foam, ratio)  # the main one hides the fill's steps
         if self.fish:
             self._shoal(p, rect, edge)
+
+    @staticmethod
+    def _hairline(p: QPainter, line: QPolygonF, width: float, colour: QColor, ratio: float) -> None:
+        """A line ``width`` logical pixels wide, drawn as stacked one-device-pixel strokes."""
+        rows = max(1, round(width * ratio))
+        alpha = colour.alphaF()
+        colour = QColor(colour)
+        if rows > 1:  # neighbouring hairlines overlap; keep the core near the asked-for alpha
+            colour.setAlphaF(1 - math.sqrt(max(0.0, 1 - alpha)))
+        pen = QPen(colour, 0)
+        pen.setCosmetic(True)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for row in range(rows):
+            shift = (row - (rows - 1) / 2) / ratio
+            p.drawPolyline(line.translated(0, shift))
+
+    def _layers(self, rect: QRectF, frame: QPainterPath, edge: float) -> tuple[QPixmap, QPixmap]:
+        """Everything that does not move, painted once per size and theme: the sand with
+        its specks, and the sea with its light, stars and glass, both cut to the panel."""
+        ratio = self.devicePixelRatioF()
+        key = (self.width(), self.height(), round(edge), THEME.dark, ratio)
+        if key != self._layers_key or self._sand_layer is None or self._sea_layer is None:
+
+            def canvas() -> tuple[QPixmap, QPainter]:
+                pixmap = QPixmap(max(1, round(rect.width() * ratio)), max(1, round(rect.height() * ratio)))
+                pixmap.setDevicePixelRatio(ratio)
+                pixmap.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(pixmap)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                return pixmap, painter
+
+            sand, p = canvas()
+            p.fillPath(frame, THEME.color("sand"))
+            rng = __import__("random").Random(11)
+            speck = QColor(THEME.c["sand_shadow"])
+            for _ in range(int(rect.width() * (rect.height() - edge) / 260)):
+                speck.setAlphaF(rng.uniform(0.25, 0.7))
+                p.fillRect(QRectF(rng.uniform(0, rect.width()), rng.uniform(edge, rect.height()), 1.2, 1.2), speck)
+            p.end()
+
+            sea, p = canvas()
+            reach = QPainterPath()
+            reach.addRect(QRectF(0, 0, rect.width(), edge + 12))
+            reach = reach.intersected(frame)
+            p.fillPath(reach, sea_gradient(QRectF(0, 0, rect.width(), edge)))
+            self._glow(p, reach, rect)
+            p.end()
+            self._sand_layer, self._sea_layer, self._layers_key = sand, sea, key
+            # the waterline band, cut out once: opaque sand to copy, sea as a texture to fill with
+            top = edge - self.BAND_ABOVE
+            band = QRect(0, round(top * ratio), sand.width(), round((self.BAND_ABOVE + self.BAND_BELOW) * ratio))
+            self._band_sand = sand.copy(band)
+            self._band_sand.setDevicePixelRatio(ratio)
+            texture = sea.copy(band)
+            texture.setDevicePixelRatio(1.0)
+            self._band_sea = QBrush(texture)
+            self._band_sea.setTransform(QTransform().translate(0, top).scale(1 / ratio, 1 / ratio))
+        return self._sand_layer, self._sea_layer
+
+    def _glitter(self, p: QPainter, rect: QRectF, edge: float, moving: bool) -> None:
+        """Sun glitter on the shallows. Glints inside the waterline band twinkle;
+        the ones higher up are part of the still layer."""
+        rng = __import__("random").Random(5)
+        p.setPen(Qt.PenStyle.NoPen)
+        for i in range(26):
+            x = rng.uniform(0.04, 0.96) * rect.width()
+            y = edge - rng.uniform(26, 120)
+            width = rng.uniform(3, 9)
+            in_band = y > edge - self.BAND_ABOVE + 4
+            if in_band != moving:
+                continue
+            twinkle = 0.5 + 0.5 * math.sin(self._phase * 2.2 + i * 1.7) if moving else 0.5
+            spark = QColor(THEME.c["glint"])
+            spark.setAlphaF(0.18 + 0.42 * twinkle)
+            p.setBrush(spark)
+            p.drawRoundedRect(QRectF(x, y, width, 1.4), 0.7, 0.7)
 
     def _shoal(self, p: QPainter, rect: QRectF, edge: float) -> None:
         span = rect.width() + 160
@@ -725,16 +858,7 @@ class NightPanel(QFrame):
                 p.setBrush(star)
                 p.drawEllipse(QPointF(rng.uniform(0.05, 0.97) * rect.width(), rng.uniform(0.04, 0.3) * rect.height()), 0.9, 0.9)
         elif self.shore is not None:
-            edge = self._edge()
-            for i in range(26):  # sun glitter on the shallows, twinkling slowly
-                x = rng.uniform(0.04, 0.96) * rect.width()
-                y = edge - rng.uniform(26, 120)
-                twinkle = 0.5 + 0.5 * math.sin(self._phase * 2.2 + i * 1.7)
-                spark = QColor(THEME.c["glint"])
-                spark.setAlphaF(0.18 + 0.42 * twinkle)
-                p.setBrush(spark)
-                width = rng.uniform(3, 9)
-                p.drawRoundedRect(QRectF(x, y, width, 1.4), 0.7, 0.7)
+            self._glitter(p, rect, self._edge(), moving=False)
         # a sheet of glass over the water: one broad, curved reflection
         sheen = QPainterPath()
         sheen.addEllipse(QPointF(rect.width() * 0.30, -rect.height() * 0.62), rect.width() * 0.95, rect.height() * 0.95)
@@ -762,18 +886,24 @@ class TideLine(QWidget):
         self._phase = 0.0
         self.setFixedHeight(14)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(90)
+        from unconscious.ui.motion import SLOW_MS, ticker
+
+        ticker().subscribe(self, self._tick, every=SLOW_MS)
 
     def set_state(self, state: str) -> None:
         self.state = state
         self.update()
 
-    def _tick(self) -> None:
-        if self.isVisible() and self.state in {"observing", "dreaming", "idle"}:
-            self._phase += 0.12 if self.state == "dreaming" else 0.06
+    def _tick(self, step: float = 1.0) -> None:
+        if self.state in {"observing", "dreaming", "idle"}:
+            self._phase += (0.12 if self.state == "dreaming" else 0.06) * step
             self.update()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        from unconscious.ui.motion import ticker
+
+        ticker().refresh()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
@@ -788,7 +918,7 @@ class TideLine(QWidget):
         path.moveTo(x, mid)
         while x < self.width() - 1:
             path.lineTo(x, mid + math.sin(x / 9 + self._phase) * amplitude)
-            x += 1.5
+            x += 3.0  # ~19 points a wavelength; antialiasing does the rest
         p.drawPath(path)
 
 
@@ -836,18 +966,24 @@ class Steps(QWidget):
         self._phase = 0.0
         self.setFixedHeight(len(self.steps) * 28)
         self.setMinimumWidth(320)
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(70)
+        from unconscious.ui.motion import SLOW_MS, ticker
+
+        ticker().subscribe(self, self._tick, every=SLOW_MS)
 
     def set_current(self, current: str | None) -> None:
         if current in self.steps:
             self.index = self.steps.index(current)
             self.update()
 
-    def _tick(self) -> None:
-        self._phase = (self._phase + 0.05) % (2 * math.pi)
+    def _tick(self, step: float = 1.0) -> None:
+        self._phase = (self._phase + 0.06 * step) % (2 * math.pi)
         self.update()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        from unconscious.ui.motion import ticker
+
+        ticker().refresh()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)

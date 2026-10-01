@@ -112,6 +112,9 @@ class InterfaceSmokeTests(TempApp):
             qt.processEvents()
             self.assertIsNotNone(window.page)
             self.assertGreater(window.page.body.count(), 1)
+        window.poll()
+        self.assertIn("threads", window.state["counts"], "a poll must not drop the full counts")
+        self.assertIn("traces", window.state["today_stats"])
         window.spark_feedback(spark_id, "kept", "")
         self.assertEqual(ctx.store.spark(spark_id)["status"], "kept")
         window.save_jot("a thought from the window")
@@ -119,6 +122,29 @@ class InterfaceSmokeTests(TempApp):
         window.apply_preferences()
         self.assertEqual(window.sidebar.buttons["today"].text(), "海岸")
         window.back()
+
+        from unconscious.ui.motion import CALM_MS, SLOW_MS, ticker
+
+        clock = ticker()
+        self.assertEqual(window.timer.interval(), 30000, "never shown: poll slowly")
+        window.show()
+        qt.processEvents()
+        self.assertEqual(window.timer.interval(), 5000)
+        moving = window.isVisible() and qt.applicationState().name == "ApplicationActive"
+        clock.set_mode("full")
+        self.assertEqual(clock._timer.isActive(), bool(moving and clock._active()))
+        if clock._timer.isActive():
+            self.assertLessEqual(clock._timer.interval(), SLOW_MS)
+            clock.set_mode("calm")
+            self.assertEqual(clock._timer.interval(), CALM_MS)
+        clock.set_mode("off")
+        self.assertFalse(clock._timer.isActive())
+        clock.set_mode("full")
+        window.hide()
+        qt.processEvents()
+        clock.refresh()
+        self.assertFalse(clock._timer.isActive(), "no motion while the window is away")
+        self.assertEqual(window.timer.interval(), 30000)
         window.close()
 
 

@@ -37,7 +37,7 @@ class ClaudeCodeCLI:
 
     name: str = "claude"
     timeout: int = 300
-    default_model: str = "sonnet"
+    default_model: str = "claude-sonnet-5-5"
 
     def available(self) -> bool:
         return shutil.which("claude") is not None
@@ -254,7 +254,7 @@ class AnthropicAPI:
         output_config: dict[str, Any] = {}
         if request.schema:
             output_config["format"] = {"type": "json_schema", "schema": request.schema}
-        if request.effort and not model.startswith("claude-haiku"):
+        if request.effort:
             output_config["effort"] = request.effort
         kwargs: dict[str, Any] = {
             "model": model,

@@ -55,6 +55,10 @@ class Sense:
         ]
     )
     retention_days: int = 90
+    # Glance less often while running on battery (and back off further while
+    # attention stays on one thing). Dwell time is credited from real elapsed
+    # time either way, so totals stay accurate.
+    battery_saver: bool = True
 
 
 @dataclass
@@ -80,6 +84,7 @@ class Models:
 class Ui:
     theme: str = "system"  # system | light | dark
     start_hidden: bool = False
+    motion: str = "auto"  # auto (full on mains, calm on battery) | full | calm | off
 
 
 SECTIONS = {"you": You, "sense": Sense, "dream": Dream, "models": Models, "ui": Ui}
@@ -196,6 +201,8 @@ def _clamp(settings: Settings) -> None:
     settings.models.timeout_seconds = max(30, min(settings.models.timeout_seconds, 1800))
     if settings.ui.theme not in {"system", "light", "dark"}:
         settings.ui.theme = "system"
+    if settings.ui.motion not in {"auto", "full", "calm", "off"}:
+        settings.ui.motion = "auto"
 
 
 def _valid_clock(text: str) -> bool:

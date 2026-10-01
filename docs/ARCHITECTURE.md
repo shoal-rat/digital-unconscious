@@ -71,10 +71,10 @@ counters, unsaved markers, page numbers) and to gather an editor's windows by pr
 
 | Job | Who takes it first (the first one aboard wins) |
 | --- | --- |
-| sorting the catch (`digest`) | DeepSeek → Claude Code (Haiku) → Codex → Anthropic API (Haiku 4.5) → … |
-| diving (`dream`) | Claude Code (Opus) → Codex → Anthropic API (Opus 5.5) → … |
-| the lighthouse (`critique`) | Codex → Claude Code (Sonnet) → …, reordered so the keeper is not the diver when possible |
-| the seabed (`dive`) | Claude Code (Sonnet) → Codex → Anthropic API (Opus 5.5) → … |
+| sorting the catch (`digest`) | Claude Code (Sonnet 5.5) → Codex → Anthropic API (Sonnet 5.5) → DeepSeek → … |
+| diving (`dream`) | Claude Code (Opus 5.5) → Codex → Anthropic API (Opus 5.5) → … |
+| the lighthouse (`critique`) | Codex → Claude Code (Sonnet 5.5) → …, reordered so the keeper is not the diver when possible |
+| the seabed (`dive`) | Claude Code (Sonnet 5.5) → Codex → Anthropic API (Sonnet 5.5) → … |
 
 Claude Code runs each errand in an empty temporary folder with `--safe-mode`, `--tools ""`, its own system prompt and
 no MCP servers; Codex runs in a read-only sandbox. An answer in the wrong shape is sent back once with the problems
@@ -86,9 +86,34 @@ listed; then the next crew member takes over. Every attempt goes in the crew's l
 the watch keeper in one process. Opening it a second time brings the first window forward (`QLocalServer`).
 `dun watch` runs only the tide watcher; the shore notices a living watcher and does not start a second.
 
-Pages are redrawn from the sea floor on `refresh()`. The window checks `api.state()` every two seconds: a dive's
-progress moves in place, and when it surfaces the page is redrawn and a notification says the dream has washed
-ashore. Everything the crew writes is shown as plain text, never as markup.
+Pages are redrawn from the sea floor on `refresh()`, which reads the full `api.state()`. Between redraws the window
+polls `api.pulse()`, a handful of counts: a dive's progress moves in place, and when it surfaces the page is redrawn
+and a notification says the dream has washed ashore. Everything the crew writes is shown as plain text, never as
+markup.
 
 The sea, the pebbles, the beads, the waterline, the shoal, the bottle and the fin are painted with `QPainter`.
 There are no `QGraphicsEffect`s: they re-composite the linen behind them and leave seams.
+
+## Sailing light
+
+The app is meant to stay open on a laptop all day, so every wake-up has to earn its place. Measurements are in the
+README.
+
+- **Glances, not stares.** On macOS `sense/macnative.py` asks the window server and the accessibility API through
+  `ctypes` (about 0.1 ms) instead of spawning `osascript` and `ioreg` for every sample; a browser's address is asked
+  for only when the window title changes. Windows and X11 keep their samplers.
+- **Pacing.** `Watcher.next_delay()` glances every `interval_seconds` while attention moves, doubles after four
+  glances on the same subject and doubles again after eight (at most 60 s), checks only the idle clock at slack
+  water, and on battery (`sense/power.py`, cached for two minutes) starts from 20 s and stretches to 80 s. Credit
+  comes from real elapsed time, so pacing changes how fast a switch is noticed, never how much time is counted. The
+  status row in the sea floor is rewritten only when what it says changes, or once a minute.
+- **One clock** (`ui/motion.py`). Everything that moves subscribes to a single coarse timer with the pace it needs:
+  the waterline 10 frames a second, the sidebar's tide line about 6, the bottle and the fin 12. The clock stops when
+  no subscriber is visible, the window is minimised or the app is not in front; on battery (`motion = "auto"`) or
+  in `calm` nothing moves more than 5 times a second; `off` leaves a still frame.
+- **Repaint as little as possible.** The dream's sea and sand are painted once per size and theme into cached
+  layers. Only the waterline band moves, and it is its own opaque child widget, so a frame repaints that strip
+  and nothing above, below or behind it. Inside the strip the lines are hairline strokes and the fills are
+  unsmoothed, because Qt's antialiased rasteriser costs in proportion to the area a shape spans.
+- **Polling follows attention.** `MainWindow._pace()` polls every 5 s while the window is open, every 1.5 s during
+  a dive and every 30 s when only the menu-bar mark needs news.
