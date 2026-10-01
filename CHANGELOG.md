@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.1.0 — a real Mac app, and a crew that reads
+
+- **Digital Unconscious.app.** A drag-to-install disk image with its own icon: the app is called Digital Unconscious
+  in the Dock and the menu bar (no longer "python"), asks for Accessibility itself, reopens from the Dock, quits with
+  ⌘Q, and finds `claude` and your proxies even when opened from Finder. Built for Apple Silicon by
+  `scripts/build_mac.py`.
+- **Looking things up.** Claude may search the web while it dreams (concepts, how two ideas connect, how a topic
+  lives in popular culture) and reads the open-access full texts at the seabed. Pages and downloads come only from
+  big sites: encyclopedias, Reddit, Zhihu, Douban, Bilibili, Weibo, Chinese and English news, film and book sites,
+  scholarly indexes and publishers. Everything happens in one sandboxed folder per errand, deleted afterwards.
+  *Harbour → The crew* turns it off.
+- Full texts download side by side within a minute; a seabed dive that reads four papers takes about a minute and a
+  half.
+
 ## 3.0.2 — when the crew can't sail
 
 - **Region guard.** While the connection is in mainland China, Claude, Codex, the Anthropic API and OpenAI stay

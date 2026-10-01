@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from unconscious import scholar
 from unconscious.llm.base import LLMRequest
 from unconscious.mind.dream import person_block
-from unconscious.mind.prompts import DIVE_SCHEMA, DIVE_SYSTEM, DIVE_TASK, LANGUAGE_LINE
+from unconscious.mind.prompts import DIVE_SCHEMA, DIVE_SYSTEM, DIVE_TASK, LANGUAGE_LINE, RESEARCH_DIVE
 from unconscious.text import clip
 
 if TYPE_CHECKING:
     from unconscious.app import App
 
 
-STEPS = ("search", "read", "save")
+STEPS = ("search", "fetch", "read", "save")
 
 
 class DiveError(RuntimeError):
@@ -40,6 +42,7 @@ def run_dive(
     progress: Callable[[str], None] | None = None,
     *,
     search: Callable[[list[str]], list[dict[str, Any]]] | None = None,
+    fetch: Callable[[str], bytes] | None = None,
 ) -> dict[str, Any]:
     step = progress or (lambda _name: None)
     spark = app.store.spark(spark_id)
@@ -52,25 +55,15 @@ def run_dive(
     if not papers:
         raise DiveError("The scholarly indexes returned nothing. Check the network connection and try again.")
 
-    step("read")
-    language = app.settings.language
-    request = LLMRequest(
-        role="dive",
-        system=DIVE_SYSTEM,
-        prompt=DIVE_TASK.format(
-            person=person_block(app),
-            title=spark["title"],
-            question=spark["question"],
-            insight=spark["insight"],
-            mechanism=spark["mechanism"],
-            papers="\n".join(paper_line(i, w) for i, w in enumerate(papers, 1)),
-            language=LANGUAGE_LINE[language],
-        ),
-        schema=DIVE_SCHEMA,
-        max_tokens=5000,
-        payload={"spark": spark, "papers": papers, "language": language},
-    )
-    result = app.router.call(request)
+    research = app.settings.models.research
+    # One folder per dive: the full texts are read in it and leave with it.
+    with tempfile.TemporaryDirectory(prefix="dun-seabed-") as folder:
+        full_texts: dict[int, str] = {}
+        if research:
+            step("fetch")
+            full_texts = scholar.fetch_pdfs(papers, Path(folder), fetch=fetch)
+        step("read")
+        result = app.router.call(dive_request(app, spark, papers, full_texts, research, Path(folder)))
     if not result.ok or not result.data:
         raise DiveError(result.error or "The dive model returned nothing.")
 
@@ -85,6 +78,7 @@ def run_dive(
     report["known"] = known
     cited = sorted({r for item in known for r in item["refs"]})
     report["cited"] = cited
+    report["full_texts"] = sorted(full_texts)
 
     step("save")
     dive_id = app.store.add_dive(spark_id, report, papers, result.label)
@@ -92,3 +86,31 @@ def run_dive(
         app.store.set_spark_status(spark_id, "pursuing")
     app.store.log_event("dive", str(spark_id), {"dive_id": dive_id, "papers": len(papers)})
     return {"dive_id": dive_id, "spark_id": spark_id, "papers": len(papers), "verdict": report.get("verdict")}
+
+
+def dive_request(app: App, spark: dict[str, Any], papers: list[dict[str, Any]], full_texts: dict[int, str],
+                 research: bool, folder: Path) -> LLMRequest:
+    language = app.settings.language
+    if full_texts:
+        library = "\nFULL TEXTS IN ./papers\n" + "\n".join(f"[{n}] {name}" for n, name in sorted(full_texts.items())) + "\n"
+    else:
+        library = ""
+    return LLMRequest(
+        role="dive",
+        system=DIVE_SYSTEM + (RESEARCH_DIVE if research else ""),
+        prompt=DIVE_TASK.format(
+            person=person_block(app),
+            title=spark["title"],
+            question=spark["question"],
+            insight=spark["insight"],
+            mechanism=spark["mechanism"],
+            papers="\n".join(paper_line(i, w) for i, w in enumerate(papers, 1)),
+            library=library,
+            language=LANGUAGE_LINE[language],
+        ),
+        schema=DIVE_SCHEMA,
+        max_tokens=5000,
+        payload={"spark": spark, "papers": papers, "language": language},
+        research=research,
+        workdir=folder if research else None,
+    )

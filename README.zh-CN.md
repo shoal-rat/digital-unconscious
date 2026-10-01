@@ -164,6 +164,10 @@
 
 ## 出海
 
+**在 Mac 上。** 从[最新版本](https://github.com/shoal-rat/digital-unconscious/releases/latest)下载 `Digital-Unconscious-<版本>.dmg`，打开后把 **Digital Unconscious** 拖进「应用程序」。它为 Apple 芯片构建，只做了临时签名、没有经过公证，所以第一次打开时请右键点应用、选择**打开**。之后 macOS 会询问一次*辅助功能*权限，观潮者需要它来读取窗口标题。终端里的命令也能照常用，只要建一个链接：`ln -s "/Applications/Digital Unconscious.app/Contents/MacOS/Digital Unconscious" ~/.local/bin/dun`。
+
+**从源码安装（任何系统）。**
+
 ```bash
 git clone https://github.com/shoal-rat/digital-unconscious.git
 cd digital-unconscious
@@ -190,6 +194,17 @@ dun                                 # 然后打开你自己的海
 | Ollama 或任何 OpenAI 兼容服务 | 在配置里写 `[providers.ollama]` | 可选，数据不离开本机 |
 
 每项工作都有首选的人手，对方失手就交给下一位。*港湾 → 船员*里能看到每项工作由谁接手。`dun doctor --ping` 会给每位船员派一个很小的真实差事。在示例海上跑完完整的一夜（分拣、下潜、灯塔），用 Sonnet 5.5 和 Opus 5.5 只需一分钟多一点。
+
+**查资料。** 打开*港湾 → 船员 → 下潜时允许 Claude 上网查概念、下载论文全文来读*（默认开启）后，Claude 做梦时可以上网搜索：弄懂一个概念，查两个想法之间有没有联系，或者看看一个话题在流行文化里是什么样子。潜到海床时，它会读捞上来的论文的开放获取全文，而不只是摘要。鱼仍然只引用你的一天，海床上的引用也仍然只指向真正检索到的文献。边界由 Claude Code 的权限和 macOS 的沙箱守着：
+
+| | |
+| --- | --- |
+| 搜索 | 任何关键词；在 Anthropic 那一侧进行 |
+| 网页和下载 | 只限大型网站：百科、Reddit、知乎、豆瓣、B 站、微博、中英文新闻、影视书籍网站、学术索引、预印本和出版社（[`llm/research.py`](src/unconscious/llm/research.py)）；绝不包括个人托管的站点 |
+| 文件 | 每次差事一个文件夹；Mac 上的其他文件一律读不到；差事结束就删除 |
+| 花费 | 每次差事有上限（按 Claude Code 的计算，做梦约 6 美元，海床约 4 美元），并且最长 20 分钟 |
+
+一次读四篇全文的海床下潜，大约一分半钟。
 
 **船员出不了海时，下潜会等待，而不是失败。**
 
@@ -299,6 +314,7 @@ dream = "auto"
 critique = "auto"
 region_guard = true      # 网络位于下列地区时，让 Claude、Codex、Anthropic 和 OpenAI 留在岸上
 hold_regions = ["CN"]
+research = true          # 做梦和下潜时允许 Claude 上网查资料、读论文
 
 [ui]
 theme = "system"         # system | light（白天）| dark（夜晚）
@@ -312,6 +328,7 @@ python -m pip install -e ".[dev,pdf]"
 QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
 python scripts/snapshots.py snapshots/ [--zh] [--dark]   # 把每个页面画成 PNG
 python scripts/readme_art.py                             # 重新绘制 README 里的图片
+python -m pip install -e ".[mac]" && python scripts/build_mac.py   # 打包 Digital Unconscious.app 和 .dmg
 ```
 
 测试完全离线：一位纸做的船员（进程内的假模型）负责回答每项工作。这片海的生态如何对应到代码，见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)（英文）；贡献说明见 [AGENTS.md](AGENTS.md)（英文）。

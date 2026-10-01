@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from unconscious.llm.base import LLMRequest, LLMResult, extract_json, full_prompt, schema_hint
+from unconscious.llm.research import TIMEOUT_SECONDS as RESEARCH_TIMEOUT
+from unconscious.llm.research import claude_flags
 
 
 def _elapsed(start: float) -> int:
@@ -60,11 +62,16 @@ class ClaudeCodeCLI:
             "--output-format", "json",
             "--model", model,
             "--system-prompt", request.system,
-            "--tools", "",
             "--safe-mode",
             "--strict-mcp-config",
             "--no-session-persistence",
         ]
+        timeout = self.timeout
+        if request.research:  # web search, scholarly pages and papers, inside the OS sandbox (research.py)
+            cmd += claude_flags(request.role)
+            timeout = max(timeout, RESEARCH_TIMEOUT)
+        else:
+            cmd += ["--tools", ""]
         if request.schema:
             cmd += ["--json-schema", json.dumps(request.schema, ensure_ascii=False)]
         if request.effort:
@@ -73,7 +80,7 @@ class ClaudeCodeCLI:
         with tempfile.TemporaryDirectory(prefix="dun-claude-") as tmp:
             try:
                 proc = subprocess.run(
-                    cmd, input=request.prompt, cwd=tmp, capture_output=True, text=True, timeout=self.timeout
+                    cmd, input=request.prompt, cwd=request.workdir or tmp, capture_output=True, text=True, timeout=timeout
                 )
             except subprocess.TimeoutExpired:
                 return LLMResult(False, provider=self.name, model=model, ms=_elapsed(start), error="timed out")

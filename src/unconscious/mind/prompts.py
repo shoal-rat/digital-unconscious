@@ -254,6 +254,27 @@ Mechanism: {mechanism}
 
 RETRIEVED WORKS
 {papers}
-
+{library}
 Write the assessment.
 {language}"""
+
+# Added to the system prompt when the crew may look things up (models.research, llm/research.py).
+RESEARCH_DREAM = """
+Looking things up
+- If you can search the web, you may use it before you write: to understand a concept you do not know well,
+  to check how two concepts relate and whether a bridge between them already exists, or to see how a topic lives
+  in popular culture (forums such as Reddit or Zhihu, news, reviews, memes). A few lookups, not a survey.
+- What you learn sharpens the sparks; it never replaces the evidence. Every spark still rises from this person's
+  day and cites only the S- and T-refs given. Do not cite web pages.
+"""
+
+RESEARCH_DIVE = """
+Reading
+- Full texts of some listed works are in ./papers, named by their number (03.pdf is [3]). Read the ones that
+  matter most for this idea before you judge: what a paper actually found, how, and with what data matters more
+  than its abstract.
+- If you can search the web, you may look for closely related work and download open-access PDFs from scholarly
+  sites into ./papers with curl to read them. Describe such work in plain words; cite only numbered works from
+  the list.
+- Keep it proportionate: a handful of papers read well beats many skimmed.
+"""

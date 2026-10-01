@@ -26,6 +26,7 @@ from unconscious.mind.prompts import (
     DREAM_TASK,
     LANGUAGE_LINE,
     MECHANISMS,
+    RESEARCH_DREAM,
 )
 from unconscious.mind.signals import Signal, ThreadStats, compute_signals
 from unconscious.mind.taste import Taste, load_taste
@@ -285,7 +286,7 @@ def run_dream(app: App, day: str, progress: Callable[[str], None] | None = None,
     total = sum(s.get("seconds") or 0 for s in digest.subjects)
     request = LLMRequest(
         role="dream",
-        system=DREAM_SYSTEM.replace("{candidates}", str(candidates_wanted)),
+        system=DREAM_SYSTEM.replace("{candidates}", str(candidates_wanted)) + (RESEARCH_DREAM if settings.models.research else ""),
         prompt=DREAM_TASK.format(
             person=person_block(app),
             day=day,
@@ -309,6 +310,7 @@ def run_dream(app: App, day: str, progress: Callable[[str], None] | None = None,
             "language": language,
             "focus": settings.you.focus,
         },
+        research=settings.models.research,
     )
     result = app.router.call(request)
     if not result.ok or not result.data:

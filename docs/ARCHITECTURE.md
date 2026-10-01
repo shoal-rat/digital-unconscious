@@ -118,6 +118,18 @@ records an attempt only for real failures, and `jobs.scheduler_tick` queues noth
 someone can sail. Pauses are kept in the store (`crew`), so they outlive a restart and every process sees them;
 `api.crew_status` reads them, and the last region answer, without touching the network.
 
+### Looking things up
+
+With `models.research` on, `mind/dream.py` and `mind/dive.py` mark their requests `research=True` and add
+`RESEARCH_DREAM` or `RESEARCH_DIVE` from `mind/prompts.py`. Only Claude Code acts on it; other crew members ignore the
+flag. `llm/research.py` turns it into Claude Code flags: the tools `WebSearch, WebFetch, Read, Glob, Grep, Bash`, a
+`--settings` document that allows `WebFetch` only for hosts on `SHELF`, blocks reads outside the working folder and
+turns on the sandbox (strict network allowlist = `SHELF`, no unsandboxed retries), `--permission-prompts none`, a
+spending ceiling and a longer timeout. The seabed first fetches up to four open-access full texts itself
+(`scholar.fetch_pdfs`, in parallel, within 60 seconds) into a temporary folder that becomes Claude's working folder,
+named by the works' numbers so citations stay checkable; the folder is deleted when the dive ends. A schema repair
+reuses the folder but never repeats the research.
+
 Claude Code runs each errand in an empty temporary folder with `--safe-mode`, `--tools ""`, its own system prompt and
 no MCP servers; Codex runs in a read-only sandbox. An answer in the wrong shape is sent back once with the problems
 listed; then the next crew member takes over. Every attempt goes in the crew's log.
@@ -133,6 +145,12 @@ Pages are redrawn from the sea floor on `refresh()`, which reads the full `api.s
 polls `api.pulse()`, a handful of counts: a dive's progress moves in place, and when it surfaces the page is redrawn
 and a notification says the dream has washed ashore. Everything the crew writes is shown as plain text, never as
 markup.
+
+`scripts/build_mac.py` makes `Digital Unconscious.app` with PyInstaller around `packaging/macos/launcher.py`, which
+takes `dun`'s arguments and opens the shore when there are none. Because the Dock passes no shell environment, the
+launcher first adopts PATH, proxies and API keys from the login shell (`env.py`). Inside the bundle the app asks macOS
+for Accessibility once (`macnative.ask_for_accessibility`), reopens the shore when its Dock icon is clicked, and lets
+the window go when the app is asked to quit, so ⌘Q is not cancelled by a window that only hides.
 
 The sea, the pebbles, the beads, the waterline, the shoal, the bottle and the fin are painted with `QPainter`.
 There are no `QGraphicsEffect`s: they re-composite the linen behind them and leave seams.

@@ -14,7 +14,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QAction, QGuiApplication, QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -98,6 +98,37 @@ def _instance_name(home: Path) -> str:
     return f"digital-unconscious-{os.getuid() if hasattr(os, 'getuid') else 'user'}-{digest}"
 
 
+BUNDLED = bool(getattr(sys, "frozen", False))  # running as Digital Unconscious.app, not from a terminal
+
+
+class _QuitWatch(QObject):
+    """⌘Q, the Dock's Quit and logging out close every window first; a window that only hides
+    when closed would cancel that. So when the app is asked to quit, the window lets go."""
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.window = window
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Type.Quit:
+            self.window.quitting = True
+        return False
+
+
+def _behave_like_a_mac_app(qt_app: QApplication, window, ctx) -> None:
+    qt_app.installEventFilter(_QuitWatch(window))
+
+    def reopen(state) -> None:  # clicking the Dock icon brings the shore back
+        if state == Qt.ApplicationState.ApplicationActive and not window.isVisible():
+            window.show_window()
+
+    qt_app.applicationStateChanged.connect(reopen)
+    if ctx.settings.sense.enabled and ctx.settings.sense.capture_titles:
+        from unconscious.sense.macnative import ask_for_accessibility
+
+        ask_for_accessibility()  # macOS shows its own prompt the first time
+
+
 def run(*, hidden: bool = False, demo: bool = False, watch: bool = True, auto_dream: bool = True) -> int:
     from unconscious.app import App
     from unconscious.jobs import Jobs, run_scheduler
@@ -154,6 +185,8 @@ def run(*, hidden: bool = False, demo: bool = False, watch: bool = True, auto_dr
             window.apply_preferences()
 
     QGuiApplication.styleHints().colorSchemeChanged.connect(follow_system)
+    if BUNDLED and sys.platform == "darwin":
+        _behave_like_a_mac_app(qt_app, window, ctx)
     if not (hidden or ctx.settings.ui.start_hidden) or window.tray is None:
         window.show_window()
     code = qt_app.exec()

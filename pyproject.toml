@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digital-unconscious"
-version = "3.0.2"
+version = "3.1.0"
 description = "Watches where your attention goes, and at night dreams about what you didn't notice."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,6 +30,7 @@ dependencies = ["PySide6-Essentials>=6.7"]
 pdf = ["pypdf>=5.0"]
 anthropic = ["anthropic>=0.40"]
 dev = ["ruff>=0.12", "build>=1.2"]
+mac = ["pyinstaller>=6.10", "dmgbuild>=1.6"]  # scripts/build_mac.py: Digital Unconscious.app and its disk image
 
 [project.urls]
 Homepage = "https://github.com/shoal-rat/digital-unconscious"

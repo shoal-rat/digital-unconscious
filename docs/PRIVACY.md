@@ -46,7 +46,14 @@ Only the crew's errands and seabed soundings:
 | The lighthouse | the candidate fish and what they cite | the *critique* crew member |
 | The seabed | the fish's sounding lines (search terms) | OpenAlex, then arXiv if needed |
 | The seabed | the fish and the abstracts that came up | the *dive* crew member |
+| Dreaming and the seabed, while *Let Claude look things up* is on | Claude's web searches (on Anthropic's side, so the search terms reach Anthropic and its search provider), and requests for pages and PDFs, which show your IP address to the site | big sites on the shelf in `llm/research.py`: encyclopedias, forums such as Reddit and Zhihu, social and video sites, Chinese and English news, film and book sites, scholarly indexes, preprint servers, publishers |
+| The seabed, while *Let Claude look things up* is on | requests for the open-access full texts of works that came up | the hosts OpenAlex and arXiv point to |
 | Before an errand to Claude, Codex, the Anthropic API or OpenAI (while the region guard is on) | a plain request with nothing about you in it; like any request, it shows your IP address | Cloudflare's `cdn-cgi/trace`, then `api.country.is` or `ipinfo.io` if that fails |
+
+What Claude reads while it looks things up stays in a temporary folder for that one errand and is deleted when the
+errand ends. Inside it Claude can read nothing else on your Mac, its shell commands run in macOS's sandbox, and the
+only sites it can reach are the ones on the shelf; personal hosting (where whoever runs the site could read who asked
+for what) is never on it.
 
 While the connection appears to be in a held region (mainland China by default), or cannot be placed at all,
 nothing is sent to Claude, Codex, the Anthropic API or OpenAI. Whether Claude Code and Codex are signed in is asked of
