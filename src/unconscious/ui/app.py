@@ -15,14 +15,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QAction, QGuiApplication, QIcon
+from PySide6.QtGui import QAction, QCursor, QGuiApplication, QIcon, QPixmap
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from unconscious.store import today
 from unconscious.ui import theme
 from unconscious.ui.i18n import set_language, t
-from unconscious.ui.widgets import mark_pixmap
+from unconscious.ui.widgets import mac_icon_image, mark_pixmap
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,11 @@ class Tray(QSystemTrayIcon):
         menu.addSeparator()
         menu.addAction(t("tray.quit"), self._quit)
         self.menu = menu
-        self.setContextMenu(menu)
+        if sys.platform != "darwin":
+            self.setContextMenu(menu)
+        # On macOS the menu is popped by hand (_activated). A menu attached through Qt makes
+        # Qt ask the event that opened it for its click count, and newer macOS aborts the
+        # app when that event is not a mouse event: one click on the mark, and the sea is gone.
         self._state_key = None
         self.update_state(self.window.state)
 
@@ -84,9 +88,12 @@ class Tray(QSystemTrayIcon):
         self.window.poll(force=True)
 
     def _activated(self, reason) -> None:
+        if sys.platform == "darwin":  # on macOS a click opens the menu, which is the convention
+            area = self.geometry()
+            self.menu.popup(area.bottomLeft() if area.isValid() else QCursor.pos())
+            return
         if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
-            if sys.platform != "darwin":  # on macOS a click opens the menu, which is the convention
-                self.window.show_window()
+            self.window.show_window()
 
     def _quit(self) -> None:
         self.window.quitting = True
@@ -156,7 +163,12 @@ def run(*, hidden: bool = False, demo: bool = False, watch: bool = True, auto_dr
     server.listen(name)
 
     theme.load_fonts()
-    qt_app.setWindowIcon(QIcon(mark_pixmap(256)))
+    if sys.platform != "darwin":
+        qt_app.setWindowIcon(QIcon(mark_pixmap(256)))
+    elif not BUNDLED:
+        # On macOS this is the Dock icon. Inside the .app the bundle's own icon is already right;
+        # from a terminal, draw the same one on Apple's grid so it is the size of its neighbours.
+        qt_app.setWindowIcon(QIcon(QPixmap.fromImage(mac_icon_image(512))))
     set_language(ctx.settings.language)
     theme.apply(qt_app, theme.detect_dark(ctx.settings.ui.theme))
     from unconscious.ui.motion import ticker

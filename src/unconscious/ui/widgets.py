@@ -11,6 +11,7 @@ from PySide6.QtGui import (
     QColor,
     QFontMetrics,
     QIcon,
+    QImage,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -378,6 +379,78 @@ def mark_pixmap(size: int, *, mono: bool = False, state: str = "observing") -> Q
         p.drawEllipse(QPointF(25.5 * s, 6.5 * s), 2.4 * s, 2.4 * s)
     p.end()
     return pixmap
+
+
+def mac_icon_image(size: int = 1024) -> QImage:
+    """The app icon on Apple's grid: the horizon mark on a linen tile of 824 on a 1024 canvas,
+    with a soft shadow and a little gloss. The Dock draws it the size of every other app."""
+
+    image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    p = QPainter(image)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    k = size / 1024
+    tile = QRectF(100 * k, 92 * k, 824 * k, 824 * k)  # Apple's icon grid: a 824 pt tile on a 1024 canvas
+    for i in range(18, 0, -1):  # a soft shadow under the tile
+        shade = QPainterPath()
+        grow = i * 1.6 * k
+        shade.addRoundedRect(tile.adjusted(-grow, -grow + 10 * k, grow, grow + 14 * k), 185 * k + grow, 185 * k + grow)
+        p.fillPath(shade, QColor(25, 40, 60, 6))
+    body = QPainterPath()
+    body.addRoundedRect(tile, 185 * k, 185 * k)
+    linen = QLinearGradient(tile.topLeft(), tile.bottomLeft())
+    linen.setColorAt(0, QColor("#fbf7f0"))
+    linen.setColorAt(1, QColor("#efe4d2"))
+    p.fillPath(body, linen)
+    glow = QRadialGradient(QPointF(tile.center().x(), tile.top() + 250 * k), 420 * k)
+    glow.setColorAt(0, QColor(255, 214, 160, 90))  # the morning over the bay
+    glow.setColorAt(1, QColor(255, 214, 160, 0))
+    p.fillPath(body, glow)
+
+    centre, radius = QPointF(512 * k, 520 * k), 250 * k
+    sea = QPainterPath()
+    sea.moveTo(centre.x() - radius, centre.y())
+    sea.arcTo(QRectF(centre.x() - radius, centre.y() - radius, 2 * radius, 2 * radius), 180, 180)
+    sea.closeSubpath()
+    water = QLinearGradient(QPointF(0, centre.y()), QPointF(0, centre.y() + radius))
+    water.setColorAt(0, QColor("#5a92cf"))
+    water.setColorAt(0.5, QColor("#2f6db1"))
+    water.setColorAt(1, QColor("#1d4f86"))
+    p.fillPath(sea, water)
+    gloss = QLinearGradient(QPointF(0, centre.y()), QPointF(0, centre.y() + radius * 0.6))
+    gloss.setColorAt(0, QColor(255, 255, 255, 140))
+    gloss.setColorAt(1, QColor(255, 255, 255, 0))
+    p.fillPath(sea, gloss)
+    foam = QPen(QColor("#f6f1e8"), 20 * k, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+    p.setPen(foam)
+    for offset, half in ((95, 150), (165, 105)):
+        wave = QPainterPath()
+        y = centre.y() + offset * k
+        x = centre.x() - half * k
+        wave.moveTo(x, y)
+        steps = 4
+        width = 2 * half * k / steps
+        for _ in range(steps):
+            wave.cubicTo(QPointF(x + width * 0.3, y - 16 * k), QPointF(x + width * 0.7, y + 16 * k), QPointF(x + width, y))
+            x += width
+        p.drawPath(wave)
+    ink = QPen(QColor("#1f2d3d"), 30 * k, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+    p.setPen(ink)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(centre, radius, radius)
+    p.drawLine(QPointF(centre.x() - radius - 75 * k, centre.y()), QPointF(centre.x() + radius + 75 * k, centre.y()))
+    shine = QPainterPath()
+    shine.addRoundedRect(QRectF(tile.left() + 30 * k, tile.top() + 22 * k, tile.width() - 60 * k, 300 * k), 160 * k, 160 * k)
+    top = QLinearGradient(QPointF(0, tile.top()), QPointF(0, tile.top() + 300 * k))
+    top.setColorAt(0, QColor(255, 255, 255, 120))
+    top.setColorAt(1, QColor(255, 255, 255, 0))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.fillPath(shine.intersected(body), top)
+    p.setPen(QPen(QColor(255, 255, 255, 170), 3 * k))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(body)
+    p.end()
+    return image
 
 
 def app_icon() -> QIcon:

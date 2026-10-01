@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digital-unconscious"
-version = "3.1.0"
+version = "3.1.1"
 description = "Watches where your attention goes, and at night dreams about what you didn't notice."
 readme = "README.md"
 requires-python = ">=3.11"
