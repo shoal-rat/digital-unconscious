@@ -288,7 +288,6 @@ def disk_image(app: Path, background: Path, icon: Path) -> Path:
         "show_pathbar": False,
         "show_sidebar": False,
         "icon_locations": {f"{NAME}.app": (170, 210), "Applications": (470, 210)},
-        "hide_extensions": [f"{NAME}.app"],
     }
     dmgbuild.build_dmg(str(target), NAME, settings=settings)
     return target
