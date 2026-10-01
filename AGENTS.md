@@ -15,6 +15,8 @@ and dreams up grounded ideas. Keep it that way:
 - `src/unconscious/`: engine (standard library only) and `ui/` (PySide6).
 - `tests/`: `unittest`; run offline with the fake model. `tests/helpers.py` has `TempApp`.
 - `scripts/snapshots.py`: renders every page to PNG offscreen. Use it to check UI changes.
+- `scripts/readme_art.py`: repaints the README pictures (`docs/assets/en`, `docs/assets/zh`, the sea loops).
+  README.md (English) and README.zh-CN.md (Chinese) are kept in step; change both.
 
 ## Rules that keep the output honest
 

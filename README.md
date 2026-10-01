@@ -1,41 +1,162 @@
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="Digital Unconscious" width="420">
+  <img src="docs/assets/logo.svg" alt="Digital Unconscious" width="380">
 </p>
-
-<p align="center"><em>By day it watches the tide of your attention. At night it dives for what you didn't notice.</em></p>
 
 <p align="center">
-  <img src="docs/assets/today.png" alt="The shore: tonight's dream as the bay of Nice, the day's currents as pebbles on the sand" width="880">
+  <b>English</b> &nbsp;·&nbsp; <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Digital Unconscious is a small desktop app for one person, imagined as a little sea.
+<p align="center">
+  <em>By day it watches the tide of your attention.<br>At night it dives for what you didn't notice.</em>
+</p>
 
-During the day a **tide watcher** notices where your attention drifts: the window in front of you, the pages you
-keep returning to, what you search for, the thoughts you put in a **bottle**. At night it **dives**. It sorts the
-day's catch into **currents** (the concerns that keep flowing back), reads the **undercurrents** running through
-them, and brings back a short reflection, the one question you seem to be circling, and a few **fish**: ideas that
-rose from your own day, each held up to the **lighthouse** by a second model before you see it.
+<p align="center">
+  <a href="https://github.com/shoal-rat/digital-unconscious/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/shoal-rat/digital-unconscious?color=2f6db1&label=release"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3c7dbf">
+  <img alt="Native app: PySide6 / Qt 6" src="https://img.shields.io/badge/native-PySide6%20%2F%20Qt%206-5bb0ab">
+  <img alt="macOS, Windows, Linux" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-desktop-dda13f">
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/license-MIT-97b455"></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/en/hero.png" alt="The shore in the morning and evening themes: tonight's dream as the bay of Nice, the day's currents as pebbles on the sand" width="900">
+</p>
+
+Some of your best ideas are already in your day. They just sink. You read three things that belong together and
+never notice; you circle the same question for weeks without diving in.
+
+**Digital Unconscious** is a small desktop app, imagined as a little sea, that notices. During the day a **tide
+watcher** follows where your attention drifts: the window in front of you, the pages you keep returning to, what you
+search for, the thoughts you drop into a **bottle**. At night it **dives**. In the morning you find a short
+reflection, the one question you seem to be circling, and a few **fish**: ideas that rose from your own day, each
+able to say exactly where it came from, each checked by a second model before you see it.
 
 It is for people who think for a living (researchers, writers, builders) and want the half-formed things to surface
 instead of sinking.
 
-> **v3 is a ground-up rebuild.** The browser dashboard, the manuscript pipeline, browser automation and the
-> credential vault are gone. What remains is the original idea, done properly, as a native app.
-> See [What changed](#what-changed-in-v3).
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <b>It watches; it doesn't stare.</b><br>
+      Window titles, pages and real time spent. No screenshots, no keystrokes. Password managers, banks and private
+      windows sit in fog and are never recorded.
+    </td>
+    <td width="33%" valign="top">
+      <b>Every fish knows where it rose from.</b><br>
+      Ideas must cite the moments of your day they came from. Invented sources are thrown back by code, and a
+      different model keeps the lighthouse.
+    </td>
+    <td width="33%" valign="top">
+      <b>Light enough to leave on all day.</b><br>
+      0.05% of one CPU core from the menu bar. The sea moves only while you are looking at it, and goes calm on
+      battery.
+    </td>
+  </tr>
+</table>
 
-## The ecosystem
+## A day at sea
+
+<table>
+  <tr>
+    <td width="46%"><img src="docs/assets/en/bottle.png" alt="A message in a bottle: a half-formed thought thrown into tonight's dive"></td>
+    <td valign="top">
+      <h3>Morning: throw a thought into the sea</h3>
+      Something half-formed on your mind? Put it in a <b>bottle</b>. Bottles are the strongest evidence a dive gets.
+      Papers, notes and text logs can <b>wash ashore</b> too, and an ActivityWatch history can be brought in.
+      <br><br>
+      Meanwhile the <b>tide watcher</b> glances at the front window every few seconds and lays down a
+      <b>driftline</b> with real time attached. At <b>slack water</b> (no keyboard or mouse for a while) it stops
+      counting.
+    </td>
+  </tr>
+</table>
+
+### Night: the dive, and in the morning, the shore
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" alt="Watch the tide, sort the catch, read the currents, dive, the lighthouse, and you; what you keep steers the next dive" width="880">
+  <img src="docs/assets/en/today.png" alt="The shore: tonight's dream with a headline, a reflection and the undercurrent question; the day's currents lie as pebbles on the sand" width="900">
 </p>
 
-1. **Watch the tide.** Every few seconds the watcher glances at the front window (app, title and, where the system
-   allows, the browser address) and lays it down as a **driftline** with real time attached. At **slack water** (no
-   keyboard or mouse for a while) it stops counting. Private windows, password managers and banks sit in **fog** and
-   are never recorded; chat apps leave only the time they took.
-2. **Sort the catch.** A deckhand model groups the day into topics and lets each join a **current**
-   ("SaaS pricing psychology", "bike lanes and commuting"). Code keeps the charts honest: every reference is checked,
-   and a current that already exists is joined rather than drawn twice.
+The **Shore** opens on tonight's dream: the Baie des Anges in full sun, a headline for the day, a few honest lines
+about where your attention went, and the **undercurrent**, the question you seem to be circling. The day's
+**currents** lie on the sand as glossy pebbles: their size is time, and stones that touch met today. A small shoal
+crosses the shallows, one fish for each idea that surfaced.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/threads.png" alt="Currents: every recurring concern as a row of beads, with tonight's undercurrents above"></td>
+    <td width="50%"><img src="docs/assets/en/thread.png" alt="One current: eight weeks of tides, what it brought and the fish that came from it"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Currents.</b> The concerns that keep flowing back, one bead per day. Tonight's
+    undercurrents sit above, in plain sentences measured from your tides, never guessed by a model.</td>
+    <td valign="top"><b>One current.</b> Eight weeks of tides, what it carried, and the fish it gave. Put a
+    <b>buoy</b> on the currents you care about; <b>becalm</b> the ones that are none of its business.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/sparks.png" alt="The shoal: every fish the dives kept"></td>
+    <td width="50%"><img src="docs/assets/en/spark.png" alt="A fish: the question, the first small stroke, when to throw it back, and where it rose from"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>The shoal.</b> Every fish the dives kept. Keep one in the net, swim after it, or throw it
+    back and say why. Your net steers the next dive.</td>
+    <td valign="top"><b>A fish.</b> An answerable question, a <b>first small stroke</b> under two hours, when to
+    <b>throw it back</b>, where it rose from, the lighthouse keeper's warning, and a dive to the
+    <b>seabed</b> for prior work.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/journal.png" alt="The logbook: one entry per night, each with a small picture of that day's shore"></td>
+    <td width="50%"><img src="docs/assets/en/settings.png" alt="The harbour: who you are, the language, the light, the water's motion and the tide watcher"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Logbook.</b> One entry per night, each with a small picture of that day's shore.</td>
+    <td valign="top"><b>Harbour.</b> Who you are and what waters you fish, the crew, the light, the water's motion,
+    and exactly what the tide watcher may see.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="46%"><img src="docs/assets/en/shark.png" alt="The shark: let the shark eat a day"></td>
+    <td valign="top">
+      <h3>And when you want to forget</h3>
+      No "purge", no "delete history". You <b>let the shark eat a day</b>, or, if you must,
+      <b>feed everything to the sharks</b>. The tide also washes raw driftlines away on its own after 90 days.
+    </td>
+  </tr>
+</table>
+
+## A living sea
+
+<p align="center">
+  <img src="docs/assets/sea-day.gif" alt="The waterline in the morning theme: a slow wave over wet sand, sun glitter and a small shoal" width="880">
+  <br>
+  <img src="docs/assets/sea-night.gif" alt="The same shore in the evening theme: deep blue water under a few stars" width="880">
+</p>
+
+The look comes from a slow morning in Nice: sun-faded linen, the Mediterranean, ochre and terracotta from the old
+town, and a little of the year 2000's glossy gel. By day the dream is pure Nice blue going turquoise over the
+pebbles; by evening it is the same bay in deep blue. Small things move slowly: the waterline breathes, a shoal
+crosses, a bottle bobs while you write, a fin passes before the shark eats. The fonts (Fraunces, Figtree, JetBrains
+Mono) are vendored, so nothing is fetched.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/threads-dark.png" alt="Currents in the evening theme"></td>
+    <td width="50%"><img src="docs/assets/en/spark-dark.png" alt="A fish in the evening theme"></td>
+  </tr>
+</table>
+
+## How it works
+
+<p align="center">
+  <img src="docs/assets/how-it-works.svg" alt="Watch the tide, sort the catch, read the currents, dive, the lighthouse, and you; what you keep steers the next dive" width="900">
+</p>
+
+1. **Watch the tide.** The watcher records the front app, the window title and, where the system allows, the
+   browser address, with real dwell time. Chat apps leave only the time they took.
+2. **Sort the catch.** A deckhand model groups the day into topics and lets each join a **current**. Code checks
+   every reference and joins currents that already exist instead of drawing them twice.
 3. **Read the currents.** Plain arithmetic over weeks of tides finds the undercurrents. The crew interprets them; it
    never counts them.
 
@@ -43,41 +164,37 @@ instead of sinking.
    | --- | --- | --- |
    | **eddy** | you come back again and again, never for long: circling without diving in | `orbit` |
    | **return tide** | a current drifted back after a long absence | `return` |
-   | **swell** | far more time today than its usual | `surge` |
+   | **swell** | far more time today than usual | `surge` |
    | **driftwood** | something new washed in, with real time or a bottle behind it | `seed` |
    | **confluence** | two distant currents ran close together today | `collision` |
    | main current · ebb | your known main work, and what has gone quiet | `steady` · `fade` |
 
-4. **Dive.** The strongest diver aboard writes a headline for the night, a reflection, the **undercurrent** (one
-   question), and a handful of candidate fish. Each fish must rise from one movement of the water (confluence, eddy,
-   return tide, swell, driftwood, or a *channel* between what you read and what you do), name exactly where it rose
-   from, ask an answerable question, suggest a **first small stroke** under two hours, and say when to **throw it back**.
-   A fish that claims to have risen from water it was never given is thrown back by code.
-5. **The lighthouse.** A *different* crew member, where one is aboard, shines a light on every fish: grounded? sharp?
-   fresh? reachable? your waters? It writes the strongest warning. Code weighs the light, your taste and a rule against
-   catching the same fish twice, and keeps the best few.
-6. **Down to the seabed.** For any fish, *Dive for prior work* sounds OpenAlex (and arXiv if needed, both keyless) and
-   asks the crew what already lies on the seabed, where the gap in the reef is, and how to test it. Citations are kept
-   only if they point at something that actually came up, and novelty is reported as murk, never as a claim.
-7. **Your net.** Keep a fish, swim after it, or throw it back (and say why: *too common*, *caught it before*,
-   *wrong waters*…). The counts steer the next dive, by at most ±15%. Put a **buoy** on currents you care about;
-   **becalm** the ones that are none of its business.
+4. **Dive.** The strongest diver aboard writes the night's headline, a reflection, the undercurrent question and a
+   handful of candidate fish. Each must rise from one movement of the water, name where it rose from, ask an
+   answerable question and suggest a first small stroke. A fish that claims water it was never given is thrown back
+   by code.
+5. **The lighthouse.** A *different* crew member, when one is aboard, scores every fish (grounded, sharp, fresh,
+   reachable, in your waters) and writes the strongest warning. Code weighs the light, your taste and a rule against
+   catching the same fish twice.
+6. **The seabed.** For any fish, *Dive for prior work* sounds OpenAlex and arXiv (both keyless). Citations survive only
+   if they point at something that actually came up, and novelty is reported as murk, never as a claim.
+7. **Your net.** Keep, follow or throw back, with a reason (*too common*, *caught it before*, *wrong waters*). Your
+   net nudges the next dive by at most ±15%.
 
 ### A small glossary of the sea
 
 | You see | It is |
 | --- | --- |
-| **Shore** | today: tonight's dream, what surfaced, and what the tide left |
+| **Shore** | today: tonight's dream, what surfaced and what the tide left |
 | **Currents** | recurring concerns across weeks, drawn as rows of beads |
 | **Shoal** | every idea the dives kept |
 | **Logbook** | one entry per night |
 | **Harbour** | settings |
-| **Pebbles** | the day's currents lying on the sand: size is time; stones that touch met today |
-| **Bottle** | a thought you jot on purpose, the strongest evidence a dive gets |
-| **Washed in** | a paper or notes you feed it |
+| **Pebbles** | the day's currents on the sand: size is time; stones that touch met today |
+| **Bottle** · **washed in** | a thought you jot on purpose · a paper or notes you feed it |
 | **At anchor** · **slack water** · **fog** | paused · idle · a quiet app it may not look at |
-| **The crew** | the language models doing each job |
-| **The shark** | forgetting: *let the shark eat a day*, or *feed everything to the sharks* |
+| **The crew** · **the lighthouse** | the language models doing each job · the second opinion |
+| **The shark** | forgetting |
 
 ## Setting out
 
@@ -91,11 +208,7 @@ dun                                 # then open your own
 
 `dun` opens the shore and leaves a small horizon mark in the menu bar (or system tray). Closing the window keeps the
 watcher watching and the night's dive scheduled; *Go ashore* in that menu quits. To put the watcher out to sea at
-every login:
-
-```bash
-dun service install
-```
+every login: `dun service install`.
 
 **macOS.** Window titles need *Accessibility* permission for the app running Digital Unconscious (System Settings →
 Privacy & Security); the first time it reads a browser's address, macOS asks once per browser. `dun doctor` shows
@@ -105,40 +218,19 @@ washed-in papers or an ActivityWatch import there. **Windows** sees window title
 
 ### The crew
 
-No API key is needed. Sign in once to either subscription CLI and it joins the crew:
+No API key is needed. Sign in once to either subscription CLI and it joins the crew.
 
 | Crew member | How they come aboard | Default jobs |
 | --- | --- | --- |
-| Claude Code | `claude`, signed in | diving (Opus 5.5); sorting the catch, the lighthouse and the seabed (Sonnet 5.5) |
+| Claude Code | `claude`, signed in | diving (**Opus 5.5**); sorting the catch, the lighthouse and the seabed (**Sonnet 5.5**) |
 | Codex | `codex`, signed in | the lighthouse, so the keeper is not the diver |
 | DeepSeek · GLM · Kimi · OpenAI | `DEEPSEEK_API_KEY` · `ZAI_API_KEY` · `MOONSHOT_API_KEY` · `OPENAI_API_KEY` | optional |
 | Anthropic API | `ANTHROPIC_API_KEY` and `pip install -e ".[anthropic]"` | optional |
 | Ollama, or any OpenAI-compatible server | `[providers.ollama]` in the config | optional, never leaves your machine |
 
-Each job names the hand it prefers and passes to the next if they falter. *Harbour → The crew* shows who will take
-each job and lets you choose. `dun doctor --ping` sends every crew member a tiny real errand.
-
-## Around the bay
-
-| | |
-| --- | --- |
-| <img src="docs/assets/threads.png" alt="Currents"> | **Currents.** Every recurring concern as a row of glossy beads, one per day, sized by the time it carried. Tonight's undercurrents sit above, in plain sentences measured from your tides. |
-| <img src="docs/assets/spark.png" alt="A fish and its seabed search"> | **A fish.** The question, the first small stroke, when to throw it back, where it rose from, the lighthouse keeper's notes and warning, and what lies on the seabed. |
-| <img src="docs/assets/journal-zh.png" alt="Logbook in Chinese"> | **Logbook.** One entry per night, each with a small picture of that day's shore. The whole sea speaks English and 简体中文. |
-| <img src="docs/assets/today-evening.png" alt="Evening"> | **Morning and evening.** By day the dream is the Baie des Anges in full sun, azure going turquoise over the pebbles; by evening, the same bay in deep blue under a few stars. |
-
-The look comes from a slow morning in Nice: sun-faded linen, the Mediterranean, ochre and terracotta from the old
-town, and a little of the year 2000's glossy gel. Small things move slowly: a shoal crosses the shallows (one fish
-for each idea that surfaced), the waterline breathes, a bottle bobs while you write, a fin passes when the shark is
-about to eat. The fonts are vendored (Fraunces, Figtree, JetBrains Mono, all SIL OFL), so nothing is fetched.
-
-## What stays in the harbour
-
-Memory is one SQLite file in `~/.digital-unconscious/` (or `$DUN_HOME`). Only a dive crosses the water: the day's
-labels and timings go to the crew when it sorts and dives, and a fish's search lines go to OpenAlex when you dive for
-prior work. Claude Code and Codex need no API key, but inference still happens on Anthropic's or OpenAI's side; bring
-Ollama aboard to keep every dive at home. The tide washes raw driftlines away after 90 days; currents, dives and fish
-stay. The full boundary is in [docs/PRIVACY.md](docs/PRIVACY.md).
+Each job names the hand it prefers and passes to the next if they falter. *Harbour → The crew* shows who takes each
+job. `dun doctor --ping` sends every crew member a tiny real errand. A full night on the sample sea (sorting, diving,
+the lighthouse) takes a little over a minute with Sonnet 5.5 and Opus 5.5.
 
 ## Light on the battery
 
@@ -164,6 +256,13 @@ Share of one CPU core on a MacBook (Apple M5, Retina), sample sea, 45 seconds pe
 | window in front, calm water (the default on battery) | — | **2.9%** |
 
 *Harbour → the water's motion* chooses calm on battery (the default), always moving, always calm or still water.
+
+## What stays in the harbour
+
+Memory is one SQLite file in `~/.digital-unconscious/` (or `$DUN_HOME`). Only a dive crosses the water: the day's
+labels and timings go to the crew when it sorts and dives, and a fish's search lines go to OpenAlex when you dive for
+prior work. Claude Code and Codex need no API key, but inference still happens on Anthropic's or OpenAI's side; bring
+Ollama aboard to keep every dive at home. The full boundary is in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## From the command line
 
@@ -225,6 +324,7 @@ motion = "auto"          # auto (calm on battery) | full | calm | off (still wat
 python -m pip install -e ".[dev,pdf]"
 QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
 python scripts/snapshots.py snapshots/ [--zh] [--dark]   # paint every page to PNG
+python scripts/readme_art.py                             # repaint the pictures in this README
 ```
 
 The tests sail offline: a paper crew (an in-process fake model) answers every job. How the ecosystem maps onto the
@@ -247,24 +347,7 @@ v3 starts again from that idea:
   rule against duplicates.
 - **A native app** (PySide6) that lives in the menu bar, instead of a web page.
 - **Smaller and stricter.** A standard-library engine, one SQLite file, no browser automation, no stored credentials.
-- The command is now `dun` instead of `du`, which shadowed the Unix disk-usage tool.
+- The command is now `dun` instead of `du`, which shadowed the Unix disk-usage tool. v2's data in `~/.du` is left
+  untouched.
 
-## 中文简介
-
-数字潜意识是一个给一个人用的桌面应用，被想象成一小片海。
-
-白天，**观潮者**留意你的注意力漂向哪里：前台窗口、反复回去的页面、搜索的内容，还有你装进**漂流瓶**的念头。夜里，它**下潜**：把一天的渔获分进**洋流**（那些反复流回来的关注点），读出其中的**暗流**——**涡流**（总绕回来却从不深入）、**回潮**（离开很久后又漂回来）、**涌浪**、**漂流木**、**交汇**（两条遥远的洋流在同一天相遇），再带回一段反思、一个你似乎一直绕着转的问题，以及几条**鱼**：从你自己的一天里浮上来的想法，每一条都先举到**灯塔**下，由另一位**船员**照一照。每条鱼都必须说清它从哪里浮上来，并给出两小时内能做的**第一小划**，以及什么情况下该**放回大海**。
-
-界面在**海岸**、**洋流**、**鱼群**、**航海日志**、**港湾**之间切换。白天的梦是阳光下尼斯的天使湾，蔚蓝渐变成近岸的绿松石色；傍晚则是缀着几点星光的深蓝海湾。每天的洋流是沙滩上的一把鹅卵石，浅水里会游过一小群鱼（鱼的数量就是当晚浮上来的想法数）。想遗忘时，就**让鲨鱼吃掉这一天**。
-
-无需 API key，登录 Claude Code 或 Codex 即可；所有记忆只停泊在本机的一个 SQLite 文件里。
-
-它为整天开着的笔记本而设计：观潮者只是偶尔看一眼，海面只在你看着它时才流动，用电池时更平静。窗口退到后台时只占约 0.3% 的单核 CPU，只留菜单栏图标时约 0.05%。
-
-```bash
-python -m pip install -e .
-dun demo --language zh   # 先在一片借来的海里看看
-dun                      # 打开你自己的海岸
-```
-
-MIT licensed.
+<p align="center"><sub>MIT licensed · made for slow mornings by the sea</sub></p>
