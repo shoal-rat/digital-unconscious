@@ -12,6 +12,7 @@ internet opens the first time with right-click → Open.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import platform
@@ -32,79 +33,6 @@ sys.path.insert(0, str(ROOT / "src"))
 from unconscious import __version__  # noqa: E402
 
 # --------------------------------------------------------------------------- pictures
-
-
-def paint_icon(size: int):
-    """The horizon mark on a linen tile, macOS-sized: the sun on the sea's edge, with a little gloss."""
-    from PySide6.QtCore import QPointF, QRectF, Qt
-    from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
-
-    image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
-    image.fill(Qt.GlobalColor.transparent)
-    p = QPainter(image)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    k = size / 1024
-    tile = QRectF(100 * k, 92 * k, 824 * k, 824 * k)  # Apple's icon grid: a 824 pt tile on a 1024 canvas
-    for i in range(18, 0, -1):  # a soft shadow under the tile
-        shade = QPainterPath()
-        grow = i * 1.6 * k
-        shade.addRoundedRect(tile.adjusted(-grow, -grow + 10 * k, grow, grow + 14 * k), 185 * k + grow, 185 * k + grow)
-        p.fillPath(shade, QColor(25, 40, 60, 6))
-    body = QPainterPath()
-    body.addRoundedRect(tile, 185 * k, 185 * k)
-    linen = QLinearGradient(tile.topLeft(), tile.bottomLeft())
-    linen.setColorAt(0, QColor("#fbf7f0"))
-    linen.setColorAt(1, QColor("#efe4d2"))
-    p.fillPath(body, linen)
-    glow = QRadialGradient(QPointF(tile.center().x(), tile.top() + 250 * k), 420 * k)
-    glow.setColorAt(0, QColor(255, 214, 160, 90))  # the morning over the bay
-    glow.setColorAt(1, QColor(255, 214, 160, 0))
-    p.fillPath(body, glow)
-
-    centre, radius = QPointF(512 * k, 520 * k), 250 * k
-    sea = QPainterPath()
-    sea.moveTo(centre.x() - radius, centre.y())
-    sea.arcTo(QRectF(centre.x() - radius, centre.y() - radius, 2 * radius, 2 * radius), 180, 180)
-    sea.closeSubpath()
-    water = QLinearGradient(QPointF(0, centre.y()), QPointF(0, centre.y() + radius))
-    water.setColorAt(0, QColor("#5a92cf"))
-    water.setColorAt(0.5, QColor("#2f6db1"))
-    water.setColorAt(1, QColor("#1d4f86"))
-    p.fillPath(sea, water)
-    gloss = QLinearGradient(QPointF(0, centre.y()), QPointF(0, centre.y() + radius * 0.6))
-    gloss.setColorAt(0, QColor(255, 255, 255, 140))
-    gloss.setColorAt(1, QColor(255, 255, 255, 0))
-    p.fillPath(sea, gloss)
-    foam = QPen(QColor("#f6f1e8"), 20 * k, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-    p.setPen(foam)
-    for offset, half in ((95, 150), (165, 105)):
-        wave = QPainterPath()
-        y = centre.y() + offset * k
-        x = centre.x() - half * k
-        wave.moveTo(x, y)
-        steps = 4
-        width = 2 * half * k / steps
-        for _ in range(steps):
-            wave.cubicTo(QPointF(x + width * 0.3, y - 16 * k), QPointF(x + width * 0.7, y + 16 * k), QPointF(x + width, y))
-            x += width
-        p.drawPath(wave)
-    ink = QPen(QColor("#1f2d3d"), 30 * k, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-    p.setPen(ink)
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawEllipse(centre, radius, radius)
-    p.drawLine(QPointF(centre.x() - radius - 75 * k, centre.y()), QPointF(centre.x() + radius + 75 * k, centre.y()))
-    shine = QPainterPath()
-    shine.addRoundedRect(QRectF(tile.left() + 30 * k, tile.top() + 22 * k, tile.width() - 60 * k, 300 * k), 160 * k, 160 * k)
-    top = QLinearGradient(QPointF(0, tile.top()), QPointF(0, tile.top() + 300 * k))
-    top.setColorAt(0, QColor(255, 255, 255, 120))
-    top.setColorAt(1, QColor(255, 255, 255, 0))
-    p.setPen(Qt.PenStyle.NoPen)
-    p.fillPath(shine.intersected(body), top)
-    p.setPen(QPen(QColor(255, 255, 255, 170), 3 * k))
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawPath(body)
-    p.end()
-    return image
 
 
 def paint_background(scale: int):
@@ -163,21 +91,77 @@ def paint_background(scale: int):
     return image
 
 
-def make_icns(target: Path) -> Path:
-    iconset = BUILD / "icon.iconset"
-    shutil.rmtree(iconset, ignore_errors=True)
-    iconset.mkdir(parents=True)
-    from PySide6.QtCore import Qt
+def paint_icon_layers(folder: Path) -> None:
+    """The layers of a Liquid Glass icon, each on a full-bleed 1024 canvas: the sea (the lower
+    half of the sun's disc, with foam) and the horizon (the sun's outline and the sea's edge).
+    macOS draws the tile, its corners, its depth and its light; we only give it the drawing."""
+    from PySide6.QtCore import QPointF, QRectF, Qt
+    from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPainterPath, QPen
 
-    master = paint_icon(1024)
-    for points in (16, 32, 128, 256, 512):
-        for factor in (1, 2):
-            pixels = points * factor
-            name = f"icon_{points}x{points}{'@2x' if factor == 2 else ''}.png"
-            master.scaled(pixels, pixels, mode=Qt.TransformationMode.SmoothTransformation).save(str(iconset / name))
-    subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(target)], check=True)
-    master.save(str(BUILD / "icon-1024.png"))
-    return target
+    centre, radius = QPointF(512, 540), 300.0
+
+    def canvas() -> tuple[QImage, QPainter]:
+        image = QImage(1024, 1024, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        return image, painter
+
+    image, p = canvas()
+    sea = QPainterPath()
+    sea.moveTo(centre.x() - radius, centre.y())
+    sea.arcTo(QRectF(centre.x() - radius, centre.y() - radius, 2 * radius, 2 * radius), 180, 180)
+    sea.closeSubpath()
+    water = QLinearGradient(QPointF(0, centre.y()), QPointF(0, centre.y() + radius))
+    water.setColorAt(0, QColor("#5a92cf"))
+    water.setColorAt(0.5, QColor("#2f6db1"))
+    water.setColorAt(1, QColor("#1d4f86"))
+    p.fillPath(sea, water)
+    p.setPen(QPen(QColor("#f6f1e8"), 24, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    for offset, half in ((114, 180), (198, 126)):
+        wave = QPainterPath()
+        y, x = centre.y() + offset, centre.x() - half
+        wave.moveTo(x, y)
+        step = 2 * half / 4
+        for _ in range(4):
+            wave.cubicTo(QPointF(x + step * 0.3, y - 19), QPointF(x + step * 0.7, y + 19), QPointF(x + step, y))
+            x += step
+        p.drawPath(wave)
+    p.end()
+    image.save(str(folder / "sea.png"))
+
+    image, p = canvas()
+    p.setPen(QPen(QColor("#1f2d3d"), 36, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(centre, radius, radius)
+    p.drawLine(QPointF(centre.x() - radius - 92, centre.y()), QPointF(centre.x() + radius + 92, centre.y()))
+    p.end()
+    image.save(str(folder / "horizon.png"))
+
+
+def make_icon() -> tuple[Path, Path]:
+    """An Icon Composer icon, compiled by actool into Assets.car (the Liquid Glass icon newer macOS
+    draws in the Dock, the same size as Apple's own) and AppIcon.icns (for macOS before 26)."""
+    source = BUILD / "AppIcon.icon"
+    shutil.rmtree(source, ignore_errors=True)
+    (source / "Assets").mkdir(parents=True)
+    paint_icon_layers(source / "Assets")
+    (source / "icon.json").write_text(json.dumps({
+        "fill": {"automatic-gradient": "extended-srgb:0.97647,0.95294,0.91765,1.00000"},  # linen
+        "groups": [
+            {"layers": [{"image-name": "horizon.png", "name": "horizon"}]},
+            {"layers": [{"image-name": "sea.png", "name": "sea"}]},
+        ],
+        "supported-platforms": {"squares": "shared"},
+    }, indent=2))
+    compiled = BUILD / "icon"
+    shutil.rmtree(compiled, ignore_errors=True)
+    compiled.mkdir()
+    subprocess.run(["xcrun", "actool", str(source), "--compile", str(compiled), "--platform", "macosx",
+                    "--minimum-deployment-target", "12.0", "--app-icon", "AppIcon",
+                    "--output-partial-info-plist", str(BUILD / "icon-info.plist")],
+                   check=True, capture_output=True, cwd=str(BUILD))
+    return compiled / "Assets.car", compiled / "AppIcon.icns"
 
 
 def make_background(target: Path) -> Path:
@@ -218,6 +202,7 @@ def info_plist() -> dict:
         "CFBundleName": NAME,
         "CFBundleDisplayName": NAME,
         "CFBundleShortVersionString": __version__,
+        "CFBundleIconName": "AppIcon",  # Assets.car: the Liquid Glass icon
         "CFBundleVersion": __version__,
         "LSMinimumSystemVersion": "12.0",
         "LSApplicationCategoryType": "public.app-category.productivity",
@@ -301,9 +286,10 @@ def main() -> int:
 
     QGuiApplication(sys.argv[:1])
     BUILD.mkdir(exist_ok=True)
-    icon = make_icns(BUILD / "DigitalUnconscious.icns")
+    catalog, icon = make_icon()
     background = make_background(BUILD / "background.tiff")
     app = bundle(icon)
+    shutil.copy(catalog, app / "Contents" / "Resources" / "Assets.car")
     saved = thin(app)
     sign(app)
     image = disk_image(app, background, icon)

@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.1 — the mark holds, and sits like its neighbours
+
+- Clicking the menu-bar mark no longer closes the app on newer macOS. Qt read the click count of the event that
+  opened the mark's menu, and macOS aborts when that event is not a mouse event; on macOS the menu is now popped by
+  the app itself.
+- The Dock icon is a Liquid Glass icon (an Icon Composer `.icon`, compiled by `actool` into `Assets.car`, with an
+  `.icns` for macOS before 26), the same size as Apple's own. The app also stopped replacing its Dock icon at launch
+  with an edge-to-edge drawing, which is what made it look a size too big.
+
 ## 3.1.0 — a real Mac app, and a crew that reads
 
 - **Digital Unconscious.app.** A drag-to-install disk image with its own icon: the app is called Digital Unconscious
