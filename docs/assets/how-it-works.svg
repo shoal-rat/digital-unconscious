@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="340" viewBox="0 0 960 340" role="img" aria-label="The ecosystem: the tide watcher, sorting the catch, reading the currents, the dive, the lighthouse, and you — what you keep steers the next dive">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L10,5 L0,9 z" fill="#2f6db1"/>
+    </marker>
+    <radialGradient id="g-notice" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#8fb9e6"/><stop offset="0.5" stop-color="#3c7dbf"/><stop offset="1" stop-color="#28598c"/></radialGradient>
+    <radialGradient id="g-sort" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#f3cf86"/><stop offset="0.5" stop-color="#dda13f"/><stop offset="1" stop-color="#a8762a"/></radialGradient>
+    <radialGradient id="g-measure" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#a5dcd8"/><stop offset="0.5" stop-color="#5bb0ab"/><stop offset="1" stop-color="#3d7f7b"/></radialGradient>
+    <radialGradient id="g-dream" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#c9bfe8"/><stop offset="0.5" stop-color="#8f7fc2"/><stop offset="1" stop-color="#62558f"/></radialGradient>
+    <radialGradient id="g-challenge" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#efb6a5"/><stop offset="0.5" stop-color="#d47a60"/><stop offset="1" stop-color="#9c543f"/></radialGradient>
+    <radialGradient id="g-you" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#cbe08f"/><stop offset="0.5" stop-color="#97b455"/><stop offset="1" stop-color="#6b8238"/></radialGradient>
+    <radialGradient id="shadow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#cbb796" stop-opacity="0.7"/><stop offset="1" stop-color="#cbb796" stop-opacity="0"/></radialGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f5aa8"/><stop offset="0.6" stop-color="#1a77c2"/><stop offset="1" stop-color="#55c3cf"/></linearGradient>
+  </defs>
+
+  <rect width="960" height="340" rx="26" fill="#f6f1e8"/>
+  <path d="M0 26 a26 26 0 0 1 26 -26 h908 a26 26 0 0 1 26 26 v18 c-60 8 -120 -6 -180 0 s-120 10 -180 2 s-120 -10 -180 -2 s-120 8 -180 0 s-120 -8 -194 -2 z" fill="url(#sea)" opacity="0.92"/>
+  <text x="34" y="30" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="15" fill="#fdfaf3">by day it watches the tide · by night it dives</text>
+
+  <!-- connectors -->
+  <g fill="none" stroke="#2f6db1" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow)">
+    <path d="M144 132 q6.5 -6 13 0 t13 0 t13 0 t13 0"/>
+    <path d="M304 132 q6.5 -6 13 0 t13 0 t13 0 t13 0"/>
+    <path d="M464 132 q6.5 -6 13 0 t13 0 t13 0 t13 0"/>
+    <path d="M624 132 q6.5 -6 13 0 t13 0 t13 0 t13 0"/>
+    <path d="M784 132 q6.5 -6 13 0 t13 0 t13 0 t13 0"/>
+  </g>
+
+  <!-- stations -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <g transform="translate(90 132)">
+      <ellipse cx="4" cy="30" rx="54" ry="13" fill="url(#shadow)"/>
+      <path d="M-46 0 C-46 -24 -24 -33 2 -32 C30 -31 47 -18 46 2 C45 24 24 34 -2 33 C-28 32 -46 22 -46 0 z" fill="url(#g-notice)"/>
+      <ellipse cx="-16" cy="-15" rx="17" ry="7" fill="#ffffff" opacity="0.45"/>
+      <text x="0" y="6" text-anchor="middle" font-size="15" fill="#ffffff" font-weight="600">01</text>
+    </g>
+    <g transform="translate(250 132)">
+      <ellipse cx="4" cy="30" rx="54" ry="13" fill="url(#shadow)"/>
+      <path d="M-47 2 C-45 -22 -22 -32 4 -31 C31 -30 46 -16 45 4 C44 25 22 33 -4 32 C-30 31 -48 22 -47 2 z" fill="url(#g-sort)"/>
+      <ellipse cx="-16" cy="-15" rx="17" ry="7" fill="#ffffff" opacity="0.45"/>
+      <text x="0" y="6" text-anchor="middle" font-size="15" fill="#ffffff" font-weight="600">02</text>
+    </g>
+    <g transform="translate(410 132)">
+      <ellipse cx="4" cy="30" rx="54" ry="13" fill="url(#shadow)"/>
+      <path d="M-45 -2 C-44 -25 -20 -33 5 -32 C30 -31 47 -17 46 1 C45 23 25 33 -1 33 C-27 33 -46 21 -45 -2 z" fill="url(#g-measure)"/>
+      <ellipse cx="-16" cy="-15" rx="17" ry="7" fill="#ffffff" opacity="0.45"/>
+      <text x="0" y="6" text-anchor="middle" font-size="15" fill="#ffffff" font-weight="600">03</text>
+    </g>
+    <g transform="translate(570 132)">
+      <ellipse cx="4" cy="30" rx="54" ry="13" fill="url(#shadow)"/>
+      <path d="M-46 1 C-46 -23 -23 -33 3 -32 C29 -31 47 -18 46 2 C45 24 24 33 -2 33 C-28 33 -46 23 -46 1 z" fill="url(#g-dream)"/>
+      <ellipse cx="-16" cy="-15" rx="17" ry="7" fill="#ffffff" opacity="0.45"/>
+      <text x="0" y="6" text-anchor="middle" font-size="15" fill="#ffffff" font-weight="600">04</text>
+    </g>
+    <g transform="translate(730 132)">
+      <ellipse cx="4" cy="30" rx="54" ry="13" fill="url(#shadow)"/>
+      <path d="M-46 0 C-45 -23 -22 -32 3 -32 C29 -32 46 -18 46 1 C46 24 24 33 -2 32 C-28 31 -47 22 -46 0 z" fill="url(#g-challenge)"/>
+      <ellipse cx="-16" cy="-15" rx="17" ry="7" fill="#ffffff" opacity="0.45"/>
+      <text x="0" y="6" text-anchor="middle" font-size="15" fill="#ffffff" font-weight="600">05</text>
+    </g>
+    <g transform="translate(886 132)">
+      <ellipse cx="4" cy="30" rx="54" ry="13" fill="url(#shadow)"/>
+      <path d="M-46 2 C-45 -22 -22 -33 3 -32 C30 -31 47 -17 46 2 C45 24 23 33 -3 33 C-29 32 -47 23 -46 2 z" fill="url(#g-you)"/>
+      <ellipse cx="-16" cy="-15" rx="17" ry="7" fill="#ffffff" opacity="0.45"/>
+      <text x="0" y="6" text-anchor="middle" font-size="15" fill="#ffffff" font-weight="600">06</text>
+    </g>
+  </g>
+
+  <!-- labels -->
+  <g text-anchor="middle">
+    <g font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#1f2d3d">
+      <text x="90" y="205">Watch the tide</text>
+      <text x="250" y="205">Sort the catch</text>
+      <text x="410" y="205">Read currents</text>
+      <text x="570" y="205">Dive</text>
+      <text x="730" y="205">The lighthouse</text>
+      <text x="886" y="205">You</text>
+    </g>
+    <g font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#6f7780">
+      <text x="90" y="228">windows, pages,</text>
+      <text x="90" y="245">searches, bottles</text>
+      <text x="250" y="228">a deckhand sorts</text>
+      <text x="250" y="245">the day into currents</text>
+      <text x="410" y="228">eddy · return tide</text>
+      <text x="410" y="245">swell · confluence</text>
+      <text x="570" y="228">an undercurrent</text>
+      <text x="570" y="245">and a few fish</text>
+      <text x="730" y="228">a second crew member</text>
+      <text x="730" y="245">checks every fish</text>
+      <text x="886" y="228">keep it in the net</text>
+      <text x="886" y="245">or throw it back</text>
+    </g>
+  </g>
+
+  <!-- taste loop -->
+  <path d="M886 262 C886 312 820 316 728 316 C640 316 580 312 572 268" fill="none" stroke="#2f6db1" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+  <text x="730" y="305" text-anchor="middle" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic" font-size="13" fill="#2f6db1">what you keep steers the next dive</text>
+</svg>

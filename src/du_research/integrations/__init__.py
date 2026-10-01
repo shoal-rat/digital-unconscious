@@ -1,1 +1,0 @@
-"""External automation integration helpers."""

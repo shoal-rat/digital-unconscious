@@ -1,215 +1,353 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shoal-rat/digital-unconscious/main/docs/assets/logo.svg" alt="Digital Unconscious" width="520">
+  <img src="docs/assets/logo.svg" alt="Digital Unconscious" width="380">
 </p>
-
-<p align="center"><strong>A quiet research loop for the ideas hidden inside your workday.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/shoal-rat/digital-unconscious/actions"><img src="https://img.shields.io/github/actions/workflow/status/shoal-rat/digital-unconscious/ci.yml?branch=main&style=flat-square" alt="Build"></a>
-  <a href="https://github.com/shoal-rat/digital-unconscious/releases"><img src="https://img.shields.io/github/v/release/shoal-rat/digital-unconscious?style=flat-square" alt="Release"></a>
-  <a href="https://github.com/shoal-rat/digital-unconscious/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-6ee7b7?style=flat-square" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/Python-3.11%2B-8b9cff?style=flat-square" alt="Python 3.11 plus">
-  <img src="https://img.shields.io/badge/API_key-not_required-f7c873?style=flat-square" alt="No API key required">
+  <b>English</b> &nbsp;·&nbsp; <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Digital Unconscious turns the weak signals around your screen activity into a short daily briefing and a searchable idea backlog. Its Research Idea Lab can also turn your papers and the structure of a local dataset into cited evidence, research opportunities, and falsifiable study cards.
+<p align="center">
+  <em>By day it watches the tide of your attention.<br>At night it dives for what you didn't notice.</em>
+</p>
 
-It is deliberately small. There is no cloud account, team workspace, social feed, or chat shell. Your signed-in **Codex** or **Claude Code** subscription can run the complete loop, so an API key is optional.
+<p align="center">
+  <a href="https://github.com/shoal-rat/digital-unconscious/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/shoal-rat/digital-unconscious?color=2f6db1&label=release"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3c7dbf">
+  <img alt="Native app: PySide6 / Qt 6" src="https://img.shields.io/badge/native-PySide6%20%2F%20Qt%206-5bb0ab">
+  <img alt="macOS, Windows, Linux" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-desktop-dda13f">
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/license-MIT-97b455"></a>
+</p>
 
-## Start in two minutes
+<p align="center">
+  <img src="docs/assets/en/hero.png" alt="The shore in the morning and evening themes: tonight's dream as the bay of Nice, the day's currents as pebbles on the sand" width="900">
+</p>
+
+Some of your best ideas are already in your day. They just sink. You read three things that belong together and
+never notice; you circle the same question for weeks without diving in.
+
+**Digital Unconscious** is a small desktop app, imagined as a little sea, that notices. During the day a **tide
+watcher** follows where your attention drifts: the window in front of you, the pages you keep returning to, what you
+search for, the thoughts you drop into a **bottle**. At night it **dives**. In the morning you find a short
+reflection, the one question you seem to be circling, and a few **fish**: ideas that rose from your own day, each
+able to say exactly where it came from, each checked by a second model before you see it.
+
+It is for people who think for a living (researchers, writers, builders) and want the half-formed things to surface
+instead of sinking.
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <b>It watches; it doesn't stare.</b><br>
+      Window titles, pages and real time spent. No screenshots, no keystrokes. Password managers, banks and private
+      windows sit in fog and are never recorded.
+    </td>
+    <td width="33%" valign="top">
+      <b>Every fish knows where it rose from.</b><br>
+      Ideas must cite the moments of your day they came from. Invented sources are thrown back by code, and a
+      different model keeps the lighthouse.
+    </td>
+    <td width="33%" valign="top">
+      <b>Light enough to leave on all day.</b><br>
+      0.05% of one CPU core from the menu bar. The sea moves only while you are looking at it, and goes calm on
+      battery.
+    </td>
+  </tr>
+</table>
+
+## A day at sea
+
+<table>
+  <tr>
+    <td width="46%"><img src="docs/assets/en/bottle.png" alt="A message in a bottle: a half-formed thought thrown into tonight's dive"></td>
+    <td valign="top">
+      <h3>Morning: throw a thought into the sea</h3>
+      Something half-formed on your mind? Put it in a <b>bottle</b>. Bottles are the strongest evidence a dive gets.
+      Papers, notes and text logs can <b>wash ashore</b> too, and an ActivityWatch history can be brought in.
+      <br><br>
+      Meanwhile the <b>tide watcher</b> glances at the front window every few seconds and lays down a
+      <b>driftline</b> with real time attached. At <b>slack water</b> (no keyboard or mouse for a while) it stops
+      counting.
+    </td>
+  </tr>
+</table>
+
+### Night: the dive, and in the morning, the shore
+
+<p align="center">
+  <img src="docs/assets/en/today.png" alt="The shore: tonight's dream with a headline, a reflection and the undercurrent question; the day's currents lie as pebbles on the sand" width="900">
+</p>
+
+The **Shore** opens on tonight's dream: the Baie des Anges in full sun, a headline for the day, a few honest lines
+about where your attention went, and the **undercurrent**, the question you seem to be circling. The day's
+**currents** lie on the sand as glossy pebbles: their size is time, and stones that touch met today. A small shoal
+crosses the shallows, one fish for each idea that surfaced.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/threads.png" alt="Currents: every recurring concern as a row of beads, with tonight's undercurrents above"></td>
+    <td width="50%"><img src="docs/assets/en/thread.png" alt="One current: eight weeks of tides, what it brought and the fish that came from it"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Currents.</b> The concerns that keep flowing back, one bead per day. Tonight's
+    undercurrents sit above, in plain sentences measured from your tides, never guessed by a model.</td>
+    <td valign="top"><b>One current.</b> Eight weeks of tides, what it carried, and the fish it gave. Put a
+    <b>buoy</b> on the currents you care about; <b>becalm</b> the ones that are none of its business.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/sparks.png" alt="The shoal: every fish the dives kept"></td>
+    <td width="50%"><img src="docs/assets/en/spark.png" alt="A fish: the question, the first small stroke, when to throw it back, and where it rose from"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>The shoal.</b> Every fish the dives kept. Keep one in the net, swim after it, or throw it
+    back and say why. Your net steers the next dive.</td>
+    <td valign="top"><b>A fish.</b> An answerable question, a <b>first small stroke</b> under two hours, when to
+    <b>throw it back</b>, where it rose from, the lighthouse keeper's warning, and a dive to the
+    <b>seabed</b> for prior work.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/journal.png" alt="The logbook: one entry per night, each with a small picture of that day's shore"></td>
+    <td width="50%"><img src="docs/assets/en/settings.png" alt="The harbour: who you are, the language, the light, the water's motion and the tide watcher"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Logbook.</b> One entry per night, each with a small picture of that day's shore.</td>
+    <td valign="top"><b>Harbour.</b> Who you are and what waters you fish, the crew, the light, the water's motion,
+    and exactly what the tide watcher may see.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="46%"><img src="docs/assets/en/shark.png" alt="The shark: let the shark eat a day"></td>
+    <td valign="top">
+      <h3>And when you want to forget</h3>
+      No "purge", no "delete history". You <b>let the shark eat a day</b>, or, if you must,
+      <b>feed everything to the sharks</b>. The tide also washes raw driftlines away on its own after 90 days.
+    </td>
+  </tr>
+</table>
+
+## A living sea
+
+<p align="center">
+  <img src="docs/assets/sea-day.gif" alt="The waterline in the morning theme: a slow wave over wet sand, sun glitter and a small shoal" width="880">
+  <br>
+  <img src="docs/assets/sea-night.gif" alt="The same shore in the evening theme: deep blue water under a few stars" width="880">
+</p>
+
+The look comes from a slow morning in Nice: sun-faded linen, the Mediterranean, ochre and terracotta from the old
+town, and a little of the year 2000's glossy gel. By day the dream is pure Nice blue going turquoise over the
+pebbles; by evening it is the same bay in deep blue. Small things move slowly: the waterline breathes, a shoal
+crosses, a bottle bobs while you write, a fin passes before the shark eats. The fonts (Fraunces, Figtree, JetBrains
+Mono) are vendored, so nothing is fetched.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/en/threads-dark.png" alt="Currents in the evening theme"></td>
+    <td width="50%"><img src="docs/assets/en/spark-dark.png" alt="A fish in the evening theme"></td>
+  </tr>
+</table>
+
+## How it works
+
+<p align="center">
+  <img src="docs/assets/how-it-works.svg" alt="Watch the tide, sort the catch, read the currents, dive, the lighthouse, and you; what you keep steers the next dive" width="900">
+</p>
+
+1. **Watch the tide.** The watcher records the front app, the window title and, where the system allows, the
+   browser address, with real dwell time. Chat apps leave only the time they took.
+2. **Sort the catch.** A deckhand model groups the day into topics and lets each join a **current**. Code checks
+   every reference and joins currents that already exist instead of drawing them twice.
+3. **Read the currents.** Plain arithmetic over weeks of tides finds the undercurrents. The crew interprets them; it
+   never counts them.
+
+   | Undercurrent | What it means | In code |
+   | --- | --- | --- |
+   | **eddy** | you come back again and again, never for long: circling without diving in | `orbit` |
+   | **return tide** | a current drifted back after a long absence | `return` |
+   | **swell** | far more time today than usual | `surge` |
+   | **driftwood** | something new washed in, with real time or a bottle behind it | `seed` |
+   | **confluence** | two distant currents ran close together today | `collision` |
+   | main current · ebb | your known main work, and what has gone quiet | `steady` · `fade` |
+
+4. **Dive.** The strongest diver aboard writes the night's headline, a reflection, the undercurrent question and a
+   handful of candidate fish. Each must rise from one movement of the water, name where it rose from, ask an
+   answerable question and suggest a first small stroke. A fish that claims water it was never given is thrown back
+   by code.
+5. **The lighthouse.** A *different* crew member, when one is aboard, scores every fish (grounded, sharp, fresh,
+   reachable, in your waters) and writes the strongest warning. Code weighs the light, your taste and a rule against
+   catching the same fish twice.
+6. **The seabed.** For any fish, *Dive for prior work* sounds OpenAlex and arXiv (both keyless). Citations survive only
+   if they point at something that actually came up, and novelty is reported as murk, never as a claim.
+7. **Your net.** Keep, follow or throw back, with a reason (*too common*, *caught it before*, *wrong waters*). Your
+   net nudges the next dive by at most ±15%.
+
+### A small glossary of the sea
+
+| You see | It is |
+| --- | --- |
+| **Shore** | today: tonight's dream, what surfaced and what the tide left |
+| **Currents** | recurring concerns across weeks, drawn as rows of beads |
+| **Shoal** | every idea the dives kept |
+| **Logbook** | one entry per night |
+| **Harbour** | settings |
+| **Pebbles** | the day's currents on the sand: size is time; stones that touch met today |
+| **Bottle** · **washed in** | a thought you jot on purpose · a paper or notes you feed it |
+| **At anchor** · **slack water** · **fog** | paused · idle · a quiet app it may not look at |
+| **The crew** · **the lighthouse** | the language models doing each job · the second opinion |
+| **The shark** | forgetting |
+
+## Setting out
 
 ```bash
 git clone https://github.com/shoal-rat/digital-unconscious.git
 cd digital-unconscious
-python -m pip install -e ".[vision,papers]"
-
-du doctor
-du daily --log-file tests/fixtures/daily_log.txt
-du dashboard
+python -m pip install -e .          # Python 3.11+, installs PySide6
+dun demo                            # wade into a borrowed sea first: three weeks of sample memory
+dun                                 # then open your own
 ```
 
-`du doctor` reports which local subscription CLIs and optional providers are ready without printing secrets. If either Codex or Claude Code is installed and signed in, the app can run without an API key.
+`dun` opens the shore and leaves a small horizon mark in the menu bar (or system tray). Closing the window keeps the
+watcher watching and the night's dive scheduled; *Go ashore* in that menu quits. To put the watcher out to sea at
+every login: `dun service install`.
 
-Install the richer desktop and research extras only if you need them:
+**macOS.** Window titles need *Accessibility* permission for the app running Digital Unconscious (System Settings →
+Privacy & Security); the first time it reads a browser's address, macOS asks once per browser. `dun doctor` shows
+what the watcher can see and who is aboard.
+**Linux** needs X11 with `xdotool` (and optionally `xprintidle`); Wayland hides the focused window, so use bottles,
+washed-in papers or an ActivityWatch import there. **Windows** sees window titles but not browser addresses.
 
-```bash
-python -m pip install -e ".[full]"
-```
+### The crew
 
-## The loop
+No API key is needed. Sign in once to either subscription CLI and it joins the crew.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/shoal-rat/digital-unconscious/main/docs/assets/readme-daily-loop.svg" alt="The daily research loop">
-</p>
-
-1. **Observe** a screenshot, screenpipe stream, or plain text activity log.
-2. **Compress** noisy activity into bounded 30-minute working notes.
-3. **Connect** distant topics into concrete research questions.
-4. **Challenge** each idea for novelty, feasibility, fit, and timing.
-5. **Brief** only the strongest ideas and keep the rest in a bounded backlog.
-6. **Research** selected ideas through literature, feasibility, data, analysis, drafting, and review.
-
-Every research stage writes JSON, readable Markdown, and trace events. Runs can be inspected and resumed without replaying completed work.
-
-A daily scan does **not** start literature downloads, browser automation, or manuscript drafting by default. Exploration is an explicit action.
-
-## From papers and data to a useful research idea
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/shoal-rat/digital-unconscious/main/docs/assets/readme-idea-lab.svg" alt="Evidence-first Research Idea Lab">
-</p>
-
-```bash
-du ideate \
-  --paper reading/paper.pdf \
-  --paper workspace/runs/example/01_literature/papers.json \
-  --data data/observations.csv \
-  --context "One-month behavioral economics project; observational methods only"
-```
-
-Idea Lab verifies exact source anchors, profiles dataset structure without sending raw rows, detects named opportunity patterns, and rejects cards without a hypothesis, null, design, smallest useful test, falsifier, and valid evidence IDs. It writes a readable report plus linked JSON under `workspace/ideation/session_*`.
-
-Novelty is deliberately reported as uncertainty—not as “nobody has done this.” The supplied corpus cannot establish that claim. Read the [Idea Lab contract](https://github.com/shoal-rat/digital-unconscious/blob/main/docs/IDEA_LAB.md) for input formats, scoring, privacy, and artifacts.
-
-## Models fit the work—not the other way around
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/shoal-rat/digital-unconscious/main/docs/assets/readme-provider-routing.svg" alt="Workload-first model routing">
-</p>
-
-The default policy is opinionated but replaceable:
-
-| Work | Preferred route | Why |
+| Crew member | How they come aboard | Default jobs |
 | --- | --- | --- |
-| Compression and briefing | DeepSeek V4 Flash, then local CLIs | Economical high-volume synthesis |
-| Paper evidence extraction | DeepSeek V4 Flash, then local CLIs | Bounded structured extraction |
-| Cross-source study design | Codex subscription | Strong linked reasoning with no API key |
-| Adversarial methods review | Claude Code subscription | Careful challenge with no API key |
-| Idea generation and adversarial review | Codex subscription | Strong structured reasoning with no API key |
-| Judging, drafting, and revision | Claude Code subscription | Careful long-form work with no API key |
-| Long-horizon analysis | GLM-5.1, then local CLIs | Optional agentic engineering path |
+| Claude Code | `claude`, signed in | diving (**Opus 5.5**); sorting the catch, the lighthouse and the seabed (**Sonnet 5.5**) |
+| Codex | `codex`, signed in | the lighthouse, so the keeper is not the diver |
+| DeepSeek · GLM · Kimi · OpenAI | `DEEPSEEK_API_KEY` · `ZAI_API_KEY` · `MOONSHOT_API_KEY` · `OPENAI_API_KEY` | optional |
+| Anthropic API | `ANTHROPIC_API_KEY` and `pip install -e ".[anthropic]"` | optional |
+| Ollama, or any OpenAI-compatible server | `[providers.ollama]` in the config | optional, never leaves your machine |
 
-Missing credentials are normal. The router skips unavailable providers and falls through to Codex, Claude Code, or another configured backend. Inspect the effective plan with:
+Each job names the hand it prefers and passes to the next if they falter. *Harbour → The crew* shows who takes each
+job. `dun doctor --ping` sends every crew member a tiny real errand. A full night on the sample sea (sorting, diving,
+the lighthouse) takes a little over a minute with Sonnet 5.5 and Opus 5.5.
 
-```bash
-du models
-```
+## Light on the battery
 
-Optional hosted providers use environment variables:
+The sea is meant to stay open on a laptop all day, so it moves the way the Mediterranean does at noon: barely.
 
-```bash
-export DEEPSEEK_API_KEY="..."   # DeepSeek V4 Flash / Pro
-export ZAI_API_KEY="..."        # GLM-5.1
-export OPENAI_API_KEY="..."     # GPT-5.6 family
-export ANTHROPIC_API_KEY="..."  # Claude API
-```
+- **The tide watcher glances; it does not stare.** On macOS it asks the window server directly instead of running
+  AppleScript for every sample (about 0.1 ms instead of 60–100 ms, and no processes spawned). It glances every 15
+  seconds while your attention moves, every 30 and then 60 while it rests on one thing, reads only the idle clock at
+  slack water, and stretches further on battery. Time is counted from the real clock, so a longer glance changes how
+  quickly a switch is noticed, never how much time is counted.
+- **The water moves only when you are looking.** Everything that moves shares one clock. It stops when the window is
+  hidden, minimised or behind another app; on battery the sea goes calm. Only the waterline is repainted, from
+  layers painted once.
+- **The window asks for news only when someone is there:** every 5 seconds while open, every 30 from the menu bar.
 
-See [Model routing](https://github.com/shoal-rat/digital-unconscious/blob/main/docs/MULTI_PROVIDER_BACKENDS.md) for modes, prefixes, and fallback behavior.
+Share of one CPU core on a MacBook (Apple M5, Retina), sample sea, 45 seconds per case:
 
-## Research pipeline
+| | first v3 build | now |
+| --- | --- | --- |
+| only the menu-bar mark (window closed) | 1.5% | **0.05%** |
+| window open behind other apps | 31.6% | **0.26%** |
+| window in front, the water moving | 30.6% | **5.5%** |
+| window in front, calm water (the default on battery) | — | **2.9%** |
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/shoal-rat/digital-unconscious/main/docs/assets/readme-research-pipeline.svg" alt="Six-stage research pipeline">
-</p>
+*Harbour → the water's motion* chooses calm on battery (the default), always moving, always calm or still water.
 
-Promote a specific question or let the app choose the strongest backlog item:
+## What stays in the harbour
 
-```bash
-du research --idea "How can sparse attention change long-running personal research agents?"
-du research --auto
-```
+Memory is one SQLite file in `~/.digital-unconscious/` (or `$DUN_HOME`). Only a dive crosses the water: the day's
+labels and timings go to the crew when it sorts and dives, and a fish's search lines go to OpenAlex when you dive for
+prior work. Claude Code and Codex need no API key, but inference still happens on Anthropic's or OpenAI's side; bring
+Ollama aboard to keep every dive at home. The full boundary is in [docs/PRIVACY.md](docs/PRIVACY.md).
 
-The pipeline searches open scholarly sources, checks feasibility, discovers datasets, creates analysis artifacts, drafts a dossier, and runs a review/revision loop. Final submission remains a human decision.
+## From the command line
 
-`--resume --run-id …` reloads completed artifacts instead of replaying their model or network work. Supplying a new `--data-file` preserves upstream discovery and rebuilds analysis plus downstream artifacts.
+The shore is the main way in; the harbour master's terminal works too.
 
-## Commands
-
-| Command | Purpose |
+| Command | |
 | --- | --- |
-| `du doctor` | Check zero-key local runtimes and optional providers |
-| `du daily [--log-file PATH]` | Run one observation-to-briefing cycle |
-| `du dashboard` | Open the local dashboard |
-| `du ideate --paper PATH [--data PATH]` | Build evidence-backed research study cards |
-| `du explore …` | Alias for `du ideate` |
-| `du models` | Explain per-agent routing and fallback |
-| `du usage` | Summarize recorded token and cost metadata |
-| `du research --idea "…"` | Start a six-stage research run |
-| `du research --auto` | Promote the best backlog idea |
-| `du learn` | Update the bounded personal idea model |
-| `du service start|stop|status` | Manage the background cycle |
-| `du config --focus "a,b"` | Narrow idea output to chosen fields |
+| `dun` / `dun app [--hidden]` | open the shore (watcher, menu-bar mark, nightly dive) |
+| `dun demo [--language zh]` | open the app on a borrowed sea |
+| `dun dream [--day D] [--redigest]` | dive into a day now and print what came up |
+| `dun jot "…"` | throw a thought into the sea in a bottle |
+| `dun feed FILE…` | let a paper, notes, a text log or an ActivityWatch export wash ashore |
+| `dun import-aw [--day D]` | bring in a day from a running ActivityWatch |
+| `dun today` · `dun threads` · `dun sparks` | read the shore, the currents and the shoal in the terminal |
+| `dun dive FISH_ID` | dive to the seabed for prior work |
+| `dun watch` | only the tide watcher, for headless machines |
+| `dun doctor [--ping]` | who is aboard, and what the watcher can see |
+| `dun config [set section.key value]` | read or change the harbour settings |
+| `dun forget --day D` · `--everything` | let the shark eat a day, or feed everything to the sharks |
+| `dun service install\|uninstall\|status` | put the watcher out to sea at every login |
 
-## A small configuration surface
+## Harbour settings
 
-The checked-in defaults live in [`config/pipeline.toml`](https://github.com/shoal-rat/digital-unconscious/blob/main/config/pipeline.toml). The useful knobs are intentionally few:
+Everything lives in `config.toml` in the harbour folder; the Harbour page edits the same file.
 
 ```toml
-[ai]
-mode = "auto"
-fallback = true
-compressor_model = "deepseek:deepseek-v4-flash"
-creative_model = "codex:default"
-judge_model = "claude_code:sonnet"
-evidence_model = "deepseek:deepseek-v4-flash"
-ideation_model = "codex:default"
-ideation_review_model = "claude_code:sonnet"
+[you]                    # the swimmer
+persona = "PhD student in health economics. I want empirical questions I can test with public data."
+focus = ["health economics", "behavioural economics"]     # your waters
+language = "auto"        # auto | en | zh
 
-[observation]
-source = "auto" # vision -> screenpipe -> file fallback
-blacklist_apps = ["password manager", "bank"]
+[sense]                  # the tide watcher
+interval_seconds = 15
+idle_seconds = 120       # slack water after this long
+quiet_apps = ["1Password", "Bitwarden", "Keychain Access"]  # fog
+private_apps = ["Messages", "WeChat", "Slack", "Mail"]       # time only
+retention_days = 90      # the tide washes driftlines away
+battery_saver = true     # glance less often on battery
 
-[idea]
-focus_fields = ["economics", "management"]
-include_threshold = 75
-max_ideas_per_cycle = 8
-auto_research_enabled = false
+[dream]                  # night diving
+time = "21:30"
+auto = true
+sparks = 3               # fish kept per dive
+candidates = 6           # fish caught before sorting
+critique = true          # the lighthouse
+
+[models]                 # the crew: "auto", or e.g. "claude:claude-opus-5-5", "codex", "deepseek:deepseek-v4-pro"
+dream = "auto"
+critique = "auto"
+
+[ui]
+theme = "system"         # system | light (morning) | dark (evening)
+motion = "auto"          # auto (calm on battery) | full | calm | off (still water)
 ```
 
-Provider prefixes are `codex:`, `claude_code:`, `deepseek:`, `glm:`, `openai:`, `anthropic:`, and `kimi:`.
-
-## Privacy, precisely
-
-“Local-first” here means storage, orchestration, retention, and the dashboard are local. It does **not** mean the selected language model runs on-device.
-
-- Activity artifacts live under `workspace/` and are ignored by Git.
-- Text summaries are sent to the selected model when a model-backed step runs.
-- Vision sends the captured image to the selected model service, including when invoked through a subscription CLI.
-- Temporary images used by Codex or Claude Code are isolated and deleted after each call.
-- The setup page never stores API keys; optional hosted keys come from environment variables.
-- An app blacklist can prevent capture from named applications.
-- Browser automation never approves payments, CAPTCHA, MFA, or terms on your behalf.
-- Idea Lab sends paper excerpts, but dataset inputs are reduced locally to schema and aggregate profile statistics; raw rows and example values stay local.
-
-Read the complete [security and data boundary](https://github.com/shoal-rat/digital-unconscious/blob/main/docs/SECURITY.md) before enabling passive vision.
-
-## Architecture
-
-The application keeps a stable `AIBackend.call(...)` contract while splitting implementation into four narrow pieces:
-
-```text
-backends/base.py    response contract and shared normalization
-backends/local.py   isolated Codex and Claude Code subscription runners
-backends/hosted.py  optional API adapters
-backends/router.py  availability, workload routing, and fallback
-backlog.py          bounded identity and retention shared by every surface
-ideation.py         source ledger, evidence graph, study cards, and ranking
-```
-
-The rest of the product remains provider-blind. See [Architecture](https://github.com/shoal-rat/digital-unconscious/blob/main/docs/ARCHITECTURE.md) and the [v2 reconstruction audit](https://github.com/shoal-rat/digital-unconscious/blob/main/docs/RECONSTRUCTION.md).
-
-## Test and build
+## For shipwrights
 
 ```bash
-python -m unittest discover -s tests -v
-python -m compileall -q src
-python -m build
+python -m pip install -e ".[dev,pdf]"
+QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
+python scripts/snapshots.py snapshots/ [--zh] [--dark]   # paint every page to PNG
+python scripts/readme_art.py                             # repaint the pictures in this README
 ```
 
-The core test suite does not require network access or provider credentials. Local Codex and Claude Code have separate smoke paths exposed through `du doctor` and the backend integration tests.
+The tests sail offline: a paper crew (an in-process fake model) answers every job. How the ecosystem maps onto the
+code is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); contribution notes are in [AGENTS.md](AGENTS.md).
 
-## Scope
+## What changed in v3
 
-Digital Unconscious is for one person, on one machine, with bounded local memory. Multi-user deployment, institutional login automation, payments, and autonomous publication are intentionally outside the product.
+v2 had grown into a research-automation framework: a six-stage pipeline that downloaded papers, generated analysis
+code and drafted manuscripts; browser automation with a credential vault; prompt self-evolution; seven provider
+adapters behind a large router; and a server-rendered dashboard. Most of it was shallow, and the idea it was meant to
+serve (noticing what you do not notice) produced generic ideas from a few hourly screenshots.
 
-MIT licensed. Contributions should preserve the small surface, honest privacy language, lazy optional dependencies, and human approval boundary described in [`AGENTS.md`](https://github.com/shoal-rat/digital-unconscious/blob/main/AGENTS.md).
+v3 starts again from that idea:
+
+- **A better tide watcher.** Continuous window and browser sampling with slack-water detection replaces hourly
+  screenshots; searches, bottles and washed-in papers count as intent.
+- **A sea with memory.** Currents and measured undercurrents give the dive something no single day contains.
+- **Honest fish.** Every idea names where it rose from; invented sources are thrown back by code.
+- **Catch wide, keep few.** A different crew member keeps the lighthouse; code applies the weights, your net and a
+  rule against duplicates.
+- **A native app** (PySide6) that lives in the menu bar, instead of a web page.
+- **Smaller and stricter.** A standard-library engine, one SQLite file, no browser automation, no stored credentials.
+- The command is now `dun` instead of `du`, which shadowed the Unix disk-usage tool. v2's data in `~/.du` is left
+  untouched.
+
+<p align="center"><sub>MIT licensed · made for slow mornings by the sea</sub></p>
