@@ -247,7 +247,8 @@ class MainWindow(QMainWindow):
         self.timer.start(5000)
         self._pace()  # started hidden in the menu bar: poll slowly until the window opens
         self.sidebar.set_status(self.state)
-        self.go("today")
+        # The first page is built when the window first opens: a sea that starts in the menu bar
+        # at login does not pay for a page nobody has looked at yet.
 
     # -- navigation ----------------------------------------------------------
 
@@ -323,6 +324,8 @@ class MainWindow(QMainWindow):
 
     def _finished(self, job: dict) -> None:
         kind, ref = job.get("kind"), job.get("ref", "")
+        if kind == "sort":  # quiet catch-up sorting: nothing to announce, the page just refreshes
+            return
         if job.get("state") == "done":
             if kind == "dream":
                 self.failures.pop(ref, None)
@@ -415,6 +418,9 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        if self.page is None:
+            name, params = self.route
+            self.go(name, replace=True, **params)
         self._pace()
         ticker().refresh()
 

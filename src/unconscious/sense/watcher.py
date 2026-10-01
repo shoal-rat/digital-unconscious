@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from unconscious.housekeeping import tidy
 from unconscious.sense.power import on_battery
 from unconscious.sense.sensors import Sample, SensorError, make_sensor
 from unconscious.sense.subjects import Subject, describe
@@ -226,8 +227,7 @@ class Watcher:
         if self._last_maintenance and now - self._last_maintenance < timedelta(hours=1):
             return
         self._last_maintenance = now
-        keep = self.app.settings.sense.retention_days
-        cutoff = (now.date() - timedelta(days=keep)).isoformat()
-        removed = self.app.store.forget_before(cutoff)
-        if removed:
-            log.info("expired %d traces older than %s", removed, cutoff)
+        try:
+            tidy(self.app, now.date())  # at most once a day, whoever gets there first
+        except Exception:  # housekeeping must never stop the watcher
+            log.exception("housekeeping failed")

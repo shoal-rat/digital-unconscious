@@ -241,5 +241,6 @@ def settings_view(app: App) -> dict[str, Any]:
         "memory": {
             "traces": app.store.trace_count(),
             "days": len(app.store.days_with_traces(limit=10000)),
+            "bytes": app.store.size(),
         },
     }

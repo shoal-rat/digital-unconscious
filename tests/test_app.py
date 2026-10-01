@@ -103,6 +103,7 @@ class InterfaceSmokeTests(TempApp):
         ctx = App(self.home)
         ctx._router = self.app._router
         window = MainWindow(ctx, Jobs(ctx), demo=True)
+        self.assertIsNone(window.page, "no page is built before the window first opens")
         window.resize(1280, 900)
         thread_id = ctx.store.threads()[0]["id"]
         spark_id = ctx.store.sparks()[0]["id"]
