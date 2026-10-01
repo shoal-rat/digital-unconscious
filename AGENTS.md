@@ -15,6 +15,8 @@ and dreams up grounded ideas. Keep it that way:
 - `src/unconscious/`: engine (standard library only) and `ui/` (PySide6).
 - `tests/`: `unittest`; run offline with the fake model. `tests/helpers.py` has `TempApp`.
 - `scripts/snapshots.py`: renders every page to PNG offscreen. Use it to check UI changes.
+- `scripts/build_mac.py`: builds `Digital Unconscious.app` and its `.dmg` (`pip install -e ".[mac]"`), around
+  `packaging/macos/launcher.py`.
 - `scripts/readme_art.py`: repaints the README pictures (`docs/assets/en`, `docs/assets/zh`, the sea loops).
   README.md (English) and README.zh-CN.md (Chinese) are kept in step; change both.
 
@@ -28,6 +30,9 @@ and dreams up grounded ideas. Keep it that way:
   never deleted except by the shark (`forget_day`, `forget_everything`). Anything that fades is decided in
   `housekeeping.tidy()` and must leave what a dive reads unchanged; a new table goes on one side or the other, and
   `tests/test_housekeeping.py` gets a line for it.
+- What a research errand may reach is decided only in `llm/research.py`: `SHELF` holds big platforms, never
+  personal hosting (`OFF_SHELF`), and the sandbox settings stay strict (no unsandboxed retries, no reads outside the
+  errand's folder). Full texts live in the errand's temporary folder and leave with it.
 - Every errand goes through `Router.call`, which applies the region guard and crew pauses. Nothing calls a
   provider's `complete` directly outside tests, and nothing about the network or a CLI is asked on the UI thread.
 - Prompts and schemas live only in `mind/prompts.py`. Schemas are strict (every property required, no extras),

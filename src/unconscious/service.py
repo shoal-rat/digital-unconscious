@@ -15,10 +15,10 @@ LABEL = "com.digital-unconscious.dun"
 
 
 def _command() -> list[str]:
-    command = [sys.executable, "-m", "unconscious", "app", "--hidden"]
-    if os.environ.get("DUN_HOME"):
-        command[3:3] = ["--home", os.environ["DUN_HOME"]]
-    return command
+    # Inside Digital Unconscious.app the executable is the app itself and takes dun's arguments.
+    start = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "unconscious"]
+    home = ["--home", os.environ["DUN_HOME"]] if os.environ.get("DUN_HOME") else []
+    return [*start, *home, "app", "--hidden"]
 
 
 def _mac_plist() -> Path:

@@ -198,6 +198,14 @@ Mono) are vendored, so nothing is fetched.
 
 ## Setting out
 
+**On a Mac.** Download `Digital-Unconscious-<version>.dmg` from the [latest release](https://github.com/shoal-rat/digital-unconscious/releases/latest), open it and drag
+**Digital Unconscious** into Applications. It is built for Apple Silicon and signed ad hoc rather than notarized, so the
+first time, right-click the app and choose **Open**. macOS then asks once for *Accessibility*, which the tide watcher
+needs to read window titles. The same commands work in a terminal through one link:
+`ln -s "/Applications/Digital Unconscious.app/Contents/MacOS/Digital Unconscious" ~/.local/bin/dun`.
+
+**From source, anywhere.**
+
 ```bash
 git clone https://github.com/shoal-rat/digital-unconscious.git
 cd digital-unconscious
@@ -231,6 +239,21 @@ No API key is needed. Sign in once to either subscription CLI and it joins the c
 Each job names the hand it prefers and passes to the next if they falter. *Harbour → The crew* shows who takes each
 job. `dun doctor --ping` sends every crew member a tiny real errand. A full night on the sample sea (sorting, diving,
 the lighthouse) takes a little over a minute with Sonnet 5.5 and Opus 5.5.
+
+**Looking things up.** With *Harbour → The crew → Let Claude look things up* (on by default), Claude may search the web
+while it dreams: to understand a concept, to check how two ideas connect, or to see how a topic lives in popular
+culture. At the seabed it reads the open-access full texts of what came up, not just the abstracts. Fish still cite only
+your day, and seabed citations still name only works that came up. Claude Code's permissions and macOS's sandbox keep
+the boundary:
+
+| | |
+| --- | --- |
+| searching | any query; it runs on Anthropic's side |
+| pages and downloads | big sites only: encyclopedias, Reddit, Zhihu, Douban, Bilibili, Weibo, Chinese and English news, film and book sites, scholarly indexes, preprint servers and publishers ([`llm/research.py`](src/unconscious/llm/research.py)); never personal hosting |
+| files | one folder per errand; nothing else on your Mac can be read; the folder is deleted when the errand ends |
+| spending | a ceiling per errand (about $6 for a dream, $4 at the seabed, as Claude Code counts it) and a 20-minute limit |
+
+A seabed dive that reads four full texts takes about a minute and a half.
 
 **When the crew can't sail, the dive waits instead of failing.**
 
@@ -357,6 +380,7 @@ dream = "auto"
 critique = "auto"
 region_guard = true      # keep Claude, Codex, Anthropic and OpenAI ashore while the connection is in…
 hold_regions = ["CN"]    # …these regions
+research = true          # let Claude search the web and read papers while it dreams and dives
 
 [ui]
 theme = "system"         # system | light (morning) | dark (evening)
@@ -370,6 +394,7 @@ python -m pip install -e ".[dev,pdf]"
 QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
 python scripts/snapshots.py snapshots/ [--zh] [--dark]   # paint every page to PNG
 python scripts/readme_art.py                             # repaint the pictures in this README
+python -m pip install -e ".[mac]" && python scripts/build_mac.py   # Digital Unconscious.app and its .dmg
 ```
 
 The tests sail offline: a paper crew (an in-process fake model) answers every job. How the ecosystem maps onto the

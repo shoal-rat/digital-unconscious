@@ -212,6 +212,7 @@ class Router:
                         max_tokens=request.max_tokens,
                         effort=request.effort,
                         payload=request.payload,
+                        workdir=request.workdir,  # only reshaping the answer: no new research
                     )
                     result = self._attempt(provider, repair, model)
                     if result.ok:

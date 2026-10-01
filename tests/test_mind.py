@@ -177,6 +177,47 @@ class DiveTests(TempApp):
         self.assertTrue(all(ref <= 6 for item in dive["report"]["known"] for ref in item["refs"]))
         self.assertEqual(self.app.store.spark(spark_id)["status"], "pursuing")
 
+    def test_a_research_dive_reads_full_texts_in_a_folder_that_leaves_with_it(self):
+        from unconscious import scholar
+
+        dream_id = self.app.store.save_dream(DAY, title="t", reflection="r", undercurrent="u?", payload={}, models={})
+        spark_id = self.app.store.add_spark(dream_id=dream_id, day=DAY, title="Decoys", mechanism="seed",
+                                            question="q?", search_terms=["decoy pricing"])
+        papers = [{"title": f"Paper {i}", "abstract": "A", "authors": [], "year": 2020, "venue": "J",
+                   "pdf": f"https://example.org/{i}.pdf" if i != 2 else ""} for i in range(1, 7)]
+
+        def fetch(url):
+            if url.endswith("3.pdf"):
+                return b"<html>paywall</html>"  # not a PDF: left out
+            if url.endswith("4.pdf"):
+                raise OSError("dead link")
+            return b"%PDF-1.7 " + url.encode()
+
+        seen = {}
+        call = self.app.router.call
+
+        def watch(request):
+            seen["request"] = request
+            seen["files"] = sorted(p.name for p in (request.workdir / "papers").iterdir()) if request.workdir else []
+            return call(request)
+
+        self.app.router.call = watch
+        self.app.update_settings({"models": {"research": True}})
+        run_dive(self.app, spark_id, search=lambda terms: papers, fetch=fetch)
+        request = seen["request"]
+        self.assertTrue(request.research)
+        self.assertEqual(seen["files"], ["01.pdf", "05.pdf", "06.pdf"][: scholar.PDF_LIMIT])
+        self.assertIn("FULL TEXTS IN ./papers", request.prompt)
+        self.assertIn("[5] papers/05.pdf", request.prompt)
+        self.assertFalse(request.workdir.exists(), "the folder and the papers in it are gone")
+        self.assertEqual(self.app.store.dives(spark_id)[0]["report"]["full_texts"], [1, 5, 6])
+
+        self.app.update_settings({"models": {"research": False}})
+        run_dive(self.app, spark_id, search=lambda terms: papers, fetch=lambda url: self.fail("no downloads"))
+        self.assertFalse(seen["request"].research)
+        self.assertIsNone(seen["request"].workdir)
+        self.assertNotIn("FULL TEXTS", seen["request"].prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

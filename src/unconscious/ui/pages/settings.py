@@ -336,9 +336,13 @@ class SettingsPage(Page):
         fallback = QCheckBox(t("settings.fallback"))
         fallback.setChecked(s["models"]["fallback"])
         self.add(fallback, 14)
+        research = QCheckBox(t("settings.research"))
+        research.setChecked(s["models"]["research"])
+        self.add(research, 6)
+        self.add(label(t("settings.researchHint"), "small", "muted"), 4)
         guard = QCheckBox(t("settings.regionGuard"))
         guard.setChecked(s["models"]["region_guard"])
-        self.add(guard, 6)
+        self.add(guard, 10)
         region = models.get("region") or {}
         country = region.get("country")
         if not country:
@@ -368,7 +372,7 @@ class SettingsPage(Page):
             self.add(label(f"{error['ts'][:16]} · {error['provider']} · {crew_message(error['error'])[:400]}", "small", "error", selectable=True), 6)
         self._save_row(lambda: self._save({"models": {
             **{role: combo.currentData() for role, combo in combos.items()}, "fallback": fallback.isChecked(),
-            "region_guard": guard.isChecked(),
+            "region_guard": guard.isChecked(), "research": research.isChecked(),
         }}))
 
     # -- memory --------------------------------------------------------------

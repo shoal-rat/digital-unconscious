@@ -82,6 +82,8 @@ class Models:
     # Claude, Codex, the Anthropic API and OpenAI stay ashore (see llm/region.py).
     region_guard: bool = True
     hold_regions: list[str] = field(default_factory=lambda: ["CN"])
+    # Let Claude search the web and read papers while it dreams and dives (llm/research.py).
+    research: bool = True
 
 
 @dataclass

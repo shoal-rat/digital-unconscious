@@ -135,6 +135,57 @@ class CliRunnerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("authenticate", result.error)
 
+    def test_claude_research_runs_inside_the_sandbox_in_the_errands_folder(self):
+        self.script("claude", (
+            "import sys, json, os\n"
+            "args = sys.argv[1:]\n"
+            "sys.stdin.read()\n"
+            "open(os.environ['ARGS_OUT'], 'w').write(json.dumps({'args': args, 'cwd': os.getcwd(),\n"
+            "    'papers': sorted(os.listdir('papers'))}))\n"
+            "print(json.dumps({'result': 'done', 'structured_output': {'answer': 'read'}}))\n"
+        ))
+        folder = Path(tempfile.mkdtemp())
+        (folder / "papers").mkdir()
+        (folder / "papers" / "01.pdf").write_bytes(b"%PDF-1.7")
+        record = self.bin / "args.json"
+        os.environ["ARGS_OUT"] = str(record)
+        try:
+            request = LLMRequest("dive", "sys", "hello", SCHEMA, research=True, workdir=folder)
+            self.assertTrue(ClaudeCodeCLI(timeout=30).complete(request, "claude-sonnet-5-5").ok)
+        finally:
+            os.environ.pop("ARGS_OUT")
+        seen = json.loads(record.read_text())
+        args = seen["args"]
+        self.assertEqual(Path(seen["cwd"]).resolve(), folder.resolve())
+        self.assertEqual(seen["papers"], ["01.pdf"])
+        self.assertIn("WebSearch", args[args.index("--tools") + 1])
+        self.assertEqual(args[args.index("--permission-prompts") + 1], "none", "nobody is there to ask at night")
+        settings = json.loads(args[args.index("--settings") + 1])
+        self.assertTrue(settings["sandbox"]["enabled"])
+        self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
+        self.assertTrue(settings["sandbox"]["network"]["strictAllowlist"])
+        self.assertTrue(settings["permissions"]["blockReadsOutsideWorkingDirectories"])
+        fetches = [rule for rule in settings["permissions"]["allow"] if rule.startswith("WebFetch")]
+        for host in ("arxiv.org", "reddit.com", "zhihu.com", "*.wikipedia.org", "douban.com"):
+            self.assertIn(f"WebFetch(domain:{host})", fetches)
+        from unconscious.llm.research import SHELF, off_shelf
+
+        self.assertFalse([host for host in SHELF if off_shelf(host)], "no personal hosting on the shelf")
+        self.assertFalse([d for d in settings["sandbox"]["network"]["allowedDomains"] if off_shelf(d.lstrip("*."))])
+        self.assertNotIn("WebFetch", settings["permissions"]["allow"], "never every page on the web")
+        self.assertTrue(all("domain:" in rule for rule in fetches))
+
+    def test_without_research_claude_has_no_tools(self):
+        self.script("claude", (
+            "import sys, json\n"
+            "args = sys.argv[1:]\n"
+            "assert args[args.index('--tools') + 1] == ''\n"
+            "assert '--settings' not in args\n"
+            "sys.stdin.read()\n"
+            "print(json.dumps({'result': 'plain', 'structured_output': {'answer': 'x'}}))\n"
+        ))
+        self.assertTrue(ClaudeCodeCLI(timeout=30).complete(LLMRequest("dream", "sys", "hi", SCHEMA), None).ok)
+
     def test_codex_runner_reads_the_last_message_file(self):
         self.script("codex", (
             "import sys\n"

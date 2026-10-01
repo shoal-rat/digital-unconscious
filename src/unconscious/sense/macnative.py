@@ -102,6 +102,28 @@ class _Frameworks:
         return value.value
 
 
+def ask_for_accessibility() -> bool:
+    """Show macOS's own "allow Accessibility" prompt if this app may not read window titles yet.
+    Returns whether it already may. Only the bundled app asks: from a terminal, the prompt would
+    name the terminal instead."""
+    try:
+        cf, ax = _load("CoreFoundation"), _load("ApplicationServices")
+        ax.AXIsProcessTrusted.restype = ctypes.c_bool
+        if ax.AXIsProcessTrusted():
+            return True
+        prompt = c_void_p.in_dll(ax, "kAXTrustedCheckOptionPrompt").value
+        true = c_void_p.in_dll(cf, "kCFBooleanTrue").value
+        cf.CFDictionaryCreate.restype = c_void_p
+        cf.CFDictionaryCreate.argtypes = [c_void_p, ctypes.POINTER(c_void_p), ctypes.POINTER(c_void_p), c_long, c_void_p, c_void_p]
+        keys, values = (c_void_p * 1)(prompt), (c_void_p * 1)(true)
+        options = cf.CFDictionaryCreate(None, keys, values, 1, None, None)
+        ax.AXIsProcessTrustedWithOptions.restype = ctypes.c_bool
+        ax.AXIsProcessTrustedWithOptions.argtypes = [c_void_p]
+        return bool(ax.AXIsProcessTrustedWithOptions(options))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 class NativeMacSensor:
     """Same contract as MacSensor, a few hundred times cheaper per glance."""
 

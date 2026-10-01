@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 
 
@@ -16,6 +17,10 @@ class LLMRequest:
     schema: dict[str, Any] | None = None
     max_tokens: int = 4000
     effort: str | None = None  # low | medium | high
+    # May the crew look things up (web, papers) for this errand? Providers without tools ignore it.
+    research: bool = False
+    # The folder the errand works in (e.g. with downloaded papers); otherwise an empty temporary one.
+    workdir: Path | None = None
     # Structured copy of the input. Real providers ignore it; the offline
     # provider uses it to answer deterministically in tests and demos.
     payload: dict[str, Any] = field(default_factory=dict)
