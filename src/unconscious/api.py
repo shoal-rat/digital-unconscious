@@ -103,7 +103,7 @@ def state(app: App) -> dict[str, Any]:
         "counts": {
             "threads": len([t for t in app.store.threads() if t["state"] not in {"merged"}]),
             "new_sparks": len(app.store.sparks(status="new")),
-            "dreams": len(app.store.dreams(limit=1000)),
+            "dreams": app.store.dive_count(),
         },
     }
 
@@ -169,18 +169,23 @@ def spark_card(app: App, spark: dict[str, Any]) -> dict[str, Any]:
     return {**spark, "threads": _thread_refs(app, spark.get("thread_ids") or [])}
 
 
-def dream_view(app: App, day: str) -> dict[str, Any] | None:
-    dream = app.store.dream(day)
-    if not dream:
-        return None
+def _dive(app: App, dream: dict[str, Any]) -> dict[str, Any]:
     sparks = [spark_card(app, s) for s in app.store.sparks(dream_id=dream["id"])]
     sparks.sort(key=lambda s: -s["score"])
-    return {**dream, "number": app.store.dream_number(day), "sparks": sparks}
+    return {**dream, "number": app.store.dive_number(dream["id"]), "sparks": sparks}
+
+
+def dream_view(app: App, day: str) -> dict[str, Any] | None:
+    """The day's latest dive, and the earlier dives of the same day (latest first), each with its fish."""
+    dives = app.store.day_dives(day)
+    if not dives:
+        return None
+    return {**_dive(app, dives[0]), "earlier": [_dive(app, d) for d in dives[1:]]}
 
 
 def dreams_list(app: App) -> list[dict[str, Any]]:
     return [
-        {k: d[k] for k in ("id", "day", "title", "undercurrent", "spark_count", "created_at")}
+        {k: d[k] for k in ("id", "day", "title", "undercurrent", "spark_count", "dives", "created_at")}
         for d in app.store.dreams(limit=365)
     ]
 
@@ -193,10 +198,14 @@ def spark_view(app: App, spark_id: int) -> dict[str, Any] | None:
     spark = app.store.spark(spark_id)
     if not spark:
         return None
-    dream = app.store.dream(spark["day"])
+    dream = app.store.dream_by_id(spark["dream_id"]) if spark.get("dream_id") else None
+    dream = dream or app.store.dream(spark["day"])
+    latest = app.store.dream(spark["day"])
     return {
         **spark_card(app, spark),
-        "dream": {"day": dream["day"], "title": dream["title"]} if dream else None,
+        # the dive this fish came from, which may be an earlier dive of its day
+        "dream": {"id": dream["id"], "day": dream["day"], "title": dream["title"],
+                  "earlier": bool(latest and latest["id"] != dream["id"])} if dream else None,
         "dives": app.store.dives(spark_id),
     }
 

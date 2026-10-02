@@ -65,13 +65,22 @@ class LayoutTests(TempApp):
     def window(self, language: str):
         from unconscious.app import App
         from unconscious.jobs import Jobs
+        from unconscious.store import today
         from unconscious.ui.i18n import set_language
+        from unconscious.ui.widgets import UNFOLDED
         from unconscious.ui.window import MainWindow
 
         seed_demo(self.home, language, reset=False)
         lengthen(self.home / "memory.db", language)
         ctx = App(self.home)
         ctx._router = self.app._router
+        first = ctx.store.dream(today())  # dive the day a second time: the first folds away on its shore, opened
+        fish = [{k: s[k] for k in ("title", "mechanism", "question", "insight", "evidence", "score")}
+                for s in ctx.store.sparks(dream_id=first["id"])[:2]]
+        ctx.store.save_dream(today(), title=first["title"] + " (again)", reflection=first["reflection"],
+                             undercurrent=first["undercurrent"], payload=first["payload"], models=first["models"], sparks=fish)
+        UNFOLDED.add(f"dive:{first['id']}")
+        self.addCleanup(UNFOLDED.discard, f"dive:{first['id']}")
         set_language(language)
         window = MainWindow(ctx, Jobs(ctx), demo=True)
         self.addCleanup(window.close)
@@ -134,6 +143,23 @@ class LayoutTests(TempApp):
 
     def test_nothing_is_cut_off_in_chinese(self):
         self.check_every_page("zh")
+
+    def test_a_fish_page_leads_back_to_the_dive_it_came_from(self):
+        from unconscious.store import today
+        from unconscious.ui.widgets import UNFOLDED, TitleLabel
+
+        ctx, window = self.window("en")
+        earlier = ctx.store.day_dives(today())[1]
+        fish = ctx.store.sparks(dream_id=earlier["id"])[0]["id"]
+        UNFOLDED.discard(f"dive:{earlier['id']}")
+        window.show()
+        window.go("spark", id=fish)
+        self.settle()
+        link = next(w for w in window.page.widget().findChildren(TitleLabel) if w.text() == earlier["title"])
+        link.clicked.emit()
+        self.settle()
+        self.assertEqual((window.route[0], window.page.day), ("today", today()))
+        self.assertIn(f"dive:{earlier['id']}", UNFOLDED, "the earlier dive is opened")
 
     def test_capped_text_is_measured_at_its_own_width(self):
         """The bug behind a dream cut off halfway: a box measured a capped title at the full column

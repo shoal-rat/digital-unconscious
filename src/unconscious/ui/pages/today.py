@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QLineEdit, QWidget
 
 from unconscious import api
+from unconscious.jobs import dream_moment
 from unconscious.mind.dream import STEPS as DREAM_STEPS
 from unconscious.store import today
 from unconscious.ui.charts import Pebbles, Ribbon, human, shore_threads
@@ -26,6 +27,7 @@ from unconscious.ui.widgets import (
     Steps,
     Swatch,
     TitleLabel,
+    Unfold,
     button,
     capped,
     eyebrow,
@@ -85,6 +87,10 @@ class TodayPage(Page):
             self.add(SectionHead(t("today.sparks"), len(dream["sparks"]), t("today.sparksNote")), 52)
             self.body.addSpacing(20)
             self.add(self.cards(dream["sparks"]))
+            if dream.get("earlier"):  # the day dived more than once: nothing of the earlier dives is lost
+                self.add(SectionHead(t("today.earlier"), len(dream["earlier"]), t("today.earlierNote")), 52)
+                for dive in dream["earlier"]:
+                    self.add(self._earlier_dive(dive), 12)
         elif job:
             self.add(self._steps_panel(job, standalone=True))
         elif not state.get("has_memory"):
@@ -106,7 +112,8 @@ class TodayPage(Page):
         b = panel.body
         stats = (dream.get("payload") or {}).get("stats") or {}
         models = dream.get("models") or {}
-        heading = t("today.tonight") if is_today else t("today.ofDay")
+        night = datetime.fromisoformat(dream["created_at"]).astimezone() >= dream_moment(self.app, dream["day"])
+        heading = t("today.ofDay") if not is_today else t("today.tonight") if night else t("today.todays")
         b.addWidget(label(f"{heading} · {t('today.dream', n=dream.get('number') or '')} · {short_day(dream['day'])}", "caption-l", "muted"))
         b.addSpacing(22)
         title = label(dream.get("title") or "", "display-xl")
@@ -149,7 +156,7 @@ class TodayPage(Page):
         facts.setLayout(flow)
         meta.addWidget(facts, 1, Qt.AlignmentFlag.AlignVCenter)
         if is_today and not job:
-            meta.addWidget(button(t("today.redream"), "", lambda: self.window.dream(self.day, redigest=True)), 0,
+            meta.addWidget(button(t("today.redream"), "", lambda: self.window.dream(self.day)), 0,
                            Qt.AlignmentFlag.AlignTop)
         b.addLayout(meta)
         failure = self.window.failures.get(dream["day"])
@@ -165,6 +172,26 @@ class TodayPage(Page):
             panel.set_shore(shore)
             panel.set_fish(len(dream.get("sparks") or []))
         return panel
+
+    def _earlier_dive(self, dive: dict) -> QWidget:
+        """An earlier dive of the day: its number, time and headline, and the rest folded away."""
+        box = vbox(spacing=8, margins=(0, 6, 0, 6))
+        when = datetime.fromisoformat(dive["created_at"]).astimezone().strftime("%H:%M")
+        box.addWidget(eyebrow(t("today.earlierAt", n=dive["number"], time=when), wrap=True))
+        box.addWidget(label(dive.get("title") or "", "display-s"))
+        inner = vbox(spacing=14)
+        if dive.get("reflection"):
+            reflection = para(dive["reflection"], "reading", "ink2", 160)
+            reflection.setMaximumWidth(660)
+            inner.addWidget(Fold(reflection, lines=6, key=f"reflection:{dive['id']}"))
+        if dive.get("undercurrent"):
+            inner.addLayout(capped(label(dive["undercurrent"], "quote-s", "ink2"), 760))
+        if dive.get("sparks"):
+            inner.addSpacing(6)
+            inner.addWidget(self.cards(dive["sparks"], compact=True))
+        box.addWidget(Unfold(wrap(inner), t("fold.dive"), t("fold.diveLess"), key=f"dive:{dive['id']}"))
+        box.addWidget(_hairline())
+        return wrap(box)
 
     def _steps_panel(self, job: dict, standalone: bool = False) -> QWidget:
         panel = NightPanel(padding=(48, 38, 48, 34))

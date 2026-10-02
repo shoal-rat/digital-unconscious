@@ -16,6 +16,7 @@ from unconscious.ui.pages.base import Page
 from unconscious.ui.pages.today import long_day
 from unconscious.ui.theme import THEME, font
 from unconscious.ui.widgets import (
+    UNFOLDED,
     Rule,
     SectionHead,
     Steps,
@@ -96,7 +97,7 @@ class SparkPage(Page):
         side = vbox(spacing=0)
         if spark.get("dream"):
             side.addWidget(self._side_title(t("spark.fromDream", day=long_day(spark["dream"]["day"]))))
-            link = button(spark["dream"]["title"], "link", lambda: self.window.go("today", day=spark["dream"]["day"]))
+            link = button(spark["dream"]["title"], "link", lambda: self._to_dive(spark["dream"]))
             link.setFont(font("serif"))
             side.addWidget(_wrapping(link, spark["dream"]["title"]))
             side.addSpacing(28)
@@ -148,6 +149,11 @@ class SparkPage(Page):
         columns.addLayout(main, 3)
         columns.addWidget(side_box, 1, Qt.AlignmentFlag.AlignTop)
         self.add(columns)
+
+    def _to_dive(self, dive: dict) -> None:
+        if dive.get("earlier"):  # the fish came from an earlier dive of its day: open it there
+            UNFOLDED.add(f"dive:{dive['id']}")
+        self.window.go("today", day=dive["day"])
 
     def _side_title(self, text: str) -> QWidget:
         box = vbox(Rule("ink"), eyebrow(text, wrap=True), spacing=10, margins=(0, 0, 0, 10))
@@ -294,5 +300,6 @@ def _wrapping(button_widget, text: str) -> QWidget:
     """QPushButton cannot wrap, so titles become clickable wrapped labels."""
 
     title = TitleLabel(text, "serif")
+    title.button = button_widget  # the button never joins a layout: without this it is gone, and so is the click
     title.clicked.connect(button_widget.click)
     return title

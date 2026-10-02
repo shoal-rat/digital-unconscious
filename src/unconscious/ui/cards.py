@@ -166,7 +166,7 @@ class SparkCard(QFrame):
             widget.setFont(font("caption-l"))
             return widget
 
-        if self.status == "new":
+        if self.status in {"new", "drifted"}:  # a fish that drifted out was never looked at: it can still be caught
             row.addWidget(small(button(t("spark.keep"), "line", lambda: self.feedback.emit(sid, "kept", ""))))
             row.addWidget(small(button(t("spark.pursue"), "ink", lambda: self.feedback.emit(sid, "pursuing", ""))))
             row.addStretch(1)

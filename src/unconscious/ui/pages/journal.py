@@ -44,7 +44,10 @@ class JournalPage(Page):
             if dream.get("undercurrent"):
                 text.addWidget(label(dream["undercurrent"], "quote-s", "ink2"))
             line.addLayout(text, 1)
-            line.addWidget(label(t("journal.sparks", n=dream["spark_count"]), "caption", "muted", wrap=False), 0, Qt.AlignmentFlag.AlignTop)
+            counts = t("journal.sparks", n=dream["spark_count"])
+            if (dream.get("dives") or 1) > 1:  # one entry a day; the earlier dives wait on its shore
+                counts += " · " + t("journal.dives", n=dream["dives"])
+            line.addWidget(label(counts, "caption", "muted", wrap=False), 0, Qt.AlignmentFlag.AlignTop)
             row.setLayout(line)
             row.clicked.connect(lambda day=dream["day"]: self.window.go("today", day=day))
             self.add(row)

@@ -45,7 +45,7 @@ The **driftline** (`traces`) is the only minute-by-minute record of a person. Af
 | tides | `thread_days`, `subject_threads` | how much time each current carried each day, and which subjects belong to it |
 | currents | `threads` | buoyed (`pinned`), becalmed (`muted`) or joined to another (`merged`) |
 | undercurrents | — | measured on demand from the tides, never stored |
-| dives | `dreams`, `digests` | one per night: headline, reflection, undercurrent, what was measured; a digest caches the sorting and leaves with its driftline |
+| dives | `dreams`, `digests` | headline, reflection, undercurrent, what was measured; a day may hold several, the latest leads and the earlier ones stay whole (their untouched fish turn `drifted`); a digest caches the sorting and leaves with its driftline |
 | fish | `sparks` | each keeps a copy of where it rose, so it outlives the driftline |
 | seabed | `dives` | the report and what came up |
 | your net | `events` | keep, swim after, throw back (with a reason) |

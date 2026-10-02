@@ -319,7 +319,11 @@ class MainWindow(QMainWindow):
         finished = [job_id for job_id in previous if job_id not in current]
         for job_id in finished:
             self._finished(self.app.store.job(job_id) or {"id": job_id, "state": "failed", "error": "", "kind": previous[job_id]["kind"], "ref": previous[job_id]["ref"]})
-        signature = (state.get("latest_dream"), state["counts"]["dreams"], state["counts"]["new_sparks"])
+        # the date too: past midnight the Shore turns to the new day instead of offering to re-dive the old one,
+        # but not while that day's dive is still out (it turns when the dive comes back)
+        held = self._signature[0] if self._signature and any(
+            j["kind"] == "dream" and j["ref"] == self._signature[0] for j in current.values()) else today()
+        signature = (held, state.get("latest_dream"), state["counts"]["dreams"], state["counts"]["new_sparks"])
         if finished or force or (self._signature is not None and signature != self._signature):
             self.refresh()
         elif current and self.page is not None:

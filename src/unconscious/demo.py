@@ -645,7 +645,7 @@ def _evidence(app, day: str, tags: list[str], thread_ids: dict[str, int]) -> lis
 def _write_dreams(app, today: date, thread_ids: dict[str, int], language: str, compute_signals) -> int:
     store = app.store
     count = 0
-    for dream in DREAMS[language]:
+    for dream in sorted(DREAMS[language], key=lambda d: -d["offset"]):  # oldest first: dive numbers follow the days
         day = (today - timedelta(days=dream["offset"])).isoformat()
         signals, _ = compute_signals(app, day, language)
         digest = store.digest(day)
@@ -670,6 +670,9 @@ def _write_dreams(app, today: date, thread_ids: dict[str, int], language: str, c
             },
             models={"digest": "demo", "dream": "sample", "critique": "sample"},
         )
+        when = datetime.fromisoformat(f"{day}T{app.settings.dream.time}:00").astimezone()
+        with store.tx() as db:  # each borrowed night dived at its dive time, whenever the sea is borrowed
+            db.execute("UPDATE dreams SET created_at=? WHERE id=?", (when.isoformat(timespec="seconds"), dream_id))
         count += 1
         for spark in dream["sparks"]:
             spark_id = store.add_spark(

@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS digests(
 
 CREATE TABLE IF NOT EXISTS dreams(
   id INTEGER PRIMARY KEY,
-  day TEXT NOT NULL UNIQUE,
+  day TEXT NOT NULL,
   created_at TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '',
   reflection TEXT NOT NULL DEFAULT '',
@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS dreams(
   payload TEXT NOT NULL DEFAULT '{}',
   models TEXT NOT NULL DEFAULT '{}'
 );
+CREATE INDEX IF NOT EXISTS dreams_day ON dreams(day);
 
 CREATE TABLE IF NOT EXISTS sparks(
   id INTEGER PRIMARY KEY,
@@ -170,7 +171,19 @@ JSON_FIELDS = {
     "scores", "report", "papers", "data", "result",
 }
 PALETTE_SIZE = 10
-SPARK_STATUSES = {"new", "kept", "pursuing", "dismissed", "done"}
+# "drifted": a fish nobody touched before a later dive of its day; it stays with its own dive
+SPARK_STATUSES = {"new", "kept", "pursuing", "dismissed", "done", "drifted"}
+DREAMS_TABLE = """
+CREATE TABLE dreams{suffix}(
+  id INTEGER PRIMARY KEY,
+  day TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  reflection TEXT NOT NULL DEFAULT '',
+  undercurrent TEXT NOT NULL DEFAULT '',
+  payload TEXT NOT NULL DEFAULT '{{}}',
+  models TEXT NOT NULL DEFAULT '{{}}'
+)"""
 THREAD_STATES = {"active", "pinned", "muted", "merged"}
 
 
@@ -215,11 +228,53 @@ class Store:
             columns = {row["name"] for row in db.execute("PRAGMA table_info(traces)")}
             if "visits" not in columns:  # schema 1: one row was always one visit
                 db.execute("ALTER TABLE traces ADD COLUMN visits INTEGER NOT NULL DEFAULT 1")
+        self._several_dives_a_day()
+        with self.tx() as db:
             db.execute(
                 "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (str(SCHEMA_VERSION),),
             )
+
+    def _several_dives_a_day(self) -> None:
+        """Schema 3: a day may hold more than one dive. Memories from before kept one dive per
+        day (dreams.day was UNIQUE, which SQLite can only drop by rebuilding the table). The
+        rebuild keeps every row and id, runs once, and is safe when the app, the tide watcher
+        and `dun` open the file at the same moment: the check is repeated under the write lock."""
+
+        def unique(db: sqlite3.Connection) -> bool:
+            row = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='dreams'").fetchone()
+            return bool(row and "UNIQUE" in (row[0] or "").upper())
+
+        with self.connect() as db:
+            if not unique(db):
+                return
+        with self._write_lock:
+            db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+            try:
+                db.execute("BEGIN IMMEDIATE")
+                if not unique(db):
+                    db.execute("ROLLBACK")
+                    return
+                columns = [r[1] for r in db.execute("PRAGMA table_info(dreams)")]
+                keep = [c for c in ("id", "day", "created_at", "title", "reflection", "undercurrent", "payload", "models")
+                        if c in columns]
+                db.execute(DREAMS_TABLE.format(suffix="_v3"))
+                db.execute(f"INSERT INTO dreams_v3({', '.join(keep)}) SELECT {', '.join(keep)} FROM dreams")
+                db.execute("DROP TABLE dreams")
+                db.execute("ALTER TABLE dreams_v3 RENAME TO dreams")
+                db.execute("CREATE INDEX IF NOT EXISTS dreams_day ON dreams(day)")
+                # days dived before this upgrade were sorted at the dive and never after: catching all their
+                # evenings up now would re-sort months of history at once. From yesterday on, they are caught up.
+                since = (datetime.now().astimezone().date() - timedelta(days=1)).isoformat()
+                db.execute("INSERT INTO kv(key, value) VALUES('stale_since', ?) ON CONFLICT(key) DO NOTHING", (_dump(since),))
+                db.execute("COMMIT")
+            except BaseException:
+                if db.in_transaction:
+                    db.execute("ROLLBACK")
+                raise
+            finally:
+                db.close()
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -318,6 +373,25 @@ class Store:
                 (since, before, limit),
             ).fetchall()
         return [r["day"] for r in rows]
+
+    def stale_digests(self, since: str, before: str, limit: int = 5) -> list[str]:
+        """Days in [since, before) sorted into currents before the rest of their driftline came in."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT g.day FROM digests g WHERE g.day>=? AND g.day<? "
+                "AND g.trace_count != (SELECT COUNT(*) FROM traces t WHERE t.day=g.day) "
+                "AND EXISTS (SELECT 1 FROM traces t WHERE t.day=g.day) ORDER BY g.day LIMIT ?",
+                (since, before, limit),
+            ).fetchall()
+        return [r["day"] for r in rows]
+
+    def notes_since(self, day: str, moment: str) -> int:
+        """Bottles, fed documents and notes of a day that came in after ``moment``."""
+        with self.connect() as db:
+            return db.execute(
+                "SELECT COUNT(*) FROM traces WHERE day=? AND kind IN ('jot','note','reading') AND started_at>?",
+                (day, moment),
+            ).fetchone()[0]
 
     def days_with_traces(self, limit: int = 60) -> list[str]:
         with self.connect() as db:
@@ -576,50 +650,84 @@ class Store:
         undercurrent: str,
         payload: dict[str, Any],
         models: dict[str, Any],
+        sparks: list[dict[str, Any]] | None = None,
     ) -> int:
-        """Store (or replace) a day's dream. Unreviewed sparks from an earlier
-        dream of the same day are discarded; sparks the user acted on survive."""
+        """Store a new dive of the day, with its fish, in one transaction. Nothing of an
+        earlier dive of the same day is lost: it keeps its text and its fish, and the fish
+        nobody touched drift out (status 'drifted') so the shoal's "new" holds the latest catch."""
+        stamp = now_iso()
         with self.tx() as db:
-            old = db.execute("SELECT id FROM dreams WHERE day=?", (day,)).fetchone()
-            if old:
-                db.execute("DELETE FROM sparks WHERE dream_id=? AND status='new'", (old["id"],))
-                db.execute(
-                    "UPDATE dreams SET created_at=?, title=?, reflection=?, undercurrent=?, payload=?, models=? "
-                    "WHERE id=?",
-                    (now_iso(), title, reflection, undercurrent, _dump(payload), _dump(models), old["id"]),
-                )
-                return int(old["id"])
+            db.execute(
+                "UPDATE sparks SET status='drifted', updated_at=? WHERE status='new' "
+                "AND dream_id IN (SELECT id FROM dreams WHERE day=?)",
+                (stamp, day),
+            )
             cur = db.execute(
                 "INSERT INTO dreams(day, created_at, title, reflection, undercurrent, payload, models) "
                 "VALUES(?,?,?,?,?,?,?)",
-                (day, now_iso(), title, reflection, undercurrent, _dump(payload), _dump(models)),
+                (day, stamp, title, reflection, undercurrent, _dump(payload), _dump(models)),
             )
-            return int(cur.lastrowid)
+            dream_id = int(cur.lastrowid)
+            for fields in sparks or []:
+                self._insert_spark(db, {**fields, "dream_id": dream_id, "day": day})
+            return dream_id
 
     def dream(self, day: str) -> dict[str, Any] | None:
+        """The day's latest dive."""
         with self.connect() as db:
-            return _row(db.execute("SELECT * FROM dreams WHERE day=?", (day,)).fetchone())
+            return _row(db.execute("SELECT * FROM dreams WHERE day=? ORDER BY id DESC LIMIT 1", (day,)).fetchone())
+
+    def dream_by_id(self, dream_id: int) -> dict[str, Any] | None:
+        with self.connect() as db:
+            return _row(db.execute("SELECT * FROM dreams WHERE id=?", (dream_id,)).fetchone())
+
+    def day_dives(self, day: str) -> list[dict[str, Any]]:
+        """Every dive of a day, latest first."""
+        with self.connect() as db:
+            return _rows(db.execute("SELECT * FROM dreams WHERE day=? ORDER BY id DESC", (day,)).fetchall())
 
     def latest_dream(self) -> dict[str, Any] | None:
         with self.connect() as db:
-            return _row(db.execute("SELECT * FROM dreams ORDER BY day DESC LIMIT 1").fetchone())
+            return _row(db.execute("SELECT * FROM dreams ORDER BY day DESC, id DESC LIMIT 1").fetchone())
 
     def dreams(self, limit: int = 60) -> list[dict[str, Any]]:
+        """The logbook: one entry per day, led by its latest dive, with how many dives the day
+        held and its fish (all of them but those that drifted out)."""
         with self.connect() as db:
             rows = db.execute(
-                "SELECT d.*, (SELECT COUNT(*) FROM sparks s WHERE s.dream_id=d.id) AS spark_count "
-                "FROM dreams d ORDER BY day DESC LIMIT ?",
+                "SELECT d.*, "
+                "(SELECT COUNT(*) FROM dreams e WHERE e.day=d.day) AS dives, "
+                "(SELECT COUNT(*) FROM sparks s WHERE s.status!='drifted' "
+                " AND s.dream_id IN (SELECT id FROM dreams e WHERE e.day=d.day)) AS spark_count "
+                "FROM dreams d WHERE d.id=(SELECT MAX(e.id) FROM dreams e WHERE e.day=d.day) "
+                "ORDER BY d.day DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return _rows(rows)
 
-    def dream_number(self, day: str) -> int:
+    def dive_count(self) -> int:
         with self.connect() as db:
-            return db.execute("SELECT COUNT(*) FROM dreams WHERE day<=?", (day,)).fetchone()[0]
+            return db.execute("SELECT COUNT(*) FROM dreams").fetchone()[0]
+
+    def dream_number(self, day: str) -> int:
+        """'Dive № n' of the day's latest dive."""
+        latest = self.dream(day)
+        return self.dive_number(latest["id"]) if latest else 0
+
+    def dive_number(self, dream_id: int) -> int:
+        """Dives are numbered in the order they were made, so a number never moves."""
+        with self.connect() as db:
+            return db.execute("SELECT COUNT(*) FROM dreams WHERE id<=?", (dream_id,)).fetchone()[0]
 
     # -------------------------------------------------------------- sparks
 
     def add_spark(self, **fields: Any) -> int:
+        with self.tx() as db:
+            return self._insert_spark(db, fields)
+
+    @staticmethod
+    def _insert_spark(db: sqlite3.Connection, fields: dict[str, Any]) -> int:
+        fields = dict(fields)
         stamp = now_iso()
         fields.setdefault("created_at", stamp)
         fields.setdefault("updated_at", stamp)
@@ -628,9 +736,8 @@ class Store:
                 fields[key] = _dump(fields[key])
         columns = ", ".join(fields)
         marks = ", ".join("?" for _ in fields)
-        with self.tx() as db:
-            cur = db.execute(f"INSERT INTO sparks({columns}) VALUES({marks})", tuple(fields.values()))
-            return int(cur.lastrowid)
+        cur = db.execute(f"INSERT INTO sparks({columns}) VALUES({marks})", tuple(fields.values()))
+        return int(cur.lastrowid)
 
     def spark(self, spark_id: int) -> dict[str, Any] | None:
         with self.connect() as db:
@@ -674,6 +781,14 @@ class Store:
         if status not in SPARK_STATUSES:
             raise ValueError(f"unknown spark status {status!r}")
         with self.tx() as db:
+            if status == "new":  # undone: back to new only in the day's latest dive, else it has drifted out
+                row = db.execute(
+                    "SELECT s.dream_id, (SELECT MAX(e.id) FROM dreams e WHERE e.day=d.day) AS latest "
+                    "FROM sparks s JOIN dreams d ON d.id=s.dream_id WHERE s.id=?",
+                    (spark_id,),
+                ).fetchone()
+                if row and row["latest"] != row["dream_id"]:
+                    status = "drifted"
             db.execute(
                 "UPDATE sparks SET status=?, reason=?, updated_at=? WHERE id=?",
                 (status, reason, now_iso(), spark_id),

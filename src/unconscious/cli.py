@@ -458,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("threads", help="the currents and tonight's undercurrents").set_defaults(func=cmd_threads)
 
     sparks = sub.add_parser("sparks", help="the shoal: every fish the dives kept")
-    sparks.add_argument("--status", choices=["new", "kept", "pursuing", "dismissed", "done"])
+    sparks.add_argument("--status", choices=["new", "kept", "pursuing", "dismissed", "done", "drifted"])
     sparks.add_argument("--limit", type=int, default=30)
     sparks.set_defaults(func=cmd_sparks)
 

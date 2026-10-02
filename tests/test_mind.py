@@ -37,6 +37,12 @@ class DigestTests(TempApp):
         self.assertEqual(names, {"SaaS pricing psychology", "Bike lanes"})
         self.assertEqual(len(self.app.store.subject_threads(DAY)), 2)
 
+    def test_a_day_with_nothing_to_sort_is_sorted_once(self):
+        self.trace(DAY, "a glance", seconds=5)
+        self.assertEqual(digest_day(self.app, DAY).topics, [])
+        self.assertEqual(self.app.store.digest(DAY)["trace_count"], 1)
+        self.assertEqual(self.app.store.undigested_days("2026-01-01", "2027-01-01"), [], "not queued every minute")
+
     def test_digest_is_cached_until_new_traces_arrive(self):
         self.trace(DAY, "Decoy pricing", seconds=900)
         first = digest_day(self.app, DAY)
@@ -111,6 +117,29 @@ class DreamTests(TempApp):
         self.assertEqual(len(sparks), len(result["sparks"]))
         self.assertTrue(all(s["evidence"] or s["thread_ids"] for s in sparks))
         self.assertTrue(all(0 < s["score"] <= 100 for s in sparks))
+
+    def test_a_second_dive_brings_back_none_of_the_days_fish(self):
+        from unconscious import api
+
+        self.seed_day()
+        first = run_dream(self.app, DAY)
+        kept = first["sparks"][0]
+        self.app.store.set_spark_status(kept, "kept")
+        self.trace(DAY, "Menu engineering decoy dish", seconds=2400, at="15:00")
+        try:
+            second = run_dream(self.app, DAY)
+        except DreamError as exc:  # the offline crew may have nothing new: that is the point
+            self.assertIn("repeats a recent spark", str(exc))
+            return
+        before = {s["title"] for s in self.app.store.sparks(dream_id=first["dream_id"])}
+        after = {s["title"] for s in self.app.store.sparks(dream_id=second["dream_id"])}
+        self.assertFalse(before & after, "nothing the first dive caught comes back")
+        view = api.dream_view(self.app, DAY)
+        self.assertEqual((view["id"], [d["id"] for d in view["earlier"]]), (second["dream_id"], [first["dream_id"]]))
+        link = api.spark_view(self.app, kept)["dream"]
+        self.assertEqual((link["id"], link["earlier"]), (first["dream_id"], True), "a fish links to its own dive")
+        self.assertEqual(self.app.store.spark(kept)["status"], "kept")
+        self.assertEqual({s["status"] for s in self.app.store.sparks(dream_id=first["dream_id"])} - {"kept"}, {"drifted"})
 
     def test_empty_day_refuses_to_dream(self):
         with self.assertRaises(DreamError):

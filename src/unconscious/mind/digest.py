@@ -117,6 +117,8 @@ def digest_day(app: App, day: str, *, force: bool = False) -> DayDigest:
     by_ref = {s["ref"]: s for s in subjects}
     trace_count = app.store.trace_count(day)
     if not subjects:
+        if trace_count and (app.store.digest(day) or {}).get("trace_count") != trace_count:
+            app.store.save_digest(day, {"topics": []}, trace_count, "")  # sorted: nothing in it to sort
         return DayDigest(day, [], [], cached=True)
 
     existing = app.store.digest(day)

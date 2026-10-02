@@ -311,6 +311,30 @@ class FoldList(QWidget):
         self._apply()
 
 
+class Unfold(QWidget):
+    """Something kept folded away under a translucent pill, opened in place (an earlier dive of the day)."""
+
+    def __init__(self, body: QWidget, more: str, less: str, key: str | None = None):
+        super().__init__()
+        self.body, self.more, self.less, self.key = body, more, less, key
+        self.toggle = button("", "fold", self._toggle)
+        self.toggle.setFont(font("caption-l"))
+        box = vbox(hbox(self.toggle, "stretch"), body, spacing=14)
+        self.setLayout(box)
+        self.open = bool(key and key in UNFOLDED)
+        self._apply()
+
+    def _apply(self) -> None:
+        self.body.setVisible(self.open)
+        self.toggle.setText(self.less + "  ↑" if self.open else self.more + "  ↓")
+
+    def _toggle(self) -> None:
+        self.open = not self.open
+        if self.key:
+            (UNFOLDED.add if self.open else UNFOLDED.discard)(self.key)
+        self._apply()
+
+
 class ElidedLabel(QLabel):
     """One line that ends in an ellipsis at whatever width it gets, with the whole text in a
     tooltip: never wider than its place, never silently cut."""

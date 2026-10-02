@@ -85,11 +85,32 @@ def dive_job(app: App, spark_id: int) -> Work:
     return lambda progress: run_dive(app, spark_id, progress)
 
 
+GROWN_SECONDS = 30 * 60  # this much more attention since a day's last dive is worth another dive
+
+
+def dream_moment(app: App, day: str) -> datetime:
+    hour, minute = (int(x) for x in app.settings.dream.time.split(":"))
+    return datetime.fromisoformat(f"{day}T{hour:02d}:{minute:02d}:00").astimezone()
+
+
+def grown_since_dive(app: App, day: str, dive: dict[str, Any]) -> bool:
+    """Has the day grown enough since its last dive to dive again: half an hour more on the
+    driftline, or a bottle, a note or a fed document that came in after the dive read it.
+    Both sides are the whole driftline (dives before 3.2 only kept what their sorting counted)."""
+    stats = (dive.get("payload") or {}).get("stats") or {}
+    dived = stats.get("day_seconds", stats.get("seconds")) or 0
+    if app.store.day_seconds(day) - dived >= GROWN_SECONDS:
+        return True
+    return app.store.notes_since(day, stats.get("read_at") or dive["created_at"]) > 0
+
+
 def due_dreams(app: App, now: datetime | None = None) -> list[str]:
     """Days that should be dreamt automatically right now.
 
     Today, once the configured dream time has passed; and yesterday, if the
-    machine was asleep or off at dream time. Each day is attempted at most twice.
+    machine was asleep or off at dream time. A day already dived by hand before
+    its dream time is dived again only if it has grown a good deal since; a dive
+    at or after dream time is the night's. Each day is attempted at most twice.
     """
     settings = app.settings
     if not settings.dream.auto:
@@ -104,7 +125,14 @@ def due_dreams(app: App, now: datetime | None = None) -> list[str]:
     candidates.append((today - timedelta(days=1)).isoformat())
     due = []
     for day in candidates:
-        if attempts.get(day, 0) >= 2 or app.store.dream(day):
+        if attempts.get(day, 0) >= 2:
+            continue
+        dive = app.store.dream(day)
+        if dive is not None:
+            if datetime.fromisoformat(dive["created_at"]).astimezone() >= dream_moment(app, day):
+                continue  # the night already dived
+            if grown_since_dive(app, day, dive):
+                due.append(day)
             continue
         if app.store.day_seconds(day) < 15 * 60 and app.store.trace_count(day) < 3:
             continue  # not enough to dream about
@@ -124,24 +152,47 @@ def sort_job(app: App, day: str) -> Work:
 
     def work(progress: Callable[[str], None]) -> dict[str, Any]:
         progress("digest")
-        return {"topics": len(digest_day(app, day).topics)}
+        topics = len(digest_day(app, day).topics)
+        if day == date.today().isoformat():  # tonight's sorting is done; the rest waits for tomorrow's catch-up
+            done = {d: v for d, v in (app.store.get("night_sorted") or {}).items() if d >= day}
+            app.store.put("night_sorted", {**done, day: datetime.now().astimezone().isoformat(timespec="seconds")})
+        return {"topics": topics}
 
     return work
 
 
 def due_sorting(app: App, now: datetime | None = None) -> list[str]:
-    """Past days the watcher saw but no dive sorted into currents (the machine slept
-    through the night, say). Sorting is what writes a day into each current's history,
-    and the undercurrents are measured from that history, so a day must be sorted
-    before its raw driftlines wash away. Oldest first, one at a time, twice at most."""
+    """Days whose driftline is not (or no longer fully) sorted into currents. Sorting is what
+    writes a day into each current's history, and the undercurrents are measured from that
+    history, so a day must be sorted before its raw driftlines wash away. Oldest first, one at
+    a time, twice at most:
+
+    - past days the watcher saw but no dive sorted (the machine slept through the night);
+    - days sorted before the rest of them came in: the evening after a day's dive;
+    - today, once after dream time, when it was dived by hand earlier and grew too little to
+      dive again (the rest of the evening is caught up tomorrow).
+
+    Yesterday with no dive at all belongs to the dream catch-up, and so does any day that is
+    due a dive."""
     settings = app.settings
     if not settings.dream.auto:
         return []
-    today = (now or datetime.now().astimezone()).date()
+    now = now or datetime.now().astimezone()
+    today = now.date()
     since = (today - timedelta(days=max(int(settings.sense.retention_days), 2))).isoformat()
-    yesterday = (today - timedelta(days=1)).isoformat()  # yesterday is the dream catch-up's
+    yesterday = (today - timedelta(days=1)).isoformat()
     attempts: dict[str, int] = app.store.get("auto_sort_attempts", {}) or {}
-    return [day for day in app.store.undigested_days(since, yesterday) if attempts.get(day, 0) < 2][:1]
+    diving = set(due_dreams(app, now))
+    # an upgraded memory: days dived by 3.1 all look stale (their evenings were never sorted); leave them be
+    stale_from = max(since, app.store.get("stale_since") or since)
+    days = set(app.store.undigested_days(since, yesterday)) | set(app.store.stale_digests(stale_from, today.isoformat()))
+    tonight, latest = today.isoformat(), app.store.dream(today.isoformat())
+    if tonight not in diving and latest and now >= dream_moment(app, tonight):
+        by_hand = datetime.fromisoformat(latest["created_at"]).astimezone() < dream_moment(app, tonight)
+        if by_hand and app.store.stale_digests(tonight, (today + timedelta(days=1)).isoformat()):
+            if (app.store.get("night_sorted") or {}).get(tonight) is None:
+                days.add(tonight)
+    return [day for day in sorted(days) if day not in diving and attempts.get(day, 0) < 2][:1]
 
 
 def crew_ready(app: App, role: str = "digest") -> bool:
@@ -166,7 +217,7 @@ def scheduler_tick(app: App, jobs: Jobs) -> None:
         # A crew that cannot sail (nobody signed in, signed out, limited, offline, or the connection
         # in a held region) does not spend the day's attempts: the dive waits for the crew.
         if due and crew_ready(app, "digest") and crew_ready(app, "dream"):
-            for day in due:
+            for day in sorted(due):  # oldest first, so dive numbers follow the days
                 jobs.submit("dream", day, counted(app, day, "auto_dream_attempts", dream_job(app, day)))
                 log.info("auto-dream queued for %s", day)
         if not app.store.active_jobs():
