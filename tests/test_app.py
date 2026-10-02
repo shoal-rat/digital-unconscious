@@ -34,6 +34,56 @@ class SchedulerTests(TempApp):
         self.assertEqual(due_dreams(self.app, morning), [])
 
 
+class SecondDiveTests(TempApp):
+    """A day dived by hand in the afternoon: the night dives again only if the day grew."""
+
+    DAY = "2026-09-30"
+
+    def setUp(self):
+        super().setUp()
+        self.app.update_settings({"dream": {"time": "21:30", "auto": True}})
+        self.trace(self.DAY, "morning work", seconds=3 * 3600, at="09:00")
+        self.app.store.save_dream(self.DAY, title="afternoon", reflection="", undercurrent="", models={},
+                                  payload={"stats": {"seconds": 3 * 3600}})
+        with self.app.store.tx() as db:
+            db.execute("UPDATE dreams SET created_at=?", (f"{self.DAY}T15:00:00{self._offset()}",))
+        self.night = datetime(2026, 9, 30, 21, 31).astimezone()
+
+    def _offset(self) -> str:
+        return datetime(2026, 9, 30, 15, 0).astimezone().isoformat()[19:]
+
+    def test_a_quiet_evening_is_not_dived_again(self):
+        self.trace(self.DAY, "a little more", seconds=10 * 60, at="16:00")
+        self.assertEqual(due_dreams(self.app, self.night), [])
+
+    def test_a_long_evening_is_dived_again(self):
+        self.trace(self.DAY, "the evening's new topic", seconds=45 * 60, at="17:00")
+        self.assertEqual(due_dreams(self.app, self.night), [self.DAY])
+
+    def test_a_bottle_after_the_dive_is_dived_again(self):
+        self.trace(self.DAY, "a thought", seconds=0, at="18:00", kind="jot", category="jot")
+        self.assertEqual(due_dreams(self.app, self.night), [self.DAY])
+
+    def test_time_the_dive_read_but_did_not_sort_is_not_growth(self):
+        self.trace(self.DAY, "Finder", seconds=40 * 60, at="11:00", category="system")
+        with self.app.store.tx() as db:  # the dive read the whole driftline, Finder included, and sorted less
+            db.execute("UPDATE dreams SET payload=?", ('{"stats": {"seconds": 10800, "day_seconds": 13200}}',))
+        self.assertEqual(due_dreams(self.app, self.night), [])
+
+    def test_a_bottle_tossed_while_the_dive_was_out_counts(self):
+        read_at = f"{self.DAY}T14:58:00{self._offset()}"
+        with self.app.store.tx() as db:
+            db.execute("UPDATE dreams SET payload=?", (f'{{"stats": {{"day_seconds": 10800, "read_at": "{read_at}"}}}}',))
+        self.trace(self.DAY, "a thought while it dived", seconds=0, at="14:59", kind="jot", category="jot")
+        self.assertEqual(due_dreams(self.app, self.night), [self.DAY])
+
+    def test_a_dive_at_night_is_the_nights(self):
+        self.trace(self.DAY, "the evening's new topic", seconds=45 * 60, at="17:00")
+        with self.app.store.tx() as db:
+            db.execute("UPDATE dreams SET created_at=?", (f"{self.DAY}T21:40:00{self._offset()}",))
+        self.assertEqual(due_dreams(self.app, self.night.replace(hour=22)), [])
+
+
 class DemoViewTests(TempApp):
     def setUp(self):
         super().setUp()
@@ -53,6 +103,7 @@ class DemoViewTests(TempApp):
         self.assertTrue(day["segments"] and day["subjects"])
         dream = api.dream_view(self.app, today())
         self.assertEqual(len(dream["sparks"]), 3)
+        self.assertEqual(dream["number"], 3, "the newest of three dives is № 3")
         threads = api.threads_view(self.app)
         kinds = {s["kind"] for s in threads["signals"]}
         self.assertTrue({"orbit", "return", "surge", "seed"} <= kinds)

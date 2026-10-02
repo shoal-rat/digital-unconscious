@@ -127,6 +127,65 @@ class CatchUpSortingTests(TempApp):
         self.app.update_settings({"dream": {"auto": False}})
         self.assertEqual(due_sorting(self.app, now), [], "no automatic crew calls when night diving is off")
 
+    def test_the_rest_of_a_dived_day_still_reaches_its_currents(self):
+        for visit in range(4):
+            self.trace(day(1), "Decoy pricing SaaS pages", seconds=400, at=f"1{visit}:00")
+        sort_job(self.app, day(1))(lambda _step: None)
+        self.app.store.save_dream(day(1), title="the night's", reflection="", undercurrent="", payload={}, models={})
+        now = __import__("datetime").datetime.fromisoformat(f"{day(0)}T08:00:00").astimezone()
+        self.assertEqual(due_sorting(self.app, now), [], "sorted, and nothing came in since")
+        self.trace(day(1), "Late reading on anchoring", seconds=1200, at="23:10")
+        self.assertEqual(due_sorting(self.app, now), [day(1)], "the evening after the dive is caught up")
+        sort_job(self.app, day(1))(lambda _step: None)
+        self.assertEqual(due_sorting(self.app, now), [])
+
+    def test_an_upgraded_memory_does_not_resort_its_history(self):
+        for offset in (6, 1):
+            for visit in range(4):
+                self.trace(day(offset), "Decoy pricing SaaS pages", seconds=400, at=f"1{visit}:00")
+            sort_job(self.app, day(offset))(lambda _step: None)
+            self.app.store.save_dream(day(offset), title="dived by 3.1", reflection="", undercurrent="", payload={}, models={})
+            self.trace(day(offset), "After the dive", seconds=600, at="23:00")
+        self.app.store.put("stale_since", day(1))  # what the upgrade to several dives a day writes
+        now = __import__("datetime").datetime.fromisoformat(f"{day(0)}T08:00:00").astimezone()
+        self.assertEqual(due_sorting(self.app, now), [day(1)], "yesterday's evening is caught up, older ones are left")
+
+    def test_the_nights_own_dive_leaves_the_evening_to_tomorrow(self):
+        import datetime as dt
+
+        from unconscious.mind.digest import digest_day
+
+        today = dt.date.today().isoformat()
+        self.app.update_settings({"dream": {"time": "00:00"}})
+        for visit in range(4):
+            self.trace(today, "Decoy pricing SaaS pages", seconds=400, at=f"0{visit}:00")
+        digest_day(self.app, today)
+        self.app.store.save_dream(today, title="the night's", reflection="", undercurrent="", payload={}, models={})
+        self.trace(today, "A few more minutes", seconds=300, at="05:00")
+        self.assertEqual(due_sorting(self.app, dt.datetime.now().astimezone()), [])
+
+    def test_tonight_sorts_once_what_a_daytime_dive_left(self):
+        import datetime as dt
+
+        today = dt.date.today().isoformat()
+        self.app.update_settings({"dream": {"time": "00:00"}})
+        from unconscious.mind.digest import digest_day
+
+        for visit in range(4):
+            self.trace(today, "Decoy pricing SaaS pages", seconds=400, at=f"0{visit}:00")
+        digest_day(self.app, today)  # what the day's dive sorted
+        self.app.store.save_dream(today, title="by hand", reflection="", undercurrent="", models={},
+                                  payload={"stats": {"seconds": 1600}})
+        before = dt.datetime.combine(dt.date.today(), dt.time(0, 0)).astimezone() - dt.timedelta(hours=1)
+        with self.app.store.tx() as db:  # dived before tonight's dive time
+            db.execute("UPDATE dreams SET created_at=?", (before.isoformat(timespec="seconds"),))
+        self.trace(today, "A few more minutes", seconds=300, at="05:00")
+        now = dt.datetime.now().astimezone()
+        self.assertEqual(due_sorting(self.app, now), [today], "too little to dive again: sorted into its currents")
+        sort_job(self.app, today)(lambda _step: None)
+        self.trace(today, "And a few more", seconds=300, at="06:00")
+        self.assertEqual(due_sorting(self.app, now), [], "once tonight; the rest is tomorrow's catch-up")
+
 
 if __name__ == "__main__":
     unittest.main()

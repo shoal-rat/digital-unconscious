@@ -30,6 +30,7 @@ from unconscious.mind.prompts import (
 )
 from unconscious.mind.signals import Signal, ThreadStats, compute_signals
 from unconscious.mind.taste import Taste, load_taste
+from unconscious.store import now_iso
 from unconscious.text import clip, duration, similar
 
 if TYPE_CHECKING:
@@ -127,9 +128,12 @@ def undercurrent_block(ctx: Context) -> str:
 
 
 def shown_block(app: App, day: str) -> str:
+    """Fish of the last three weeks, the same day's earlier dives first: a second dive of a day
+    must not bring back what the first one caught, kept or threw back."""
     since = (date.fromisoformat(day) - timedelta(days=21)).isoformat()
-    recent = [s for s in app.store.sparks(limit=60) if s["day"] >= since and s["day"] != day]
-    return "\n".join(f"- {s['title']}" for s in recent[:20]) or "(nothing yet)"
+    same_day = app.store.sparks(day=day, limit=60)
+    recent = [s for s in app.store.sparks(limit=60) if since <= s["day"] < day or s["day"] > day]
+    return "\n".join(f"- {s['title']}" for s in (same_day + recent)[:24]) or "(nothing yet)"
 
 
 def _refs(values: Any, valid: dict[str, Any]) -> list[str]:
@@ -271,6 +275,8 @@ def run_dream(app: App, day: str, progress: Callable[[str], None] | None = None,
     step("gather")
     if app.store.trace_count(day) == 0:
         raise DreamError(f"Nothing was observed on {day}. Leave `dun up` running, jot a thought, or feed a document.")
+    # what this dive reads, on the scale the night watch measures growth by (see jobs.grown_since_dive)
+    read_at, read_seconds = now_iso(), app.store.day_seconds(day)
 
     step("digest")
     digest = digest_day(app, day, force=force_digest)
@@ -342,18 +348,12 @@ def run_dream(app: App, day: str, progress: Callable[[str], None] | None = None,
             "threads": len({t["thread_id"] for t in digest.topics if t.get("thread_id")}),
             "candidates": len(cards) + len(rejected),
             "kept": len(chosen),
+            "day_seconds": round(read_seconds),
+            "read_at": read_at,
         },
         "rejected": rejected + [{"title": c["title"], "reason": f"ranked out ({c['score']})"} for c in cards if c not in chosen],
     }
-    dream_id = app.store.save_dream(
-        day,
-        title=clip(str(data.get("title") or ""), 140),
-        reflection=clip(str(data.get("reflection") or ""), 1400),
-        undercurrent=clip(str(data.get("undercurrent") or ""), 400),
-        payload=payload,
-        models={"digest": digest.model, "dream": result.label, "critique": critic_label},
-    )
-    spark_ids = []
+    fish = []
     for card in chosen:
         evidence = []
         for ref in card["evidence_refs"]:
@@ -363,23 +363,32 @@ def run_dream(app: App, day: str, progress: Callable[[str], None] | None = None,
                 "visits": s.get("visits") or 0, "url": s.get("url") or "", "domain": s.get("domain") or "",
                 "body": clip(s.get("body") or "", 400), "day": day,
             })
-        spark_ids.append(app.store.add_spark(
-            dream_id=dream_id,
-            day=day,
-            title=card["title"],
-            mechanism=card["mechanism"],
-            question=card["question"],
-            insight=card["insight"],
-            first_step=card["first_step"],
-            kill=card["kill"],
-            field=card["field"],
-            thread_ids=[ctx.valid_t[r] for r in card["thread_refs"]],
-            evidence=evidence,
-            search_terms=card["search_terms"],
-            scores=card["scores"],
-            score=card["score"],
-            objection=card["objection"],
-        ))
+        fish.append({
+            "title": card["title"],
+            "mechanism": card["mechanism"],
+            "question": card["question"],
+            "insight": card["insight"],
+            "first_step": card["first_step"],
+            "kill": card["kill"],
+            "field": card["field"],
+            "thread_ids": [ctx.valid_t[r] for r in card["thread_refs"]],
+            "evidence": evidence,
+            "search_terms": card["search_terms"],
+            "scores": card["scores"],
+            "score": card["score"],
+            "objection": card["objection"],
+        })
+    # one transaction: the dive and its fish arrive together, and an earlier dive of the day stays whole
+    dream_id = app.store.save_dream(
+        day,
+        title=clip(str(data.get("title") or ""), 140),
+        reflection=clip(str(data.get("reflection") or ""), 1400),
+        undercurrent=clip(str(data.get("undercurrent") or ""), 400),
+        payload=payload,
+        models={"digest": digest.model, "dream": result.label, "critique": critic_label},
+        sparks=fish,
+    )
+    spark_ids = [s["id"] for s in sorted(app.store.sparks(dream_id=dream_id), key=lambda s: s["id"])]
     app.store.log_event("dream", day, {"sparks": spark_ids, "models": {"dream": result.label, "critique": critic_label}})
     return {"day": day, "dream_id": dream_id, "title": data.get("title", ""), "sparks": spark_ids,
             "candidates": len(cards), "rejected": len(rejected)}

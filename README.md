@@ -105,11 +105,12 @@ crosses the shallows, one fish for each idea that surfaced.
     <b>seabed</b> for prior work.</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/en/journal.png" alt="The logbook: one entry per night, each with a small picture of that day's shore"></td>
+    <td width="50%"><img src="docs/assets/en/journal.png" alt="The logbook: one entry per day, each with a small picture of that day's shore"></td>
     <td width="50%"><img src="docs/assets/en/settings.png" alt="The harbour: who you are, the language, the light, the water's motion and the tide watcher"></td>
   </tr>
   <tr>
-    <td valign="top"><b>Logbook.</b> One entry per night, each with a small picture of that day's shore.</td>
+    <td valign="top"><b>Logbook.</b> One entry per day, each with a small picture of that day's shore. Dive twice in a day and the
+    latest leads; the earlier dive stays whole on that day's shore, folded away.</td>
     <td valign="top"><b>Harbour.</b> Who you are and what waters you fish, the crew, the light, the water's motion,
     and exactly what the tide watcher may see.</td>
   </tr>
@@ -188,7 +189,7 @@ Mono) are vendored, so nothing is fetched.
 | **Shore** | today: tonight's dream, what surfaced and what the tide left |
 | **Currents** | recurring concerns across weeks, drawn as rows of beads |
 | **Shoal** | every idea the dives kept |
-| **Logbook** | one entry per night |
+| **Logbook** | one entry per day; a day's earlier dives fold away on its shore |
 | **Harbour** | settings |
 | **Pebbles** | the day's currents on the sand: size is time; stones that touch met today |
 | **Bottle** · **washed in** | a thought you jot on purpose · a paper or notes you feed it |
@@ -306,7 +307,9 @@ The harbour tidies itself once a day, and the rule is simple: **details fade, th
 - **Details fade.** After two weeks, visits to the same thing on the same day merge into one row: same subjects, same
   totals, so nothing a dive reads changes. After 90 days the raw driftline washes away.
 - **No day slips through.** A day becomes part of a current's history when it is sorted. If the laptop slept through
-  the night, the night watch quietly sorts the days it missed, long before they could wash away.
+  the night, the night watch quietly sorts the days it missed, long before they could wash away, and the hours that
+  came in after a day's dive are sorted too. Dive by hand in the afternoon and the night dives again only if the day
+  grew a good deal since (half an hour more, or a new bottle); otherwise it just sorts the evening into its currents.
 - **The shark really eats.** Forgetting a day, or everything, gives the space back to the disk. Old job records, the
   crew's call log and the login log are trimmed too.
 

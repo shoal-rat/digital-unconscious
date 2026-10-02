@@ -23,6 +23,7 @@ from PySide6.QtGui import (
     QTextOption,
     QTransform,
 )
+from PySide6.QtGui import Qt as GuiQt
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -44,8 +45,53 @@ INSTRUMENT_KINDS = {"", "ink", "accent", "line", "ghost", "on", "jot", "tab"}
 # ------------------------------------------------------------------ text
 
 
+class WrapLabel(QLabel):
+    """A QLabel that measures its wrapped height at the width it will really have.
+
+    A vertical box layout asks every child for its height at the full column width, even
+    when the child carries a maximum width; QLabel then reports fewer lines than it will
+    paint, the box comes out short, and the layout squeezes the difference out of whatever
+    is tallest (a dream's reflection, cut off halfway). Clamping here keeps the sums true."""
+
+    def heightForWidth(self, width: int) -> int:
+        return super().heightForWidth(min(width, self.maximumWidth()) if width >= 0 else width)
+
+
+class TitleLabel(WrapLabel):
+    """A wrapping line of text that opens something when clicked; underlined on hover."""
+
+    clicked = Signal()
+
+    def __init__(self, text: str, role: str):
+        super().__init__(text)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setWordWrap(True)
+        self.setFont(font(role))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def enterEvent(self, _event) -> None:
+        f = self.font()
+        f.setUnderline(True)
+        self.setFont(f)
+
+    def leaveEvent(self, _event) -> None:
+        f = self.font()
+        f.setUnderline(False)
+        self.setFont(f)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
+
+def plain_tip(text: str) -> str:
+    """A tooltip shown as plain text: Qt guesses rich text from anything that looks like a tag, and
+    window titles, model names and jots are never markup."""
+    return GuiQt.convertFromPlainText(text, GuiQt.WhiteSpaceMode.WhiteSpaceNormal) if text else ""
+
+
 def label(text: str, role: str = "body", tone: str | None = None, *, wrap: bool = True, selectable: bool = False) -> QLabel:
-    widget = QLabel(text or "")
+    widget = WrapLabel(text or "")
     widget.setTextFormat(Qt.TextFormat.PlainText)  # model output is never interpreted as markup
     widget.setFont(font(role))
     widget.setWordWrap(wrap)
@@ -75,13 +121,18 @@ class Para(QWidget):
     plain text, and its rich-text mode under-reports height (clipping the last
     line), so paragraphs are laid out here with QTextLayout."""
 
+    overflowChanged = Signal(bool)  # noqa: N815 - Qt naming: the text no longer fits its fold, or fits again
+
     def __init__(self, text: str, role: str = "body", tone: str | None = None, leading: float = 1.5):
         super().__init__()
         self._text = (text or "").strip()
         self._font = font(role)
         self.tone = tone
         self.leading = leading
-        self._cache: tuple[int, list, float] | None = None
+        self._cache: tuple[int, list, float, list[float]] | None = None
+        self.fold_lines: int | None = None  # set by Fold: show only this many lines while folded
+        self.folded = True
+        self._overflowing: bool | None = None  # unknown until the first real width, which always tells the Fold
         policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
@@ -93,6 +144,7 @@ class Para(QWidget):
         width = max(40, width)
         if self._cache and self._cache[0] == width:
             return self._cache[1], self._cache[2]
+        bottoms: list[float] = []
         metrics = QFontMetrics(self._font)
         step = max(metrics.height(), self._font.pixelSize() * self.leading)
         offset = (step - metrics.height()) / 2
@@ -110,10 +162,25 @@ class Para(QWidget):
                 line.setLineWidth(width)
                 line.setPosition(QPointF(0, y + offset))
                 y += step
+                bottoms.append(y)
             layout.endLayout()
             layouts.append(layout)
-        self._cache = (width, layouts, y)
+        self._cache = (width, layouts, y, bottoms)
         return layouts, y
+
+    def exceeds(self, width: int) -> bool:
+        """Does the text run past its fold at this width? One extra line is not worth folding."""
+        if not self.fold_lines:
+            return False
+        self._layout(min(width, self.maximumWidth()))
+        return len(self._cache[3]) > self.fold_lines + 1
+
+    def _shown_height(self, width: int) -> float:
+        width = min(width, self.maximumWidth())
+        _, full = self._layout(width)
+        if self.folded and self.exceeds(width):
+            return self._cache[3][self.fold_lines - 1]
+        return full
 
     def hasHeightForWidth(self) -> bool:
         return True
@@ -121,7 +188,7 @@ class Para(QWidget):
     def heightForWidth(self, width: int) -> int:
         # Box layouts offer the full column width even when a maximum width
         # will clamp the paragraph; measure at the width it will paint at.
-        return int(self._layout(min(width, self.maximumWidth()))[1] + 1)
+        return int(self._shown_height(width) + 1)
 
     def sizeHint(self) -> QSize:
         width = self.width() if self.width() > 40 else 480
@@ -133,6 +200,10 @@ class Para(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self.updateGeometry()
+        overflowing = self.exceeds(self.width())
+        if overflowing != self._overflowing:
+            self._overflowing = overflowing
+            self.overflowChanged.emit(overflowing)
 
     def _color(self) -> QColor:
         table = NIGHT_TONES if in_night(self) else DAY_TONES
@@ -143,8 +214,169 @@ class Para(QWidget):
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         painter.setPen(self._color())
         layouts, _ = self._layout(self.width())
+        if not (self.folded and self.exceeds(self.width())):
+            for layout in layouts:
+                layout.draw(painter, QPointF(0, 0))
+            return
+        # Folded: the shown lines, the last one fading into the page, so it reads as "there is more".
+        bottoms = self._cache[3]
+        shown = bottoms[self.fold_lines - 1]
+        fade_from = bottoms[self.fold_lines - 2] if self.fold_lines > 1 else 0.0
+        ratio = self.devicePixelRatioF()
+        image = QImage(int(self.width() * ratio) + 1, int(shown * ratio) + 1, QImage.Format.Format_ARGB32_Premultiplied)
+        image.setDevicePixelRatio(ratio)
+        image.fill(Qt.GlobalColor.transparent)
+        inner = QPainter(image)
+        inner.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        inner.setPen(painter.pen())
         for layout in layouts:
-            layout.draw(painter, QPointF(0, 0))
+            layout.draw(inner, QPointF(0, 0))
+        fade = QLinearGradient(QPointF(0, fade_from), QPointF(0, shown))
+        fade.setColorAt(0, QColor(0, 0, 0, 255))
+        fade.setColorAt(1, QColor(0, 0, 0, 30))
+        inner.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        inner.fillRect(QRectF(0, fade_from, self.width(), shown - fade_from + 1), fade)
+        inner.end()
+        painter.drawImage(QPointF(0, 0), image)
+
+
+# Folds a person has opened stay open while the app runs, through page rebuilds.
+UNFOLDED: set[str] = set()
+
+
+class Fold(QWidget):
+    """Long text shown in its first lines, the last one fading, with a translucent pill that
+    unfolds it in place and folds it back. The pill appears only when the text is longer than
+    the fold at the width it has, so nothing is ever cut without a way to read it all."""
+
+    def __init__(self, text: Para, lines: int = 6, key: str | None = None):
+        super().__init__()
+        self.text, self.key = text, key
+        text.fold_lines = max(1, lines)
+        text.folded = not (key and key in UNFOLDED)
+        self.toggle = button("", "fold", self._toggle)
+        self.toggle.setFont(font("caption-l"))
+        row = hbox(self.toggle, "stretch")
+        box = vbox(text, row, spacing=10)
+        self.setLayout(box)
+        text.overflowChanged.connect(lambda _overflowing: self._sync())
+        self._sync()
+
+    def _sync(self) -> None:
+        over = self.text.exceeds(self.text.width() if self.text.width() > 40 else self.text.maximumWidth())
+        self.text._overflowing = over  # what the pill shows; a later width that changes it emits again
+        self.toggle.setVisible(over)
+        self.toggle.setText(t("fold.more") + "  ↓" if self.text.folded else t("fold.less") + "  ↑")
+
+    def _toggle(self) -> None:
+        self.text.folded = not self.text.folded
+        if self.key:
+            (UNFOLDED.discard if self.text.folded else UNFOLDED.add)(self.key)
+        self.text.updateGeometry()
+        self.text.update()
+        self._sync()
+
+
+class FoldList(QWidget):
+    """A list that shows its first ``keep`` rows and a translucent pill for the rest."""
+
+    def __init__(self, rows: list, keep: int, key: str | None = None, spacing: int = 0):
+        super().__init__()
+        self.rows, self.keep, self.key = rows, keep, key
+        box = vbox(spacing=spacing)
+        for row in rows:
+            _add(box, row)
+        self.toggle = button("", "fold", self._toggle)
+        self.toggle.setFont(font("caption-l"))
+        box.addSpacing(8 if len(rows) > keep else 0)
+        box.addLayout(hbox(self.toggle, "stretch"))
+        self.setLayout(box)
+        self.toggle.setVisible(len(rows) > keep)  # after setLayout: shown without a parent it would be a window
+        self.open = bool(key and key in UNFOLDED)
+        self._apply()
+
+    def _apply(self) -> None:
+        for index, row in enumerate(self.rows):
+            target = row if isinstance(row, QWidget) else None
+            if target is not None:
+                target.setVisible(self.open or index < self.keep)
+        hidden = len(self.rows) - self.keep
+        self.toggle.setText(t("fold.fewer") + "  ↑" if self.open else t("fold.all", n=len(self.rows)) + "  ↓")
+        self.toggle.setToolTip("" if self.open else t("fold.hidden", n=hidden))
+
+    def _toggle(self) -> None:
+        self.open = not self.open
+        if self.key:
+            (UNFOLDED.add if self.open else UNFOLDED.discard)(self.key)
+        self._apply()
+
+
+class Unfold(QWidget):
+    """Something kept folded away under a translucent pill, opened in place (an earlier dive of the day)."""
+
+    def __init__(self, body: QWidget, more: str, less: str, key: str | None = None):
+        super().__init__()
+        self.body, self.more, self.less, self.key = body, more, less, key
+        self.toggle = button("", "fold", self._toggle)
+        self.toggle.setFont(font("caption-l"))
+        box = vbox(hbox(self.toggle, "stretch"), body, spacing=14)
+        self.setLayout(box)
+        self.open = bool(key and key in UNFOLDED)
+        self._apply()
+
+    def _apply(self) -> None:
+        self.body.setVisible(self.open)
+        self.toggle.setText(self.less + "  ↑" if self.open else self.more + "  ↓")
+
+    def _toggle(self) -> None:
+        self.open = not self.open
+        if self.key:
+            (UNFOLDED.add if self.open else UNFOLDED.discard)(self.key)
+        self._apply()
+
+
+class ElidedLabel(QLabel):
+    """One line that ends in an ellipsis at whatever width it gets, with the whole text in a
+    tooltip: never wider than its place, never silently cut."""
+
+    def __init__(self, text: str, role: str = "body", tone: str | None = None, tip: str | None = None,
+                 longest: int = 420):
+        super().__init__()
+        self.full = text or ""
+        self.longest = longest
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setFont(font(role))
+        if tone:
+            self.setProperty("tone", tone)
+        self.setToolTip(plain_tip(tip if tip is not None else self.full))
+        self.setText(self.full)
+
+    def sizeHint(self) -> QSize:
+        m = self.contentsMargins()  # a style's padding lands here
+        width = min(self.fontMetrics().horizontalAdvance(self.full) + 4, self.longest) + m.left() + m.right()
+        return QSize(width, super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:
+        m = self.contentsMargins()
+        return QSize(min(self.sizeHint().width(), 40 + m.left() + m.right()), super().minimumSizeHint().height())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        room = max(10, self.contentsRect().width())
+        self.setText(self.fontMetrics().elidedText(self.full, Qt.TextElideMode.ElideRight, room))
+
+
+def capped(widget: QWidget, width: int) -> QHBoxLayout:
+    """A widget no wider than ``width``, added to a vertical layout through a row so the layout
+    measures it at that width (see WrapLabel). Use it for holders that have a layout, whose
+    height Qt asks of the layout directly and never of the widget."""
+    widget.setMaximumWidth(width)
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(0)
+    row.addWidget(widget, 1)
+    row.addStretch(0)
+    return row
 
 
 def para(text: str, role: str = "body", tone: str | None = None, line_height: int = 150) -> Para:
@@ -153,12 +385,12 @@ def para(text: str, role: str = "body", tone: str | None = None, line_height: in
 
 
 
-def eyebrow(text: str, tone: str = "muted") -> QLabel:
+def eyebrow(text: str, tone: str = "muted", *, wrap: bool = False) -> QLabel:
     """A caption: lowercase italic, said in passing rather than announced."""
     text = text or ""
     if text.isascii() and not text[:1].isdigit():
         text = text[:1].lower() + text[1:] if not text.isupper() else text.lower()
-    return label(text, "caption", tone, wrap=False)
+    return label(text, "caption", tone, wrap=wrap)
 
 
 def button(text: str, kind: str = "", on_click=None, *, tip: str = "") -> QPushButton:
@@ -595,11 +827,18 @@ class MiniBar(QWidget):
         p.drawRoundedRect(QRectF(0, 0, max(5.0, self.width() * self.fraction), self.height()), 2.5, 2.5)
 
 
+CHIP_TEXT_WIDTH = 220
+
+
 def chip(text: str, hue: int | None, on_click=None) -> QPushButton:
     widget = button(text, "chip", on_click)
     widget.setIcon(swatch_icon(hue))
     widget.setIconSize(QSize(9, 9))
     widget.setFont(font("small"))
+    shown = widget.fontMetrics().elidedText(text or "", Qt.TextElideMode.ElideRight, CHIP_TEXT_WIDTH)
+    if shown != (text or ""):
+        widget.setText(shown)
+        widget.setToolTip(plain_tip(text))
     return widget
 
 
@@ -1088,19 +1327,24 @@ class Steps(QWidget):
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.drawEllipse(QPointF(6, y), 3.6, 3)
             p.setPen(color)
-            p.drawText(QRect(24, y - 12, self.width() - 24, 24), Qt.AlignmentFlag.AlignVCenter, t(f"steps.{step}"))
+            name = p.fontMetrics().elidedText(t(f"steps.{step}"), Qt.TextElideMode.ElideRight, max(10, self.width() - 26))
+            p.drawText(QRect(24, y - 12, self.width() - 24, 24), Qt.AlignmentFlag.AlignVCenter, name)
 
 
 # ------------------------------------------------------------------ layouts
 
 
 class FlowLayout(QLayout):
-    """Left-to-right wrapping layout (chips, stamps, buttons)."""
+    """Left-to-right wrapping layout (chips, stamps, buttons).
 
-    def __init__(self, parent=None, spacing: int = 6):
+    With ``one_line`` it asks for the width of all its items on one line, so beside other
+    things in a row it keeps them on one line while there is room and wraps when there is not."""
+
+    def __init__(self, parent=None, spacing: int = 6, *, one_line: bool = False):
         super().__init__(parent)
         self._items: list = []
         self._spacing = spacing
+        self._one_line = one_line
         self.setContentsMargins(0, 0, 0, 0)
 
     def addItem(self, item) -> None:
@@ -1133,18 +1377,22 @@ class FlowLayout(QLayout):
         self._layout(rect, apply=True)
 
     def sizeHint(self) -> QSize:
-        return self.minimumSize()
+        if not self._one_line or not self._items:
+            return self.minimumSize()
+        hints = [item.sizeHint() for item in self._items]
+        width = sum(h.width() for h in hints) + self._spacing * (len(hints) - 1)
+        return QSize(width, max(h.height() for h in hints))
 
     def minimumSize(self) -> QSize:
         size = QSize()
         for item in self._items:
-            size = size.expandedTo(item.minimumSize())
+            size = size.expandedTo(item.minimumSize().boundedTo(QSize(160, 10_000)))
         return size
 
     def _layout(self, rect: QRect, apply: bool) -> int:
         x, y, line = rect.x(), rect.y(), 0
         for item in self._items:
-            hint = item.sizeHint()
+            hint = item.sizeHint().boundedTo(QSize(max(1, rect.width()), 10_000))
             if x + hint.width() > rect.right() + 1 and line > 0:
                 x = rect.x()
                 y += line + self._spacing
@@ -1182,7 +1430,17 @@ class CardGrid(QWidget):
         for index, card in enumerate(self.cards):
             self.grid.addWidget(card, index // columns, index % columns, Qt.AlignmentFlag.AlignTop)
 
+    def _need(self) -> int:
+        # A card's buttons and margins set how narrow it can really go; never squeeze below that.
+        return max([self.min_width] + [card.minimumSizeHint().width() for card in self.cards])
+
+    def minimumSizeHint(self) -> QSize:
+        # One column always fits, so ask the page for one card's width, not the current columns':
+        # otherwise three columns hold the page wider than a small window and never get to re-flow.
+        return QSize(self._need(), super().minimumSizeHint().height())
+
     def resizeEvent(self, event) -> None:
         width = event.size().width()
-        self._place(max(1, min(3, (width + self.spacing) // (self.min_width + self.spacing))))
+        need = self._need()
+        self._place(max(1, min(3, (width + self.spacing) // (need + self.spacing))))
         super().resizeEvent(event)

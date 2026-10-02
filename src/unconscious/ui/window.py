@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from unconscious import __version__, api, ingest
 from unconscious.jobs import dive_job, dream_job
 from unconscious.store import today
+from unconscious.text import clip
 from unconscious.ui import theme
 from unconscious.ui.dialogs import JotDialog
 from unconscious.ui.i18n import CREW_NAMES, crew_message, set_language, t, trouble_message
@@ -30,7 +31,7 @@ from unconscious.ui.pages.sparks import SparkPage, SparksPage
 from unconscious.ui.pages.threads import ThreadPage, ThreadsPage
 from unconscious.ui.pages.today import TodayPage
 from unconscious.ui.theme import THEME, font
-from unconscious.ui.widgets import TideLine, app_icon, button, label, mark_pixmap, vbox
+from unconscious.ui.widgets import TideLine, app_icon, button, label, mark_pixmap, plain_tip, vbox
 
 if TYPE_CHECKING:
     from unconscious.app import App
@@ -165,7 +166,9 @@ class Sidebar(QWidget):
             from unconscious.ui.charts import human
 
             subject = human(state["today_stats"]["seconds"]) + " · " + t("common.today").lower()
-        self.subject_label.setText(self.subject_label.fontMetrics().elidedText(subject, Qt.TextElideMode.ElideRight, 188))
+        shown = self.subject_label.fontMetrics().elidedText(subject, Qt.TextElideMode.ElideRight, 188)
+        self.subject_label.setText(shown)
+        self.subject_label.setToolTip(plain_tip(subject) if shown != subject else "")
 
 
 class Toast(QLabel):
@@ -263,6 +266,7 @@ class MainWindow(QMainWindow):
         page.refresh()
         if self.page is not None:
             self.holder.removeWidget(self.page)
+            self.page.hide()  # off the screen now, not whenever the event loop gets round to deleting it
             self.page.deleteLater()
         self.page = page
         self.holder.addWidget(page)
@@ -315,7 +319,11 @@ class MainWindow(QMainWindow):
         finished = [job_id for job_id in previous if job_id not in current]
         for job_id in finished:
             self._finished(self.app.store.job(job_id) or {"id": job_id, "state": "failed", "error": "", "kind": previous[job_id]["kind"], "ref": previous[job_id]["ref"]})
-        signature = (state.get("latest_dream"), state["counts"]["dreams"], state["counts"]["new_sparks"])
+        # the date too: past midnight the Shore turns to the new day instead of offering to re-dive the old one,
+        # but not while that day's dive is still out (it turns when the dive comes back)
+        held = self._signature[0] if self._signature and any(
+            j["kind"] == "dream" and j["ref"] == self._signature[0] for j in current.values()) else today()
+        signature = (held, state.get("latest_dream"), state["counts"]["dreams"], state["counts"]["new_sparks"])
         if finished or force or (self._signature is not None and signature != self._signature):
             self.refresh()
         elif current and self.page is not None:
@@ -349,7 +357,7 @@ class MainWindow(QMainWindow):
         else:
             key = ref if kind == "dream" else f"dive:{ref}"
             self.failures[key] = crew_message(job.get("error") or "") or t("common.error")
-            self.toast(self.failures[key][:300], error=True)
+            self.toast(clip(self.failures[key], 300), error=True)  # the whole reason stays on the page
 
     # -- actions -------------------------------------------------------------
 

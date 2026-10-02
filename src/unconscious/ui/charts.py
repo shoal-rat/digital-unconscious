@@ -24,6 +24,7 @@ from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 from unconscious.text import duration
 from unconscious.ui.i18n import language, t
 from unconscious.ui.theme import THEME, font
+from unconscious.ui.widgets import plain_tip
 
 
 def short_day(day: str) -> str:
@@ -217,7 +218,7 @@ class Pebbles(QWidget):
         pebble = self._at(event.position())
         self.setCursor(Qt.CursorShape.PointingHandCursor if pebble else Qt.CursorShape.ArrowCursor)
         if pebble:
-            QToolTip.showText(event.globalPosition().toPoint(), f"{pebble['name']}\n{human(pebble['seconds'])}", self)
+            QToolTip.showText(event.globalPosition().toPoint(), plain_tip(f"{pebble['name']}\n{human(pebble['seconds'])}"), self)
         else:
             QToolTip.hideText()
 
@@ -339,7 +340,7 @@ class Ribbon(QWidget):
                     text = f"{head} · {_clock(seg['start'])}–{_clock(seg['end'])}\n" + "\n".join(seg.get("labels") or [])
                     break
         if text:
-            QToolTip.showText(event.globalPosition().toPoint(), text, self)
+            QToolTip.showText(event.globalPosition().toPoint(), plain_tip(text), self)
         else:
             QToolTip.hideText()
 
@@ -428,8 +429,9 @@ class Strata(QWidget):
             p.drawText(QRectF(20, y + 6, name_w - 20, 24), Qt.AlignmentFlag.AlignVCenter, name)
             p.setFont(font("caption"))
             p.setPen(THEME.color("muted"))
-            p.drawText(QRectF(20, y + 29, name_w - 20, 16), Qt.AlignmentFlag.AlignVCenter,
-                       f"{t('threads.days', n=row['active_14'])} · {human(row['total'])}")
+            facts = f"{t('threads.days', n=row['active_14'])} · {human(row['total'])}"
+            facts = QFontMetrics(p.font()).elidedText(facts, Qt.TextElideMode.ElideRight, name_w - 22)
+            p.drawText(QRectF(20, y + 29, name_w - 20, 16), Qt.AlignmentFlag.AlignVCenter, facts)
             series = row["series"][-columns:]
             for i, value in enumerate(series):
                 cx = x0 + i * cell + cell / 2
@@ -461,10 +463,10 @@ class Strata(QWidget):
             if sig_w:
                 p.setFont(font("caption"))
                 x = self.width() - 6
-                for kind in reversed([k for k in row["signals"] if k != "collision"][:3]):
-                    word = t(f"mech.{kind}")
-                    word = word.lower() if word.isascii() else word
+                for kind, word in reversed(self._signal_words(row)[:3]):
                     w = QFontMetrics(p.font()).horizontalAdvance(word) + 16
+                    if x - w < self.width() - sig_w:  # the rest stay in the row's tooltip, off the dots
+                        break
                     x -= w
                     p.setPen(Qt.PenStyle.NoPen)
                     p.setBrush(THEME.mechanism(kind))
@@ -473,6 +475,11 @@ class Strata(QWidget):
                     p.drawText(QRectF(x + 12, y, w, self.ROW), Qt.AlignmentFlag.AlignVCenter, word)
                     x -= 10
             p.setOpacity(1.0)
+
+    @staticmethod
+    def _signal_words(row: dict) -> list[tuple[str, str]]:
+        words = [(kind, t(f"mech.{kind}")) for kind in row["signals"] if kind != "collision"]
+        return [(kind, word.lower() if word.isascii() else word) for kind, word in words]
 
     def _row_at(self, y: float) -> dict | None:
         for top, row in self._all_rows():
@@ -497,9 +504,10 @@ class Strata(QWidget):
         days = self.days[-columns:]
         if 0 <= index < len(days):
             value = row["series"][-columns:][index]
-            QToolTip.showText(event.globalPosition().toPoint(), f"{row['name']}\n{short_day(days[index])} · {human(value)}", self)
+            QToolTip.showText(event.globalPosition().toPoint(), plain_tip(f"{row['name']}\n{short_day(days[index])} · {human(value)}"), self)
         else:
-            QToolTip.showText(event.globalPosition().toPoint(), row.get("gist") or row["name"], self)
+            tip = [row["name"], row.get("gist") or "", " · ".join(word for _, word in self._signal_words(row))]
+            QToolTip.showText(event.globalPosition().toPoint(), plain_tip("\n".join(x for x in tip if x)), self)
 
     def leaveEvent(self, _event) -> None:
         self._hover = None

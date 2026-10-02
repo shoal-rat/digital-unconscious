@@ -82,7 +82,7 @@ def run_dive(
 
     step("save")
     dive_id = app.store.add_dive(spark_id, report, papers, result.label)
-    if spark["status"] == "new":
+    if spark["status"] in {"new", "drifted"}:  # going to the seabed for a fish is choosing it
         app.store.set_spark_status(spark_id, "pursuing")
     app.store.log_event("dive", str(spark_id), {"dive_id": dive_id, "papers": len(papers)})
     return {"dive_id": dive_id, "spark_id": spark_id, "papers": len(papers), "verdict": report.get("verdict")}

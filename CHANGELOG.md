@@ -1,5 +1,47 @@
 # Changelog
 
+## 3.2.0 — read it all, and a day may dive twice
+
+### Two dives in one day
+
+- **Nothing of the first dive is lost.** Diving again used to write over the day's dive: its headline, reflection and
+  undercurrent were gone, and the fish you had not touched were deleted (and their numbers handed to new fish, so a
+  seabed report could turn up on the wrong one). Now every dive is kept. The Logbook still has one entry a day, led
+  by the latest dive, and says how many dives the day held; on that day's shore the earlier dives fold away under
+  *Open this dive*, whole, with their fish. Fish nobody touched *drift out*: they stay with their own dive and leave
+  the shoal's "new"; you can still keep or follow them, and a fish's page links to the dive it really came from.
+- **No fish twice.** A second dive is shown everything the day already caught, kept or threw back, so it brings back
+  none of it.
+- **The evening is not lost.** A dive by hand in the afternoon used to cancel the night's dive, and whatever came in
+  after a day's dive never reached its currents. Now the night dives again when the day grew a good deal since (half
+  an hour more, or a new bottle), and otherwise sorts the evening into its currents; the next morning catches up any
+  day sorted before the rest of it came in.
+- *Dive again* on the Shore no longer re-sorts a day that has nothing new. Past midnight the Shore turns to the new
+  day. "Dive № n" counts dives in the order they were made, so a number never moves. The seabed's second search is
+  now *Back to the seabed*, no longer a second *Dive again*.
+- A dive made by hand in the daytime is headed *today's dream*, not *tonight's*. A fish's page leads back to the dive
+  it came from, opening an earlier dive in place (that link, and a paper's title, had stopped responding to clicks).
+- Memories from before open unchanged: the first start rebuilds one table and keeps every dive. Days dived before
+  the upgrade keep their sorting; from then on, the hours after a dive are caught up.
+
+### Nothing cut off
+
+- **Nothing stops halfway.** A long dream no longer ends mid-sentence on the Shore. Qt measured a narrowed title or
+  undercurrent at the panel's full width, came out short, and took the difference from the reflection; every narrowed
+  text is now measured at the width it really has.
+- **A pill to read it all.** A reflection longer than seven lines shows its first six, the last one fading, and a
+  translucent *Read it all* pill that unfolds it in place (*Fold it back* folds it again). A fold you open stays open
+  while the app runs. The same pill sits under a fish's long insight on the Shore, and under lists that used to stop
+  without saying so: what washed ashore today, a current's logbook, the crew's usage. A card on the Shore shows four
+  pieces of evidence and says how many more are on the fish's page.
+- **Small windows.** Cards re-flow into fewer columns instead of pushing the page past the window's edge; a fish's
+  side column, a current's buttons and the dream's facts wrap; long names end in "…" with the whole name on hover
+  (shown as plain text, never as markup).
+  The Strata keeps its words off the dots and lists them all on hover.
+- A dive that failed when you asked for another one is explained under the dream, in full.
+- `tests/test_layout.py` renders every page at four window sizes in English and Chinese, with texts two and three
+  times as long and a day dived twice, and fails on anything cut off, overlapping or wider than the window.
+
 ## 3.1.1 — the mark holds, and sits like its neighbours
 
 - Clicking the menu-bar mark no longer closes the app on newer macOS. Qt read the click count of the event that

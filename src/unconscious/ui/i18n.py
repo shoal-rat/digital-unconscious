@@ -66,6 +66,7 @@ EN: dict[str, str] = {
     "spark.keep": "Keep", "spark.pursue": "Swim after it →", "spark.dismiss": "Throw it back", "spark.undo": "Undo",
     "spark.open": "Open →",
     "spark.kept": "in the net", "spark.pursuing": "following", "spark.dismissed": "thrown back", "spark.done": "landed", "spark.new": "new",
+    "spark.drifted": "drifted out",
     "reason.generic": "Too common a fish", "reason.known": "Caught it before", "reason.off_field": "Wrong waters",
     "reason.infeasible": "Too deep to reach", "reason.wrong": "Misread my tide",
     "spark.evidence": "it surfaced from", "spark.fromDream": "From the dive of {day}", "spark.rubric": "The lighthouse keeper's notes",
@@ -75,7 +76,7 @@ EN: dict[str, str] = {
     # the seabed (literature)
     "dive.title": "Down to the seabed",
     "dive.intro": "Sound the open scholarly indexes with this fish's search lines, then ask the crew what already lies on the seabed, where the gap is, and how to test it.",
-    "dive.start": "Dive for prior work", "dive.again": "Dive again", "dive.known": "already on the seabed", "dive.gap": "the gap in the reef",
+    "dive.start": "Dive for prior work", "dive.again": "Back to the seabed", "dive.known": "already on the seabed", "dive.gap": "the gap in the reef",
     "dive.sharpened": "Sharpened question", "dive.approaches": "ways in", "dive.design": "Design", "dive.data": "Data",
     "dive.next": "next strokes", "dive.risks": "rocks", "dive.refs": "what came up",
     "dive.verdict.open": "Open water", "dive.verdict.active": "A busy reef", "dive.verdict.crowded": "A crowded harbour",
@@ -98,8 +99,8 @@ EN: dict[str, str] = {
     "sparks.all": "All", "sparks.empty": "No fish in these waters yet.",
     # logbook
     "journal.title": "Logbook",
-    "journal.sub": "One entry per night. The headline is the dive's; the question underneath is the undercurrent you seemed to be circling.",
-    "journal.empty": "The logbook is still blank.", "journal.sparks": "{n} fish",
+    "journal.sub": "One entry per day. The headline is the latest dive's; a day that dived more than once keeps the earlier dives on its shore. The question underneath is the undercurrent you seemed to be circling.",
+    "journal.empty": "The logbook is still blank.", "journal.sparks": "{n} fish", "journal.dives": "{n} dives",
     # harbour
     "settings.title": "Harbour", "settings.sub": "Everything is moored in one file in your harbour folder.",
     "settings.you": "The swimmer", "settings.youNote": "Who is in the water. Every dive reads this first.",
@@ -127,6 +128,11 @@ EN: dict[str, str] = {
     "settings.models": "The crew", "settings.modelsNote": "Each job goes to the best hand on deck, and the next one takes over if they falter.",
     "settings.choice": "preference", "settings.chain": "will try", "settings.autoModel": "Whoever is aboard",
     "settings.fallback": "Hand over to the next crew member when one falters",
+    "fold.more": "Read it all", "fold.less": "Fold it back", "fold.dive": "Open this dive", "fold.diveLess": "Fold this dive away", "today.todays": "today's dream",
+    "today.earlier": "Earlier dives", "today.earlierAt": "dive № {n} · {time}",
+    "today.earlierNote": "kept as they came up; the fish nobody touched drifted out with the tide",
+    "fold.all": "Show all {n}", "fold.fewer": "Show fewer", "fold.hidden": "{n} more below",
+    "spark.moreEvidence": "+{n} more on the fish's page",
     "settings.research": "Let Claude look things up on the web and read papers while it dives",
     "settings.researchHint": "Searches run on Anthropic's side. Pages and PDFs come only from big sites: encyclopedias, forums such as Reddit and Zhihu, Chinese and English news, film and book sites, scholarly indexes and publishers. Everything it downloads stays in one folder per dive, sealed off from the rest of your Mac, and is deleted when the dive ends.",
     "settings.regionGuard": "Keep Claude and Codex ashore while the connection is in mainland China",
@@ -167,7 +173,7 @@ EN: dict[str, str] = {
     "error.noModel": "There is no crew aboard. Sign in to Claude Code (`claude`) or Codex (`codex`), or set an API key. See Harbour → The crew.",
     "tray.open": "Open the shore", "tray.jot": "Bottle a thought…", "tray.dream": "Dive now", "tray.pause": "Drop anchor for an hour",
     "tray.resume": "Weigh anchor", "tray.quit": "Go ashore (quit)", "tray.hidden": "Still watching the tide from the menu bar. Go ashore from its menu to quit.",
-    "notify.dream": "Tonight's dream has washed ashore", "notify.dive": "Back up from the seabed", "notify.failed": "The dive came up empty",
+    "notify.dream": "A dive has washed ashore", "notify.dive": "Back up from the seabed", "notify.failed": "The dive came up empty",
 }
 
 ZH: dict[str, str] = {
@@ -217,6 +223,7 @@ ZH: dict[str, str] = {
     "spark.score": "灯塔的光照亮它的程度",
     "spark.keep": "收进网里", "spark.pursue": "跟着它游 →", "spark.dismiss": "放回大海", "spark.undo": "撤销", "spark.open": "打开 →",
     "spark.kept": "在网里", "spark.pursuing": "追随中", "spark.dismissed": "已放回", "spark.done": "已上岸", "spark.new": "新",
+    "spark.drifted": "随潮退去",
     "reason.generic": "太常见的鱼", "reason.known": "以前钓到过", "reason.off_field": "不是我的水域",
     "reason.infeasible": "太深够不着", "reason.wrong": "误读了我的潮汐",
     "spark.evidence": "它从这里浮上来", "spark.fromDream": "来自 {day} 的下潜", "spark.rubric": "灯塔看守人的笔记",
@@ -225,7 +232,7 @@ ZH: dict[str, str] = {
     "rubric.generic": "看守人觉得这是条常见的鱼", "rubric.none": "灯塔看守人没给这条鱼留笔记。",
     "dive.title": "潜到海床",
     "dive.intro": "用这条鱼的测深线探测开放学术索引，再请船员看看海床上已经有什么、礁石的缺口在哪、如何检验。",
-    "dive.start": "潜下去找文献", "dive.again": "再潜一次", "dive.known": "海床上已有的", "dive.gap": "礁石的缺口",
+    "dive.start": "潜下去找文献", "dive.again": "再探一次海床", "dive.known": "海床上已有的", "dive.gap": "礁石的缺口",
     "dive.sharpened": "更锐利的问题", "dive.approaches": "下水的路线", "dive.design": "设计", "dive.data": "数据",
     "dive.next": "接下来的几划", "dive.risks": "暗礁", "dive.refs": "捞上来的文献",
     "dive.verdict.open": "开阔水域", "dive.verdict.active": "热闹的礁区", "dive.verdict.crowded": "拥挤的港口",
@@ -243,8 +250,8 @@ ZH: dict[str, str] = {
     "thread.mergeConfirm": "让「{a}」汇入「{b}」？它的潮汐会并入更大的洋流。", "thread.renameTitle": "重命名洋流",
     "sparks.title": "鱼群", "sparks.sub": "每一次下潜留下的鱼，以及你怎么处置了它们。", "sparks.search": "在鱼群里搜索……",
     "sparks.all": "全部", "sparks.empty": "这片水域还没有鱼。",
-    "journal.title": "航海日志", "journal.sub": "每晚一篇。标题是下潜时起的；下面那个问题，是你似乎一直绕着转的暗流。",
-    "journal.empty": "航海日志还是空白的。", "journal.sparks": "{n} 条鱼",
+    "journal.title": "航海日志", "journal.sub": "每天一篇。标题是最新那次下潜起的；一天潜了不止一次，较早的几次留在那天的海岸上。下面那个问题，是你似乎一直绕着转的暗流。",
+    "journal.empty": "航海日志还是空白的。", "journal.sparks": "{n} 条鱼", "journal.dives": "潜了 {n} 次",
     "settings.title": "港湾", "settings.sub": "一切都系在港湾文件夹里的一个文件上。",
     "settings.you": "游泳的人", "settings.youNote": "谁在水里。每一次下潜都会先读这一段。",
     "settings.name": "名字", "settings.persona": "关于你和你的工作",
@@ -271,6 +278,11 @@ ZH: dict[str, str] = {
     "settings.models": "船员", "settings.modelsNote": "每份工作交给甲板上最合适的人，他们失手时下一位接上。",
     "settings.choice": "偏好", "settings.chain": "将依次尝试", "settings.autoModel": "船上有谁就谁",
     "settings.fallback": "有人失手时交给下一位船员",
+    "fold.more": "展开全文", "fold.less": "收起", "fold.dive": "展开这次下潜", "fold.diveLess": "收起这次下潜", "today.todays": "今日之梦",
+    "today.earlier": "更早的下潜", "today.earlierAt": "第 {n} 次下潜 · {time}",
+    "today.earlierNote": "原样留着；没人碰过的鱼随潮退去了",
+    "fold.all": "展开全部 {n} 项", "fold.fewer": "收起", "fold.hidden": "下面还有 {n} 项",
+    "spark.moreEvidence": "还有 {n} 条，在这条鱼的页面上",
     "settings.research": "下潜时允许 Claude 上网查概念、下载论文全文来读",
     "settings.researchHint": "搜索在 Anthropic 那一侧进行。网页和 PDF 只来自大型网站：百科、Reddit 和知乎这类论坛、中英文新闻、影视书籍网站、学术索引和出版社。下载的东西都放在每次下潜单独的文件夹里，与 Mac 上的其他文件隔开，下潜结束就删除。",
     "settings.regionGuard": "网络位于中国大陆时，让 Claude 和 Codex 留在岸上",
@@ -309,7 +321,7 @@ ZH: dict[str, str] = {
     "error.noModel": "船上没有船员。请登录 Claude Code（`claude`）或 Codex（`codex`），或设置 API key。见 港湾 → 船员。",
     "tray.open": "打开海岸", "tray.jot": "装一只漂流瓶…", "tray.dream": "现在下潜", "tray.pause": "下锚一小时",
     "tray.resume": "起锚", "tray.quit": "上岸（退出）", "tray.hidden": "仍在菜单栏里观潮。从它的菜单里上岸即可退出。",
-    "notify.dream": "今夜的梦被冲上岸了", "notify.dive": "从海床回来了", "notify.failed": "这次下潜空手而归",
+    "notify.dream": "一次下潜被冲上岸了", "notify.dive": "从海床回来了", "notify.failed": "这次下潜空手而归",
 }
 
 _current = "en"
