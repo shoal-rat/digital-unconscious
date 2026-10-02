@@ -9,7 +9,6 @@ from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
-    QLabel,
     QWidget,
 )
 
@@ -18,14 +17,17 @@ from unconscious.ui.i18n import t
 from unconscious.ui.theme import THEME, font
 from unconscious.ui.widgets import (
     FlowLayout,
+    Fold,
     ScoreRing,
     Stamp,
+    TitleLabel,
     button,
     chip,
     eyebrow,
     hbox,
     label,
     para,
+    plain_tip,
     vbox,
     wrap,
 )
@@ -33,31 +35,6 @@ from unconscious.ui.widgets import (
 KIND_MARK = {"search": "⌕", "jot": "✎", "reading": "❡", "note": "·"}
 SHADOW = (12, 4, 20)  # side, top, bottom room for the painted shadow
 REASONS = ["generic", "known", "off_field", "infeasible", "wrong"]
-
-
-class TitleLabel(QLabel):
-    clicked = Signal()
-
-    def __init__(self, text: str, role: str):
-        super().__init__(text)
-        self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setWordWrap(True)
-        self.setFont(font(role))
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    def enterEvent(self, _event) -> None:
-        f = self.font()
-        f.setUnderline(True)
-        self.setFont(f)
-
-    def leaveEvent(self, _event) -> None:
-        f = self.font()
-        f.setUnderline(False)
-        self.setFont(f)
-
-    def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
 
 
 class SparkCard(QFrame):
@@ -70,7 +47,6 @@ class SparkCard(QFrame):
         self.spark = spark
         self.status = spark.get("status") or "new"
         self.compact = compact
-        self.setMinimumWidth(280)
         # The soft shadow is painted inside these margins rather than with a
         # QGraphicsEffect, which re-composites the textured page behind it.
         sx, st, sb = SHADOW
@@ -93,7 +69,9 @@ class SparkCard(QFrame):
         if spark.get("question"):
             body.addWidget(para(spark["question"], "question", "ink2", 145))
         if not compact and spark.get("insight"):
-            body.addWidget(para(spark["insight"], "body", "ink2", 150))
+            insight = para(spark["insight"], "body", "ink2", 150)
+            # in a list the card folds a long insight; the fish's own page shows it whole
+            body.addWidget(Fold(insight, lines=5, key=f"insight:{spark['id']}") if linked else insight)
 
         if not compact and (spark.get("first_step") or spark.get("kill")):
             grid = QGridLayout()
@@ -123,7 +101,8 @@ class SparkCard(QFrame):
         if evidence and not compact:
             body.addSpacing(2)
             box = vbox(spacing=5)
-            for index, item in enumerate(evidence[:4], 1):
+            shown = evidence[:4] if linked else evidence
+            for index, item in enumerate(shown, 1):
                 text = f"“{item.get('body') or item['label']}”" if item.get("kind") in {"jot", "note"} else item["label"]
                 line = hbox(spacing=8)
                 number = label(str(index), "caption", "accent", wrap=False)
@@ -138,11 +117,16 @@ class SparkCard(QFrame):
                     tip += f"\n{item['domain']}"
                 if item.get("seconds"):
                     tip += f" · {human(item['seconds'])}"
-                content.setToolTip(tip)
+                content.setToolTip(plain_tip(tip))
                 line.addWidget(content, 1)
                 if item.get("seconds"):
                     line.addWidget(label(human(item["seconds"]), "caption", "muted", wrap=False), 0, Qt.AlignmentFlag.AlignTop)
                 box.addLayout(line)
+            if len(evidence) > len(shown):
+                more = button(t("spark.moreEvidence", n=len(evidence) - len(shown)), "link",
+                              lambda: self.open_spark.emit(int(spark["id"])))
+                more.setFont(font("caption"))
+                box.addLayout(hbox(more, "stretch"))
             body.addWidget(_dashed(box))
 
         if not compact and spark.get("objection"):

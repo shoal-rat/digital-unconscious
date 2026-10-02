@@ -15,13 +15,19 @@ from unconscious.ui.i18n import language, t, trouble_message
 from unconscious.ui.pages.base import Page
 from unconscious.ui.theme import font
 from unconscious.ui.widgets import (
+    ElidedLabel,
+    FlowLayout,
+    Fold,
+    FoldList,
     MiniBar,
     NightPanel,
     SectionHead,
     Stamp,
     Steps,
     Swatch,
+    TitleLabel,
     button,
+    capped,
     eyebrow,
     hbox,
     label,
@@ -101,7 +107,7 @@ class TodayPage(Page):
         stats = (dream.get("payload") or {}).get("stats") or {}
         models = dream.get("models") or {}
         heading = t("today.tonight") if is_today else t("today.ofDay")
-        b.addWidget(label(f"{heading} · {t('today.dream', n=dream.get('number') or '')} · {short_day(dream['day'])}", "caption-l", "muted", wrap=False))
+        b.addWidget(label(f"{heading} · {t('today.dream', n=dream.get('number') or '')} · {short_day(dream['day'])}", "caption-l", "muted"))
         b.addSpacing(22)
         title = label(dream.get("title") or "", "display-xl")
         title.setMaximumWidth(860)
@@ -109,7 +115,7 @@ class TodayPage(Page):
         b.addSpacing(22)
         reflection = para(dream.get("reflection") or "", "reading", "body", 165)
         reflection.setMaximumWidth(660)
-        b.addWidget(reflection)
+        b.addWidget(Fold(reflection, lines=6, key=f"reflection:{dream['day']}"))
         if dream.get("undercurrent"):
             b.addSpacing(34)
             mark = label("“", "quote", "accent", wrap=False)
@@ -122,9 +128,7 @@ class TodayPage(Page):
             row = hbox(spacing=8)
             row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
             row.addLayout(quote, 1)
-            holder = wrap(row)
-            holder.setMaximumWidth(760)
-            b.addWidget(holder)
+            b.addLayout(capped(wrap(row), 760))
         b.addSpacing(30)
         meta = hbox(spacing=18)
         parts = []
@@ -138,12 +142,20 @@ class TodayPage(Page):
             parts.append(t("today.meta.sample"))
         elif models.get("dream"):
             parts.append(t("today.meta.models", dream=models["dream"], critique=models.get("critique") or "—"))
-        for part in parts:
-            meta.addWidget(label(part, "caption", "muted", wrap=False))
-        meta.addStretch(1)
+        flow = FlowLayout(spacing=18)  # the parts wrap rather than push the panel wider than the window
+        for part in parts:  # a part wider than the room ends in … and says it all on hover
+            flow.addWidget(ElidedLabel(part, "caption", "muted", longest=10_000))
+        facts = QWidget()
+        facts.setLayout(flow)
+        meta.addWidget(facts, 1, Qt.AlignmentFlag.AlignVCenter)
         if is_today and not job:
-            meta.addWidget(button(t("today.redream"), "", lambda: self.window.dream(self.day, redigest=True)))
+            meta.addWidget(button(t("today.redream"), "", lambda: self.window.dream(self.day, redigest=True)), 0,
+                           Qt.AlignmentFlag.AlignTop)
         b.addLayout(meta)
+        failure = self.window.failures.get(dream["day"])
+        if failure:  # a re-dive that failed: the dream stays, and the reason is readable in full
+            b.addSpacing(12)
+            b.addWidget(label(failure, "small", "error", selectable=True))
         payload = dream.get("payload") or {}
         pebbles = shore_threads(payload.get("topics") or [], payload.get("signals") or [])
         if pebbles:
@@ -280,14 +292,14 @@ class TodayPage(Page):
             left.addWidget(label(t("today.unsorted"), "question", "muted"))
         for row in rows:
             line = hbox(spacing=8)
-            line.addWidget(Swatch(row["hue"]))
-            name = button(row["name"], "link", lambda tid=row["id"]: self.window.go("thread", id=tid))
-            name.setFont(font("body"))
-            line.addWidget(name)
+            name = TitleLabel(row["name"], "body")  # wraps, where a button would push the column wider
+            dot = (name.fontMetrics().height() - 10) // 2  # on the first line, however many the name takes
+            line.addLayout(vbox(Swatch(row["hue"]), "stretch", spacing=0, margins=(0, max(0, dot), 0, 0)))
+            name.clicked.connect(lambda tid=row["id"]: self.window.go("thread", id=tid))
+            line.addWidget(name, 1)
             for kind in [k for k in signals.get(row["id"], []) if k != "steady"][:2]:
-                line.addWidget(Stamp(kind, small=True))
-            line.addStretch(1)
-            line.addWidget(label(human(row["seconds"]), "mono-n", "muted", wrap=False))
+                line.addWidget(Stamp(kind, small=True), 0, Qt.AlignmentFlag.AlignTop)
+            line.addWidget(label(human(row["seconds"]), "mono-n", "muted", wrap=False), 0, Qt.AlignmentFlag.AlignTop)
             left.addLayout(vbox(line, MiniBar(row["seconds"] / peak, row["hue"]), spacing=5))
         left.addStretch(1)
 
@@ -296,7 +308,8 @@ class TodayPage(Page):
         right.addSpacing(10)
         if not view["subjects"]:
             right.addWidget(label(t("today.nothingYet"), "question", "muted"))
-        for s in view["subjects"][:14]:
+        rows = []
+        for s in view["subjects"]:
             line = hbox(spacing=10, margins=(0, 7, 0, 7))
             mark = label(KIND_MARK.get(s["kind"], ""), "mono-n", "accent" if s["kind"] == "jot" else "muted", wrap=False)
             mark.setFixedWidth(14)
@@ -310,16 +323,14 @@ class TodayPage(Page):
                 mark = holder
             line.addWidget(mark)
             text = f"“{s['body'] or s['label']}”" if s["kind"] == "jot" else s["label"]
-            item = label(text, "body", wrap=False)
-            item.setMinimumWidth(80)
-            item.setToolTip("\n".join(x for x in (s["label"], s.get("thread") or "", s.get("domain") or "") if x))
-            elided = item.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, 420)
-            item.setText(elided)
-            line.addWidget(item, 1)
+            whole = s["body"] if s["kind"] == "jot" and s.get("body") else s["label"]
+            tip = "\n".join(x for x in (whole, s.get("thread") or "", s.get("domain") or "") if x)
+            line.addWidget(ElidedLabel(text, "body", tip=tip), 1)  # ends in … at whatever width it gets
             if s["seconds"]:
                 line.addWidget(label(human(s["seconds"]), "mono-n", "muted", wrap=False))
-            right.addWidget(wrap(line))
-            right.addWidget(_hairline())
+            rows.append(wrap(vbox(wrap(line), _hairline(), spacing=0)))
+        if rows:
+            right.addWidget(FoldList(rows, keep=14, key=f"subjects:{view['day']}"))
         right.addStretch(1)
 
         columns = hbox(spacing=44)

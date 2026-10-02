@@ -27,7 +27,7 @@ from unconscious.ui.dialogs import SharkDialog
 from unconscious.ui.i18n import crew_message, region_name, t, trouble_message
 from unconscious.ui.pages.base import Page
 from unconscious.ui.theme import font
-from unconscious.ui.widgets import SectionHead, button, eyebrow, hbox, label, vbox, wrap
+from unconscious.ui.widgets import FoldList, SectionHead, button, eyebrow, hbox, label, vbox, wrap
 
 MODEL_CHOICES = [
     "claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "codex", "anthropic:claude-opus-5-5", "anthropic:claude-sonnet-5-5",
@@ -362,14 +362,16 @@ class SettingsPage(Page):
         usage = self.view.get("usage") or []
         if usage:
             self.add(eyebrow(t("settings.usage")), 18)
-            for item in usage[:6]:
+            lines = []
+            for item in usage:
                 tokens = int((item.get("tokens_in") or 0) + (item.get("tokens_out") or 0))
-                self.add(label(f"{item['role']:<9} {item['provider']}:{item['model']}  ·  " + t("settings.calls", n=item["calls"], tokens=f"{tokens:,}"),
-                               "mono-n", "ink2"), 4)
+                lines.append(label(f"{item['role']:<9} {item['provider']}:{item['model']}  ·  " + t("settings.calls", n=item["calls"], tokens=f"{tokens:,}"),
+                                   "mono-n", "ink2"))
+            self.add(FoldList(lines, keep=6, key="usage", spacing=4), 4)
         error = self.view.get("last_error")
         if error:
             self.add(eyebrow(t("settings.lastError")), 16)
-            self.add(label(f"{error['ts'][:16]} · {error['provider']} · {crew_message(error['error'])[:400]}", "small", "error", selectable=True), 6)
+            self.add(label(f"{error['ts'][:16]} · {error['provider']} · {crew_message(error['error'])}", "small", "error", selectable=True), 6)
         self._save_row(lambda: self._save({"models": {
             **{role: combo.currentData() for role, combo in combos.items()}, "fallback": fallback.isChecked(),
             "region_guard": guard.isChecked(), "research": research.isChecked(),

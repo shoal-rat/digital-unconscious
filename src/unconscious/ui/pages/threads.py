@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QComboBox, QInputDialog, QMessageBox, QWidget
 
 from unconscious import api
@@ -13,7 +14,9 @@ from unconscious.ui.pages.today import short_day
 from unconscious.ui.theme import font
 from unconscious.ui.widgets import (
     Clickable,
+    ElidedLabel,
     FlowLayout,
+    FoldList,
     Rule,
     SectionHead,
     Stamp,
@@ -74,7 +77,7 @@ class ThreadPage(Page):
         title_row = hbox(spacing=14)
         title_row.addWidget(Swatch(th.get("hue"), 16), 0, Qt.AlignmentFlag.AlignVCenter)
         title_row.addWidget(label(th["name"], "display-l"), 1)
-        actions = hbox(spacing=6)
+        actions = FlowLayout(spacing=6, one_line=True)  # the buttons wrap under each other in a small window
         pinned, muted = th.get("state") == "pinned", th.get("state") == "muted"
         actions.addWidget(button(t("thread.rename"), "line", self._rename))
         actions.addWidget(button(t("thread.unpin") if pinned else t("thread.pin"), "on" if pinned else "line",
@@ -83,6 +86,9 @@ class ThreadPage(Page):
                                  lambda: self._set_state("active" if muted else "muted")))
         if th.get("others"):
             merge = QComboBox()
+            # sized to a short name, not the longest current's, so the row fits a small window
+            merge.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            merge.setMinimumContentsLength(14)
             merge.addItem(t("thread.merge"), None)
             for other in th["others"]:
                 merge.addItem(other["name"], other["id"])
@@ -90,7 +96,9 @@ class ThreadPage(Page):
             actions.addWidget(merge)
         for i in range(actions.count()):
             actions.itemAt(i).widget().setFont(font("small"))
-        title_row.addLayout(actions)
+        holder = QWidget()
+        holder.setLayout(actions)
+        title_row.addWidget(holder, 0, Qt.AlignmentFlag.AlignVCenter)
         self.add(title_row)
         if th.get("gist"):
             gist = para(th["gist"], "reading", "ink2", 150)
@@ -99,7 +107,7 @@ class ThreadPage(Page):
         if th.get("keywords"):
             flow = FlowLayout(spacing=6)
             for keyword in th["keywords"]:
-                tag = label(keyword, "mono-n", "ink2", wrap=False)
+                tag = ElidedLabel(keyword, "mono-n", "ink2")
                 tag.setStyleSheet("padding: 2px 7px; border-radius: 3px; background: palette(alternate-base);")
                 flow.addWidget(tag)
             holder = QWidget()
@@ -132,10 +140,14 @@ class ThreadPage(Page):
         left = vbox(spacing=0)
         left.addWidget(SectionHead(t("thread.notes")))
         left.addSpacing(8)
-        for entry in (th.get("history") or [])[:20]:
+        history = th.get("history") or []
+        whens = [f"{short_day(entry['day'])} · {human(entry['seconds'])}" for entry in history]
+        when_width = max([0] + [QFontMetrics(font("mono-n")).horizontalAdvance(w) for w in whens]) + 4
+        notes = []
+        for entry, stamp in zip(history, whens, strict=True):
             line = hbox(spacing=14, margins=(0, 9, 0, 9))
-            when = label(f"{short_day(entry['day'])} · {human(entry['seconds'])}", "mono-n", "muted", wrap=False)
-            when.setFixedWidth(130)
+            when = label(stamp, "mono-n", "muted", wrap=False)
+            when.setFixedWidth(when_width)  # as wide as the longest date, in either language
             line.addWidget(when, 0, Qt.AlignmentFlag.AlignTop)
             text = vbox(spacing=3)
             if entry.get("note"):
@@ -143,18 +155,21 @@ class ThreadPage(Page):
             if entry.get("subjects"):
                 text.addWidget(label(" · ".join(entry["subjects"][:4]), "small", "muted"))
             line.addLayout(text, 1)
-            left.addWidget(wrap(line))
-            left.addWidget(Rule("rule2"))
+            notes.append(wrap(vbox(wrap(line), Rule("rule2"), spacing=0)))
+        if notes:
+            left.addWidget(FoldList(notes, keep=20, key=f"history:{thread_id}"))
         left.addStretch(1)
         right = vbox(spacing=0)
         right.addWidget(SectionHead(t("thread.subjects")))
         right.addSpacing(8)
-        for name, count in th.get("subjects") or []:
+        counts = th.get("subjects") or []
+        count_width = max([0] + [QFontMetrics(font("mono-n")).horizontalAdvance(f"{c}×") for _, c in counts]) + 4
+        for name, count in counts:
             line = hbox(spacing=12, margins=(0, 8, 0, 8))
             n = label(f"{count}×", "mono-n", "muted", wrap=False)
-            n.setFixedWidth(30)
+            n.setFixedWidth(count_width)
             line.addWidget(n)
-            line.addWidget(label(name, "body"), 1)
+            line.addWidget(para(name, "body", None, 140), 1)
             right.addWidget(wrap(line))
             right.addWidget(Rule("rule2"))
         right.addStretch(1)

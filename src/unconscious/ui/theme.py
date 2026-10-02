@@ -280,6 +280,8 @@ def stylesheet(c: dict[str, str]) -> str:
     QPushButton[kind="reason"]:hover {{ border-color: {c['accent']}; color: {c['accent']}; background: transparent; }}
     QPushButton[kind="link"] {{ border: none; padding: 0; color: {c['ink']}; text-align: left; background: transparent; border-radius: 0; }}
     QPushButton[kind="link"]:hover {{ color: {c['accent']}; }}
+    QPushButton[kind="fold"] {{ background: transparent; border: 1px solid {c['rule']}; border-radius: 12px; padding: 3px 13px; min-height: 16px; color: {c['muted']}; }}
+    QPushButton[kind="fold"]:hover {{ border-color: {c['ink2']}; color: {c['ink']}; }}
     QPushButton[kind="quiet"] {{ border: none; padding: 4px 2px; color: {c['muted']}; background: transparent; border-radius: 0; }}
     QPushButton[kind="quiet"]:hover {{ color: {c['ink']}; }}
     QPushButton[size="s"] {{ padding: 5px 13px; border-radius: 13px; min-height: 16px; }}
@@ -288,6 +290,8 @@ def stylesheet(c: dict[str, str]) -> str:
     QPushButton[kind="tab"][active="true"] {{ color: #ffffff; background: {gel(c['gel'])}; border: 1px solid {QColor(c['gel']).darker(125).name()}; }}
     #Night QPushButton {{ border: 1px solid rgba(247,241,230,0.42); border-radius: 16px; color: {c['night_ink']}; background: {GLASS}; padding: 7px 18px; }}
     #Night QPushButton:hover {{ border-color: {c['night_ink']}; }}
+    #Night QPushButton[kind="fold"] {{ background: rgba(255,255,255,0.07); border: 1px solid rgba(247,241,230,0.30); border-radius: 12px; padding: 3px 13px; min-height: 16px; color: {c['night_muted']}; }}
+    #Night QPushButton[kind="fold"]:hover {{ border-color: {c['night_ink']}; color: {c['night_ink']}; background: rgba(255,255,255,0.12); }}
     #Night QPushButton[kind="accent"] {{ background: {c['night_ink']}; border: 1px solid {c['night_ink']}; border-radius: 16px; color: {c['sea_far']}; }}
     #Night QPushButton[kind="accent"]:hover {{ background: #ffffff; }}
 

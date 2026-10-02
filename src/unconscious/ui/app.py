@@ -20,6 +20,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from unconscious.store import today
+from unconscious.text import clip
 from unconscious.ui import theme
 from unconscious.ui.i18n import set_language, t
 from unconscious.ui.widgets import mac_icon_image, mark_pixmap
@@ -73,7 +74,7 @@ class Tray(QSystemTrayIcon):
         self.setIcon(icon)
         label = t("sensor.dreaming") if dreaming else t(f"sensor.{'paused' if paused else sensor.get('state', 'never')}")
         if sensor.get("subject") and not dreaming and not paused:
-            label += f" · {sensor['subject'][:40]}"
+            label += f" · {clip(sensor['subject'], 40)}"
         self.status_action.setText(label)
         self.pause_action.setText(t("tray.resume") if paused else t("tray.pause"))
         self.setToolTip(f"Digital Unconscious — {label}")

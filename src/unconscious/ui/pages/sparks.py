@@ -19,6 +19,7 @@ from unconscious.ui.widgets import (
     Rule,
     SectionHead,
     Steps,
+    TitleLabel,
     button,
     eyebrow,
     hbox,
@@ -48,7 +49,8 @@ class SparksPage(Page):
         search = QLineEdit(query)
         search.setPlaceholderText(t("sparks.search"))
         search.setClearButtonEnabled(True)
-        search.setFixedWidth(260)
+        search.setMinimumWidth(160)
+        search.setMaximumWidth(260)
         timer = QTimer(search)
         timer.setSingleShot(True)
         timer.setInterval(350)
@@ -122,7 +124,7 @@ class SparkPage(Page):
                 text = f"“{item.get('body') or item['label']}”" if item.get("kind") in {"jot", "note"} else item["label"]
                 line = hbox(spacing=8, margins=(0, 6, 0, 6))
                 line.addWidget(label(str(index), "mono-s", "accent", wrap=False), 0, Qt.AlignmentFlag.AlignTop)
-                block = vbox(label(text, "small"), spacing=2)
+                block = vbox(para(text, "small", None, 140), spacing=2)
                 meta = " · ".join(x for x in (KIND_MARK.get(item.get("kind"), "") + (" " + item["domain"] if item.get("domain") else ""),
                                               human(item["seconds"]) if item.get("seconds") else "") if x.strip())
                 if meta:
@@ -134,19 +136,21 @@ class SparkPage(Page):
         if spark.get("search_terms"):
             side.addWidget(self._side_title(t("spark.searchTerms")))
             for term in spark["search_terms"]:
-                side.addWidget(label(term, "mono-n", "ink2"))
+                side.addWidget(para(term, "mono-n", "ink2", 140))  # a long term breaks anywhere, not past the column
+                side.addSpacing(6)  # wider than the lines inside one wrapped term
         side.addStretch(1)
 
         side_box = QWidget()
         side_box.setLayout(side)
-        side_box.setFixedWidth(300)
+        side_box.setMinimumWidth(220)  # narrows with a small window instead of pushing past it
+        side_box.setMaximumWidth(300)
         columns = hbox(spacing=44)
-        columns.addLayout(main, 1)
-        columns.addWidget(side_box, 0, Qt.AlignmentFlag.AlignTop)
+        columns.addLayout(main, 3)
+        columns.addWidget(side_box, 1, Qt.AlignmentFlag.AlignTop)
         self.add(columns)
 
     def _side_title(self, text: str) -> QWidget:
-        box = vbox(Rule("ink"), eyebrow(text), spacing=10, margins=(0, 0, 0, 10))
+        box = vbox(Rule("ink"), eyebrow(text, wrap=True), spacing=10, margins=(0, 0, 0, 10))
         return wrap(box)
 
     def _dive_section(self, spark: dict) -> QWidget:
@@ -185,12 +189,12 @@ class SparkPage(Page):
         tag = label(t(f"dive.verdict.{verdict}"), "caption-l", None, wrap=False)
         color = {"open": THEME.c["ok"], "active": THEME.hue(2).name(), "crowded": THEME.c["accent"]}.get(verdict, THEME.c["muted"])
         tag.setStyleSheet(f"color: #ffffff; background: {color}; padding: 4px 12px; border-radius: 12px;")
-        head.addWidget(tag)
-        head.addWidget(label(t("dive.when", day=(dive.get("created_at") or "")[:10], model=dive.get("model") or ""), "mono-n", "muted", wrap=False))
-        head.addStretch(1)
+        head.addWidget(tag, 0, Qt.AlignmentFlag.AlignTop)
+        when = label(t("dive.when", day=(dive.get("created_at") or "")[:10], model=dive.get("model") or ""), "mono-n", "muted")
+        head.addWidget(when, 1)
         again = button(t("dive.again"), "line", lambda: self.window.dive(spark["id"]))
         again.setFont(font("small"))
-        head.addWidget(again)
+        head.addWidget(again, 0, Qt.AlignmentFlag.AlignTop)
         box.addLayout(head)
         if report.get("sharpened_question"):
             box.addSpacing(16)
@@ -288,7 +292,6 @@ def _bullet(text: str, mark: str = "—") -> QWidget:
 
 def _wrapping(button_widget, text: str) -> QWidget:
     """QPushButton cannot wrap, so titles become clickable wrapped labels."""
-    from unconscious.ui.cards import TitleLabel
 
     title = TitleLabel(text, "serif")
     title.clicked.connect(button_widget.click)

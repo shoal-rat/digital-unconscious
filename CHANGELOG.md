@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.1.2 — read it all
+
+- **Nothing stops halfway.** A long dream no longer ends mid-sentence on the Shore. Qt measured a narrowed title or
+  undercurrent at the panel's full width, came out short, and took the difference from the reflection; every narrowed
+  text is now measured at the width it really has.
+- **A pill to read it all.** A reflection longer than seven lines shows its first six, the last one fading, and a
+  translucent *Read it all* pill that unfolds it in place (*Fold it back* folds it again). A fold you open stays open
+  while the app runs. The same pill sits under a fish's long insight on the Shore, and under lists that used to stop
+  without saying so: what washed ashore today, a current's logbook, the crew's usage. A card on the Shore shows four
+  pieces of evidence and says how many more are on the fish's page.
+- **Small windows.** Cards re-flow into fewer columns instead of pushing the page past the window's edge; a fish's
+  side column, a current's buttons and the dream's facts wrap; long names end in "…" with the whole name on hover
+  (shown as plain text, never as markup).
+  The Strata keeps its words off the dots and lists them all on hover.
+- A dive that failed when you asked for another one is explained under the dream, in full.
+- `tests/test_layout.py` renders every page at four window sizes in English and Chinese, with texts two and three
+  times as long, and fails on anything cut off, overlapping or wider than the window.
+
 ## 3.1.1 — the mark holds, and sits like its neighbours
 
 - Clicking the menu-bar mark no longer closes the app on newer macOS. Qt read the click count of the event that
