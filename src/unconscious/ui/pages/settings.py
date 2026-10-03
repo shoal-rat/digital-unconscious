@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import platform
+import threading
 from datetime import date, timedelta
 
-from PySide6.QtCore import QDate, Qt, QTime, QUrl
+from PySide6.QtCore import QDate, QObject, Qt, QTime, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -20,8 +21,9 @@ from PySide6.QtWidgets import (
     QTimeEdit,
     QWidget,
 )
+from shiboken6 import isValid
 
-from unconscious import api, ingest
+from unconscious import api, ingest, service
 from unconscious.llm.router import ROLE_PREFERENCES, ROLES
 from unconscious.ui.dialogs import SharkDialog
 from unconscious.ui.i18n import crew_message, region_name, t, trouble_message
@@ -134,6 +136,10 @@ class DropZone(QFrame):
             self.on_file(path)
 
 
+class _Relay(QObject):
+    done = Signal(str)  # an error, or "" when it went through
+
+
 class SettingsPage(Page):
     def build(self) -> None:
         self.view = api.settings_view(self.app)
@@ -226,6 +232,16 @@ class SettingsPage(Page):
         pause.addStretch(1)
         self.add(pause, 14)
         self.body.addSpacing(18)
+        if service.supported():
+            at_login = QCheckBox(t("settings.atLogin"))
+            at_login.setChecked(service.installed())
+            at_login.setEnabled(not self.window.demo)  # a borrowed sea never takes over the real login item
+            at_login.toggled.connect(lambda on, box=at_login: self._at_login(on, box))
+            self.add(at_login)
+            hint = label(t("settings.atLoginHint"), "small", "muted")
+            hint.setMaximumWidth(640)
+            self.add(hint, 4)
+            self.body.addSpacing(18)
         sense = s["sense"]
         titles = QCheckBox(t("settings.titles"))
         titles.setChecked(sense["capture_titles"])
@@ -253,6 +269,35 @@ class SettingsPage(Page):
             "interval_seconds": interval.value(), "idle_seconds": idle.value(), "retention_days": retention.value(),
             "quiet_apps": lines_of(quiet_apps), "private_apps": lines_of(private_apps), "quiet_domains": lines_of(quiet_domains),
         }}))
+
+    def _at_login(self, on: bool, box: QCheckBox) -> None:
+        """Add or remove the login item off the interface thread (launchctl is a command)."""
+        box.setEnabled(False)
+        window = self.window
+        relay = _Relay(window)  # owned by the window: the page may be rebuilt before the answer comes
+
+        def finish(error: str) -> None:
+            relay.deleteLater()
+            if error:
+                window.toast(t("settings.atLoginFailed", error=error), error=True)
+            else:
+                window.toast(t("settings.atLoginOn") if on else t("settings.atLoginOff"))
+            if isValid(box):  # only the switch: the rest of the Harbour may hold edits not yet saved
+                box.blockSignals(True)
+                box.setChecked(service.installed())
+                box.blockSignals(False)
+                box.setEnabled(True)
+
+        relay.done.connect(finish, Qt.ConnectionType.QueuedConnection)
+
+        def work() -> None:
+            try:
+                service.set_at_login(on)
+                relay.done.emit("")
+            except Exception as exc:  # the system's own words, shown as they are
+                relay.done.emit(str(exc)[:300] or type(exc).__name__)
+
+        threading.Thread(target=work, name="dun-login-item", daemon=True).start()
 
     def _pause(self, hours) -> None:
         from datetime import datetime

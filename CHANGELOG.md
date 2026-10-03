@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.2.1 — it sets out at every login
+
+- **Set out at every login.** *Harbour → The tide watcher* has a switch that opens the app quietly in the menu bar
+  whenever you log in, so the tide is watched all day and the night's dive is never missed. On macOS it is a login
+  agent that macOS lists under *Allow in the Background*; if the app ever falls over, it is started again, while
+  ⌘Q lets it rest until the next login. The switch works off the interface thread, changes nothing else on the page,
+  and turning it off from the app it started does not stop that app. If the system refuses, nothing is left behind
+  and the switch says so; the borrowed sea (`dun demo`) cannot touch it.
+- When it starts at login while you already have it open, it no longer pulls the window to the front.
+- `dun service install` says what it does inside the Mac app (no more talk of Python).
+
 ## 3.2.0 — read it all, and a day may dive twice
 
 ### Two dives in one day

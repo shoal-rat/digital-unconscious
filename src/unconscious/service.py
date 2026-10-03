@@ -29,29 +29,74 @@ def _linux_unit() -> Path:
     return Path.home() / ".config" / "systemd" / "user" / "digital-unconscious.service"
 
 
-def handle(action: str) -> int:
+def supported() -> bool:
+    return platform.system() in {"Darwin", "Linux"}
+
+
+def installed() -> bool:
+    """Is the app set to set out at login (a file check: cheap enough for the interface)."""
     system = platform.system()
     if system == "Darwin":
-        return _mac(action)
+        return _mac_plist().exists()
     if system == "Linux":
-        return _linux(action)
-    print("On Windows, create a shortcut to the command below in shell:startup:")
-    print("  " + " ".join(f'"{part}"' if " " in part else part for part in _command()))
+        return _linux_unit().exists()
+    return False
+
+
+def running_as_job() -> bool:
+    """This process was started by the login item (launchd names the processes of its jobs)."""
+    return os.environ.get("XPC_SERVICE_NAME") == LABEL
+
+
+def set_at_login(on: bool, *, start_now: bool = False) -> None:
+    """Add or remove the login item. From inside the app (start_now False) the running app is left
+    alone: it is not stopped when the item goes, and a copy started by the item hands over and
+    leaves quietly. Raises RuntimeError with the system's own words when it refuses."""
+    system = platform.system()
+    if system == "Darwin":
+        _mac_set(on)
+    elif system == "Linux":
+        _linux_set(on, start_now)
+    else:
+        raise RuntimeError("not on this system")
+
+
+def handle(action: str) -> int:
+    system = platform.system()
+    if system not in {"Darwin", "Linux"}:
+        print("On Windows, create a shortcut to the command below in shell:startup:")
+        print("  " + " ".join(f'"{part}"' if " " in part else part for part in _command()))
+        return 0
+    if action == "status":
+        if system == "Linux":
+            return subprocess.call(["systemctl", "--user", "status", _linux_unit().name])
+        result = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{LABEL}"], capture_output=True, text=True)
+        print("installed and loaded" if result.returncode == 0 else ("installed, not loaded" if installed() else "not installed"))
+        return 0
+    try:
+        if action == "uninstall":  # from a terminal, the background app goes with its login item
+            set_at_login(False, start_now=True)
+            print("Removed the login item.")
+            return 0
+        set_at_login(True, start_now=True)
+    except RuntimeError as exc:
+        print(f"The login item was not changed: {exc}")
+        return 1
+    if getattr(sys, "frozen", False) or system != "Darwin":
+        print("Digital Unconscious will now set out at every login, quietly in the menu bar.")
+    else:
+        print("Digital Unconscious will now start at login. macOS may ask for Accessibility permission for Python.")
     return 0
 
 
-def _mac(action: str) -> int:
+def _mac_set(on: bool) -> None:
     path = _mac_plist()
-    uid = os.getuid()
-    if action == "status":
-        result = subprocess.run(["launchctl", "print", f"gui/{uid}/{LABEL}"], capture_output=True, text=True)
-        print("installed and loaded" if result.returncode == 0 else ("installed, not loaded" if path.exists() else "not installed"))
-        return 0
-    if action == "uninstall":
-        subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(path)], capture_output=True)
+    domain = f"gui/{os.getuid()}"
+    if not on:
+        if not running_as_job():  # booting out the job that is this very app would quit it mid-click
+            subprocess.run(["launchctl", "bootout", domain, str(path)], capture_output=True)
         path.unlink(missing_ok=True)
-        print("Removed the login item.")
-        return 0
+        return
     logs = app_home() / "logs"  # trimmed daily by housekeeping
     logs.mkdir(parents=True, exist_ok=True)
     args = "\n".join(f"    <string>{escape(part)}</string>" for part in _command())
@@ -75,29 +120,38 @@ def _mac(action: str) -> int:
 """,
         encoding="utf-8",
     )
-    subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(path)], capture_output=True)
-    result = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(path)], capture_output=True, text=True)
+    if running_as_job():
+        return  # the item is already loaded: it is this app
+    subprocess.run(["launchctl", "bootout", domain, str(path)], capture_output=True)
+    result = subprocess.run(["launchctl", "bootstrap", domain, str(path)], capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"Wrote {path}, but launchctl said: {result.stderr.strip()}")
-        return 1
-    print("Digital Unconscious will now start at login. macOS may ask for Accessibility permission for Python.")
-    return 0
+        path.unlink(missing_ok=True)  # not loaded: neither the switch nor the next login may think otherwise
+        raise RuntimeError(result.stderr.strip() or f"launchctl bootstrap exited {result.returncode}")
 
 
-def _linux(action: str) -> int:
+def _linux_set(on: bool, start_now: bool) -> None:
     path = _linux_unit()
-    if action == "status":
-        return subprocess.call(["systemctl", "--user", "status", path.name])
-    if action == "uninstall":
-        subprocess.run(["systemctl", "--user", "disable", "--now", path.name])
+    now = ["--now"] if start_now else []
+    if not on:
+        try:
+            subprocess.run(["systemctl", "--user", "disable", *now, path.name], capture_output=True)
+        except OSError:
+            pass  # no systemd: the unit file is all there is
         path.unlink(missing_ok=True)
-        print("Removed the user service.")
-        return 0
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "[Unit]\nDescription=Digital Unconscious\n\n[Service]\n"
         f"ExecStart={' '.join(_command())}\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n",
         encoding="utf-8",
     )
-    subprocess.run(["systemctl", "--user", "daemon-reload"])
-    return subprocess.call(["systemctl", "--user", "enable", "--now", path.name])
+    try:
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        result = subprocess.run(["systemctl", "--user", "enable", *now, path.name], capture_output=True, text=True)
+    except OSError as exc:
+        path.unlink(missing_ok=True)
+        raise RuntimeError(str(exc)) from exc
+    if result.returncode != 0:
+        path.unlink(missing_ok=True)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        raise RuntimeError(result.stderr.strip() or f"systemctl exited {result.returncode}")

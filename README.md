@@ -216,8 +216,9 @@ dun                                 # then open your own
 ```
 
 `dun` opens the shore and leaves a small horizon mark in the menu bar (or system tray). Closing the window keeps the
-watcher watching and the night's dive scheduled; *Go ashore* in that menu quits. To put the watcher out to sea at
-every login: `dun service install`.
+watcher watching and the night's dive scheduled; *Go ashore* in that menu quits. To have it set out at every login,
+quietly in the menu bar, tick *Set out at every login* in *Harbour → The tide watcher* on macOS and Linux (or run
+`dun service install`, which on Windows explains the startup shortcut).
 
 **macOS.** Window titles need *Accessibility* permission for the app running Digital Unconscious (System Settings →
 Privacy & Security); the first time it reads a browser's address, macOS asks once per browser. `dun doctor` shows
