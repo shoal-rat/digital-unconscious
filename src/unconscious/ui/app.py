@@ -106,6 +106,23 @@ def _instance_name(home: Path) -> str:
     return f"digital-unconscious-{os.getuid() if hasattr(os, 'getuid') else 'user'}-{digest}"
 
 
+def answer_second_start(server: QLocalServer, window) -> None:
+    """A second start opened by hand says "show" and the window comes forward; a start at login
+    says nothing and the open app is left where it is."""
+    sock = server.nextPendingConnection()
+    if sock is None:
+        return
+
+    def read() -> None:
+        if b"show" in bytes(sock.readAll()):
+            window.show_window()
+
+    sock.readyRead.connect(read)
+    sock.disconnected.connect(sock.deleteLater)
+    if sock.bytesAvailable():
+        read()
+
+
 BUNDLED = bool(getattr(sys, "frozen", False))  # running as Digital Unconscious.app, not from a terminal
 
 
@@ -154,6 +171,8 @@ def run(*, hidden: bool = False, demo: bool = False, watch: bool = True, auto_dr
     probe = QLocalSocket()
     probe.connectToServer(name)
     if probe.waitForConnected(300):
+        if hidden:  # started by the login item while it is already open: nothing to bring forward
+            return 0
         probe.write(b"show")
         probe.flush()
         probe.waitForBytesWritten(300)
@@ -191,7 +210,7 @@ def run(*, hidden: bool = False, demo: bool = False, watch: bool = True, auto_dr
     window = MainWindow(ctx, jobs, demo=demo)
     if QSystemTrayIcon.isSystemTrayAvailable():
         window.tray = Tray(window)
-    server.newConnection.connect(lambda: (server.nextPendingConnection(), window.show_window()))
+    server.newConnection.connect(lambda: answer_second_start(server, window))
 
     def follow_system(_scheme) -> None:
         if ctx.settings.ui.theme == "system":
